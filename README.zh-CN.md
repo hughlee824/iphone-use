@@ -109,7 +109,7 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 | `inspect REF [--query TEXT]` | 读取或搜索缓存观察及其子树。 |
 | `tap REF` | 点击元素；也可传观察 ID 并指定 `--x X --y Y`。 |
 | `swipe REF --direction up` | 滑动元素，也支持明确端点、速度和按住时长。 |
-| `type REF --mode replace --text TEXT` | 替换文本，或用 `--mode insert` 在已有焦点的光标处插入。`--stdin` 支持 UTF-8 文件或管道。 |
+| `focus REF --observe` / `type REF --text TEXT --observe` | Runner：显式聚焦后插入文字；[替换与追加流程](docs/runner-actions.md)由 agent 编排。standard 保持原生输入模式。 |
 | `press REF --key return` | 向已有焦点的输入框发送 Return。 |
 | `disconnect` | 等待已接收命令完成并清理会话。 |
 

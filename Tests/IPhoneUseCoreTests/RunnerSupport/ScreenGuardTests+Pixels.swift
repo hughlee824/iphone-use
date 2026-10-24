@@ -161,6 +161,12 @@ extension ScreenGuardTests {
             request.merge(expected.result) { _, new in new }
             let action = try DeviceAction(operation: "swipe", request: request)
             let fields = try XCTestBackend.actionFields(action, target: cache.resolveTarget(for: action))
+            if !action.coordinate {
+                let raw = try XCTUnwrap(fields["motion"] as? [String: Any])
+                XCTAssertEqual(try JSONDecoder().decode(SwipeMotion.self, from: jsonData(raw)), expected)
+                XCTAssertNotNil((fields["target"] as? [String: Any])?["path"])
+                continue
+            }
             let raw = try XCTUnwrap(fields["gesture"] as? [String: Any])
             let decoded = try JSONDecoder().decode(CoordinateGesture.self, from: jsonData(raw))
             XCTAssertEqual(decoded.motion, expected)

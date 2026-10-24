@@ -113,6 +113,29 @@ def acceptance_checks(binary_directory, jobs):
     run([binary, "--self-test"])
 
 
+def input_runtime_checks(binary_directory):
+    # Compile the real Runner action implementation against deterministic platform objects.
+    # This checks orchestration without a phone; it does not certify XCTest's device behavior.
+    directory = ROOT / ".build/runtime-checks"
+    directory.mkdir(parents=True, exist_ok=True)
+    platform = Path(run(["xcrun", "--sdk", "macosx", "--show-sdk-platform-path"], capture=True))
+    frameworks = platform / "Developer/Library/Frameworks"
+    libraries = platform / "Developer/usr/lib"
+    modules = binary_directory / "Modules"
+    combined = binary_directory / "IPhoneUseRunnerSupport.o"
+    objects = [combined] if combined.is_file() else sorted(
+        (binary_directory / "IPhoneUseRunnerSupport.build").rglob("*.o"))
+    if not objects:
+        raise RuntimeError("Missing RunnerSupport objects for Runner input runtime tests")
+    binary = directory / "input"
+    run(["xcrun", "swiftc", "-parse-as-library", "-I", modules if modules.is_dir() else binary_directory,
+         "-F", frameworks, "-L", libraries,
+         "-Xlinker", "-rpath", "-Xlinker", frameworks, "-Xlinker", "-rpath", "-Xlinker", libraries,
+         "Tests/RunnerRuntime/InputPlatform.swift", "Runner/LiveSessionTests+Input.swift",
+         "Tests/RunnerRuntime/InputActionTests.swift", *objects, "-o", binary])
+    run([binary])
+
+
 def native_checks(jobs):
     run(["xcodebuild", "-version"])
     run(["swift", "--version"])
@@ -124,6 +147,7 @@ def native_checks(jobs):
     run(["swift", "test", "--package-path", "packages/runner-support", "--jobs", str(jobs)])
     run(["swift", "test", "--jobs", str(jobs)])
     runtime_checks()
+    input_runtime_checks(binary_directory)
     run([sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests", "-v"],
         environment=environment)
     run(["xcodebuild", "build-for-testing", "-project", "Runner/IPhoneUseRunner.xcodeproj",

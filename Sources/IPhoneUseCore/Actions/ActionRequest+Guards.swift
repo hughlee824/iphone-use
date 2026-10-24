@@ -4,6 +4,9 @@ import Foundation
 extension ActionRequest {
     func guardPolicy(reference: ObservationReference) throws -> (ScreenGuard.Policy, [ObservationReference]) {
         var policy = ScreenGuard.Policy()
+        // Coordinate targets retain strict local protection. Unrelated page
+        // animation does not veto Runner input; standard keeps its own default.
+        if !allowScreenText && request["dynamicTarget"] == nil { policy.maxScreenChange = 1 }
         var protected: [ObservationReference] = []
         if ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(operation) {
             if request["maxScreenChange"] != nil {

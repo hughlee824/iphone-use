@@ -13,8 +13,8 @@ final class RunnerLifecycleTests: XCTestCase {
         let result = try ActionReply.decode(
             XCTestCapture.actionResponse(response, directory: directory, expectedHome: true))
         XCTAssertEqual(result["homeScreenConfirmed"] as? Bool, false)
-        // The exception is Home-specific: other inputs still require stability.
-        XCTAssertThrowsError(try XCTestCapture.actionResponse(response, directory: directory))
+        // Missing observation is separate from acknowledged execution.
+        XCTAssertNoThrow(try XCTestCapture.actionResponse(response, directory: directory))
         var invalid = response; invalid["result"] = ["kind": "home"]
         XCTAssertThrowsError(
             try XCTestCapture.actionResponse(invalid, directory: directory, expectedHome: true))

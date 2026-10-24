@@ -110,7 +110,7 @@ Use `iphone-use --help` or `iphone-use <command> --help` for all options. Sessio
 | `inspect REF [--query TEXT]` | Read or search a cached observation or subtree. |
 | `tap REF` | Tap an element, or use an observation ID with `--x X --y Y`. |
 | `swipe REF --direction up` | Swipe an element; explicit endpoints, velocity, and hold durations are also supported. |
-| `type REF --mode replace --text TEXT` | Replace text, or use `--mode insert` at an already focused caret. `--stdin` accepts UTF-8 from a file or pipe. |
+| `focus REF --observe` / `type REF --text TEXT --observe` | Runner: explicit focus, then insertion; [replacement/append workflows](docs/runner-actions.md). Standard keeps its native modes. |
 | `press REF --key KEY` | Send an editing key to an already focused text input; see [supported keys](docs/runner-editing-keys.md). |
 | `disconnect` | Finish accepted commands and clean up the session. |
 

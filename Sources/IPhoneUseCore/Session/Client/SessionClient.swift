@@ -158,7 +158,10 @@ public enum SessionClient {
         let id = UUID().uuidString
         var request = fields
         request["id"] = id
-        request["version"] = 1
+        // Old hosts must reject new action semantics rather than silently auto-focus.
+        let explicitAction = (DeviceAction.operations + ["type-with-method", "type-with-caret", "press-with-caret"])
+            .contains(operation)
+        request["version"] = explicitAction ? 2 : 1
         request["session"] = session
         request["op"] = operation
         do {

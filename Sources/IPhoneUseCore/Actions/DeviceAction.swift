@@ -3,7 +3,8 @@ import Foundation
 import CoreFoundation
 
 struct DeviceAction {
-    static let operations = ["tap", "double-tap", "long-press", "pinch", "swipe", "home", "type", "press"]
+    static let operations =
+        ["tap", "double-tap", "long-press", "pinch", "swipe", "home", "focus", "clear", "type", "press"]
     let kind: String
     var touchPaste: Bool { kind == "type" && fields["textMethod"] as? String == "touch-paste" }
     let reference: ObservationReference
@@ -45,6 +46,11 @@ struct DeviceAction {
         dynamicRects = try validation.dynamicRects(
             coordinate: coordinate, ignoredScreenRect: ignoredScreenRect, protected: protected, policy: policy
         )
+        if !coordinate, !allowScreenText,
+            !protected.isEmpty || request["maxScreenChange"] != nil
+                || (request["maxRegionChange"] as? Double ?? 0) != 0 {
+            throw IPhoneUseError("coordinate_guard_required", "Screen guard options require explicit coordinates")
+        }
         guardPolicy = policy
         protectedReferences = protected
         self.fields = fields
@@ -94,7 +100,14 @@ enum ActionReply {
                 possiblyExecuted: true, requiresObservation: true,
                 result: response["result"] as? [String: Any])
         }
-        if response["ok"] as? Bool == true, completed, started {
+        let result = response["result"] as? [String: Any] ?? [:]
+        let primitive = result["inputAction"] as? [String: Any] ?? [:]
+        let verifiedNoOp = !started && result["noOp"] as? Bool == true
+            && ["focus", "clear"].contains(result["kind"] as? String ?? "")
+            && primitive["eventAttempted"] as? Bool == false
+            && primitive["eventAcknowledged"] as? Bool == false
+            && primitive["verification"] as? String == "confirmed"
+        if response["ok"] as? Bool == true, completed, started || verifiedNoOp {
             return response["result"] as? [String: Any] ?? [:]
         }
         let invalidFacts =

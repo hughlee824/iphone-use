@@ -46,7 +46,7 @@ final class HostRequestExecution {
 
     func checkPendingPaste() throws {
         if touchPaste.pending,
-            appAction || operation == "text-prepare" || operation == "type" || operation == "press" {
+            appAction || operation == "text-prepare" || ["focus", "clear", "type", "press"].contains(operation) {
             throw IPhoneUseError(
                 "touch_paste_pending",
                 "Inspect the pending touch-paste transaction and text-finish before another text or app action"
@@ -77,6 +77,8 @@ final class HostRequestExecution {
             "pinch": performAction,
             "swipe": performAction,
             "home": performAction,
+            "focus": performAction,
+            "clear": performAction,
             "type": performAction,
             "press": performAction
         ]

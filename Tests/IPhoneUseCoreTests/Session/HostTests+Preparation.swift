@@ -197,7 +197,7 @@ extension HostTests {
             wait(for: [finished], timeout: 3)
         }
         _ = try call(paths, session: session, op: "observe")
-        let response = try call(paths, session: session, op: "tap", fields: ["reference": "o1:e11"])
+        let response = try call(paths, session: session, op: "tap", fields: ["reference": "o1", "x": 100, "y": 200])
         XCTAssertEqual(response["outcome"] as? String, "unknown")
         XCTAssertEqual(response["ok"] as? Bool, false)
         let facts = try XCTUnwrap(response["result"] as? [String: Any])
@@ -210,7 +210,7 @@ extension HostTests {
         XCTAssertEqual(
             backend.previewGestures.count, 1,
             "A queued native input is visualized without claiming acknowledgement")
-        let stale = try call(paths, session: session, op: "tap", fields: ["reference": "o1:e11"])
+        let stale = try call(paths, session: session, op: "tap", fields: ["reference": "o1", "x": 100, "y": 200])
         XCTAssertEqual(stale["outcome"] as? String, "not_dispatched")
         XCTAssertEqual(backend.actionCount, 1)
         XCTAssertTrue(

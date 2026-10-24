@@ -14,7 +14,7 @@ extension ObservationCache {
             return try homeTarget(entry.capture)
         }
         if entry.capture.metadata["backend"] as? String == "apple-native" {
-            if ["type", "press"].contains(action.kind), action.reference.node == nil {
+            if ["focus", "clear", "type", "press"].contains(action.kind), action.reference.node == nil {
                 return try textTarget(action, entry: entry)
             }
             guard ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind),
@@ -30,7 +30,7 @@ extension ObservationCache {
             ["app", "appAlert", "systemAlert"].contains(scope),
             !entry.capture.nodes.isEmpty
         else { throw IPhoneUseError("target_context_unknown", "Observe a known app or alert before acting") }
-        if ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind) {
+        if action.coordinate && ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind) {
             return try coordinateTarget(for: action, capture: entry.capture)
         }
         return try accessibilityTarget(action, entry: entry)
@@ -120,19 +120,11 @@ extension ObservationCache {
         var index = 0
         if !action.coordinate {
             let node = try resolveCurrent(action.reference)
-            if ["type", "press"].contains(action.kind),
+            if ["focus", "clear", "type", "press"].contains(action.kind),
                 !["text_field", "secure_text_field", "text_view", "search_field"].contains(node.role) {
                 throw IPhoneUseError("not_text_input", "The reference must identify a text input")
             }
-            if action.kind == "type", var text = action.fields["text"] as? String {
-                if action.fields["mode"] as? String == "append" {
-                    do {
-                        text = try RunnerTextInput.append(
-                            text, to: node.attributes["value"], secure: node.role == "secure_text_field")
-                    } catch let failure as RunnerTextInput.Failure {
-                        throw IPhoneUseError(failure.rawValue, failure.message)
-                    }
-                }
+            if action.kind == "type", let text = action.fields["text"] as? String {
                 if text.unicodeScalars.contains(where: { $0.value == 10 || $0.value == 13 }),
                     node.role != "text_view" {
                     throw IPhoneUseError(

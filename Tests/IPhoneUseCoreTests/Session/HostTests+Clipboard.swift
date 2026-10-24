@@ -135,7 +135,9 @@ extension HostTests {
             XCTAssertEqual((status["result"] as? [String: Any])?["mode"] as? String, expectedMode)
             let support = (status["result"] as? [String: Any])?["support"] as? [String: Any]
             XCTAssertEqual((support?["operations"] as? [String])?.contains("record-start"), true)
-            XCTAssertEqual(support?["textModes"] as? [String], ["insert", "replace", "append"])
+            XCTAssertEqual(support?["textModes"] as? [String], native ? ["insert", "replace", "append"] : ["insert"])
+            XCTAssertEqual((support?["operations"] as? [String])?.contains("focus"), !native)
+            XCTAssertEqual((support?["operations"] as? [String])?.contains("clear"), !native)
             let observed = try call(paths, session: session, op: "observe")
             let rejected = try call(paths, session: session, op: "not-an-operation")
             let disconnected = try call(paths, session: session, op: "disconnect")

@@ -30,13 +30,16 @@ public enum ControlMode: String, Codable {
             ]
         }
         return [
-            "operations": common + ["text-finish"],
+            "operations": common + ["focus", "clear", "text-finish"],
             "observationSources": ["screenshot", "available_elements"],
             "actionTargets": [
                 "tap": ["screen_point", "element"], "swipe": ["screen_path", "element"],
+                "double-tap": ["screen_point", "element"], "long-press": ["screen_point", "element"],
+                "focus": ["element"], "clear": ["element"],
                 "type": ["element", "touch_paste_staging"], "press": ["element"]
             ],
-            "textModes": ["insert", "replace", "append"], "textMethods": ["touch-paste"],
+            "textModes": ["insert"], "textMethods": ["touch-paste"],
+            "explicitFocus": true, "clearSelection": true, "inputActionVersion": 13,
             "touchPasteModes": ["insert"],
             "pressKeys": RunnerPressKey.allCases.map(\.rawValue)
         ]
