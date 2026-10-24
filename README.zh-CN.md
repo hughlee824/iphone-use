@@ -11,7 +11,7 @@
 
 [![CI](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138.svg)](Package.swift)
+[![Swift](https://img.shields.io/badge/Swift-6.0%2B-F05138.svg)](Package.swift)
 
 iPhone-use 是一个 macOS CLI，让外部 agent 能够发现 App、读取截图与辅助功能数据，并操作连接的 iPhone。自然语言理解、任务规划和结果判断由调用 agent 负责；iPhone-use 通过所选模式的持续会话提供设备观察与动作能力。
 
@@ -256,7 +256,7 @@ python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
 ```
 
-Python 3.9+ 仅用于发布工具和开发测试，不是已安装 CLI 的运行依赖。检查入口需要完整 Xcode，以及固定版本的 SwiftLint 和 Actionlint，先构建 CLI，再把可执行文件路径显式传给集成测试；缺少 CLI 会报错。默认构建并发为两个任务。唯一外部 Swift 包依赖为 [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.5.0)，锁定版本 `1.5.0`。
+Python 3.9+ 仅用于发布工具和开发测试，不是已安装 CLI 的运行依赖。检查入口需要完整 Xcode，以及固定版本的 SwiftLint 和 Actionlint，先构建 CLI，再把可执行文件路径显式传给集成测试；缺少 CLI 会报错。默认构建并发为两个任务。唯一外部 Swift 包依赖为 [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2)，锁定版本 `1.8.2`。该依赖要求 Swift 6+ 编译器；原生构建请使用受支持的完整 Xcode 27 工具链。Package.swift 的 tools version 不代表兼容 Swift 5.9 编译器，也不表示启用 Swift 6 语言模式。
 
 CI 使用 Node.js 22+ 将文档中的调用模板用于受控工具响应；Node 仅为开发测试所需。修改 canonical skill 后运行 `python3 scripts/plugin/sync-plugin.py` 更新包内副本；发布变更前使用 `python3 scripts/plugin/set-plugin-version.py X.Y.Z` 同步更新所有共享分发版本。CI 还会无签名编译 Runner，并打包插件供审阅。官网源码、测试和 Cloudflare 部署独立维护于 [iphone-use-website](https://github.com/HughLee824/iphone-use-website)。具体命令和真机验收要求见[公开接入发布检查](docs/public-access-release.md)。
 
