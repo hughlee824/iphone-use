@@ -1,6 +1,6 @@
 # Runner 编辑按键
 
-Runner 支持 Return、退格、四个方向键、Tab 和 Shift+Tab。CLI 与 Runner 必须通过当前能力协商；支持列表以会话返回值为准。
+Runner 支持 Return、退格、四个方向键、Tab、Shift+Tab、select-all 和 end。CLI 与 Runner 必须通过当前能力协商；支持列表以会话返回值为准。
 
 ```sh
 iphone-use --session "$SESSION" press o1:e23 --key backspace --observe
@@ -16,11 +16,12 @@ iphone-use --session "$SESSION" press o3:e23 --key tab --observe
 | backspace | `typeText(XCUIKeyboardKey.delete)` | 字符或选区被删除 |
 | left / right / up / down | `typeKey` 与 Apple 对应方向键常量，无修饰键 | 光标/选区或 App 定义行为 |
 | tab / shift-tab | `typeKey(Tab)`，仅 Shift+Tab 携带 Shift | 焦点切换或 App 定义行为 |
+| select-all / end | Command-A / Command-Down | 请求全选/末尾，必须由 agent 观察验证，不保证选区效果 |
 | escape | **Runner 不支持**；`unsupported_key`，派发前拒绝 | 标准模式仍保留自己的 Escape 实现；不自动切换模式 |
 
 ## 执行与保护
 
-仍验证会话、当前 observation、来源 AX 目标及完整祖先路径、观察期 AX 身份与精确绑定、enabled/isHittable 和输入框角色。成功回执增加 `key` 与 `keyModifiers`；宿主必须核对它们与请求一致，否则返回 unknown。输入调用前后和判稳后的执行事实分开记录。completed 表示输入流程完成；附带的稳定性事实仍需单独读取，不等于 App 业务效果被确认。
+验证当前会话、作用域、AX 身份与输入框焦点；不要求旧 label/value/frame，也不要求已聚焦字段可点击。成功回执中的 key/keyModifiers 仍与请求核对。完整边界见 [Runner actions](runner-actions.md)。
 
 Tab/Shift+Tab 可以把焦点移出来源字段。它们执行后读取一次快照，遍历 XCTest 返回的完整快照，最多允许 8 个完整位于当前范围内的输入框参与光标检查；字段数超限或键盘状态不适用时不启用光标例外。只有候选字段中识别出唯一符合既有模型的蓝色光标，才允许该笔画闪烁。其余字段和全屏仍进行像素比较。没有焦点遍历、滚动、整字段遮罩或阈值放宽，也不把像素识别当作焦点证明。
 

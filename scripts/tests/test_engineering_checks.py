@@ -85,6 +85,28 @@ class EngineeringChecksTests(unittest.TestCase):
                     self.assertEqual(commands[-1][1:], ['--self-test'])
                     self.assertEqual(len(commands), 4)
 
+    def test_input_runtime_checks_compile_real_runner_and_run_fixture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for layout in ('xcode', 'native'):
+                directory = root / layout
+                directory.mkdir()
+                obj = directory / 'IPhoneUseRunnerSupport.o' if layout == 'xcode' else directory / 'IPhoneUseRunnerSupport.build/input.o'
+                obj.parent.mkdir(exist_ok=True)
+                obj.touch()
+                with patch.object(CHECKS, 'ROOT', root), patch.object(CHECKS, 'run', return_value='/fixture/MacOSX.platform') as run:
+                    CHECKS.input_runtime_checks(directory)
+                    commands = [call.args[0] for call in run.call_args_list]
+                    self.assertIn('Runner/LiveSessionTests+Input.swift', commands[1])
+                    self.assertIn('Tests/RunnerRuntime/InputPlatform.swift', commands[1])
+                    self.assertIn('Tests/RunnerRuntime/InputActionTests.swift', commands[1])
+                    self.assertIn(obj, commands[1])
+                    self.assertEqual(commands[-1], [root / '.build/runtime-checks/input'])
+                    self.assertEqual(len(commands), 3)
+            with patch.object(CHECKS, 'ROOT', root), patch.object(CHECKS, 'run', return_value='/fixture/MacOSX.platform'):
+                with self.assertRaisesRegex(RuntimeError, 'Missing RunnerSupport objects'):
+                    CHECKS.input_runtime_checks(root / 'missing')
+
     def test_homebrew_template_imports_tools_from_current_and_published_legacy_layouts(self):
         import os
         workflow = (CHECKS.ROOT / 'packaging/homebrew-tap/.github/workflows/update-iphone-use.yml').read_text()

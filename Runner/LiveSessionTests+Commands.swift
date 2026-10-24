@@ -12,7 +12,7 @@ extension LiveSessionTests {
             return [
                 "protocol": "iphone-use-spike-jsonl-v1", "lifecycleOwner": hostManaged ? "host" : "spike",
                 "lifetimeLimitSeconds": hostManaged ? NSNull() : 900, "observationVersion": 4,
-                "actionVersion": 12, "launchVersion": 2, "startupGuard": RunnerStartupGuard.facts(),
+                "actionVersion": 13, "launchVersion": 2, "startupGuard": RunnerStartupGuard.facts(),
                 "frameStabilityVersion": 2, "screenGuardVersion": 1, "previewGeometryVersion": 2,
                 "inputProgressVersion": 1,
                 "applicationStateTimeoutSupported": stateTimeout != nil
@@ -29,7 +29,10 @@ extension LiveSessionTests {
         // Home is acknowledged system navigation. Its destination can contain
         // continuously animated icons; page readiness is left to observation.
         if command["kind"] as? String == "home" { return result }
-        try await waitForStableFrame()
+        // Sampling failure cannot erase an acknowledged input. Observe separately.
+        do { try await waitForStableFrame() } catch {
+            postObservationError = "post_action_capture_unavailable"
+        }
         return result
     }
 

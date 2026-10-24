@@ -1,6 +1,6 @@
 # 动作前画面校验与坐标执行
 
-画面校验覆盖 tap/swipe：宿主根据原观察准备坐标和画面指纹，Runner 重新截图并校验，通过后执行坐标手势。type/press 的 AX 目标解析、动作后的容差帧稳定检测、每次派发后重新 observe、unknown 不重发均保持不变。
+画面校验仅覆盖坐标动作；Runner 元素动作使用当前 AX 身份。Runner 坐标动作默认全局变化上限 1、局部保护区域上限 0；standard 仍为全局 0.01。无关动画不否定 Runner 局部目标；这不证明目标的业务身份。详见 [动作边界](runner-actions.md)。
 
 上述 Runner 路径之外，实验性 apple-native 的 `type oN` 和 `press oN --key return` 都从当前截图生成完整字段保护，并在输入前重新截图校验；完整字段使用原分辨率局部比较与颜色无关的有界光标排除，不读取 AX 或自动聚焦。`text-prepare` 只准备自有键盘，随后使旧引用失效并返回新图。具体约束见[原生文字输入](actions.md#实验性原生文字输入)。
 
@@ -23,13 +23,13 @@ iphone-use --session "$SESSION" tap o1:e10
 iphone-use --session "$SESSION" tap o2 --x 195 --y 380
 iphone-use --session "$SESSION" swipe o3:e50 --direction up
 iphone-use --session "$SESSION" swipe o4 --from-x 97 --from-y 405 --to-x 97 --to-y 365
-iphone-use --session "$SESSION" tap o5:e10 --protect o5:e20 --protect o5:e21
-iphone-use --session "$SESSION" tap o6:e10 --max-screen-change 0.01 --max-region-change 0
+iphone-use --session "$SESSION" tap o5 --x 195 --y 380 --protect o5:e20 --protect o5:e21
+iphone-use --session "$SESSION" tap o6 --x 195 --y 380 --max-screen-change 0.01 --max-region-change 0
 ```
 
 上面的引用、坐标均为示例，不能直接用于当前设备。`--protect` 可重复最多三次，引用必须属于这次动作的同一观察；适合显式保护要保存的日期、数量、对象名称等。默认不会推断哪些业务字段重要。
 
-- 元素 tap 使用捕获 frame 与当前观察 scope 相交部分的中心点。元素 swipe 使用该区域轴向 80%→20%（up/left）或 20%→80%（down/right）的端点。空 identifier/label 不影响坐标解析。禁止自动滚动寻找离屏元素。
+- Runner 元素动作沿当前 AX 身份定位；tap 使用当前元素，swipe 使用当前元素的 20%–80% 路径。元素动作不接受像素保护选项；需要保护业务区域时使用坐标动作。禁止自动滚动寻找离屏元素。
 - 坐标 swipe 必须同时提供四个端点参数，以观察 ID 为引用，不能混用元素引用或 `--direction`。单位是屏幕点，不是 PNG 像素；起终点必须在原 scope 内且至少相距 1 点。
 - Runner 使用 XCTest 坐标 tap，或带 `withVelocity` / `thenHoldForDuration` 的 `press(forDuration:thenDragTo:)` 重载。拖动速度、起始按住和结束停留由已校验的 motion 参数指定；这仍是 XCTest 坐标原语，不承诺内容位移或底层 HID 的精确时序。参数见 [可控拖动](actions.md#可控拖动)。
 - `--max-screen-change` 和 `--max-region-change` 满足 `0 <= region <= screen <= 1`。修改阈值是调用方明确选择，Runner 不会自动放宽阈值、重试或修正坐标。设置为 1 会使对应相似度限制失去拦截能力，上下文检查仍有效。
@@ -49,7 +49,7 @@ iphone-use --session "$SESSION" swipe o7 --from-x 315 --from-y 685 --to-x 315 --
 
 支持截图坐标的 tap、double-tap、long-press、pinch、swipe，以及指定完整字段的原生 type/press。只允许一个矩形，必须完全位于屏幕内、面积不超过屏幕的 25%，并与全部保护区域不相交：触点周围、滑动走廊、双指路径、完整输入框及额外 `--protect` 都不能被排除。25% 是首版范围限制，不是正确率保证。如果视频挡住了滑动走廊，应基于新图选择视频外路径，不能让后端移除路径保护。
 
-未指定时仍使用原 `srgb-grid-v1`。指定时使用 `srgb-area-excluded-rect-v2`：将矩形外画面分成最多四个互不重叠的矩形，各自先裁剪，再对每个网格单元覆盖的全部原生 sRGB 像素取整数平均，按原 32×64 全局网格密度向上取整分配行列；以剩余画面面积加权计算变化比例，分母不含排除区域。网格单元按原生像素整数边界分区，余数像素也被计入；每个裁剪区域最多处理 1600 万像素，超出时拒绝比较。旧版高质量插值会把极窄的残留动画边缘放大成整格变化，新版不会自动扩大排除框。完整整屏比较仍记录为 `rawScreenChange`，实际接纳使用排除后的 `screenChange`。保护区域仍使用原始图及 48×48 网格，默认整屏 0.01、局部 0、颜色容差 8 不变。
+未指定时仍使用原 `srgb-grid-v1`。指定时使用 `srgb-area-excluded-rect-v2`：将矩形外画面分成最多四个互不重叠的矩形，各自先裁剪，再对每个网格单元覆盖的全部原生 sRGB 像素取整数平均，按原 32×64 全局网格密度向上取整分配行列；以剩余画面面积加权计算变化比例，分母不含排除区域。网格单元按原生像素整数边界分区，余数像素也被计入；每个裁剪区域最多处理 1600 万像素，超出时拒绝比较。旧版高质量插值会把极窄的残留动画边缘放大成整格变化，新版不会自动扩大排除框。完整整屏比较仍记录为 `rawScreenChange`，实际接纳使用排除后的 `screenChange`。保护区域仍使用原始图及 48×48 网格，标准模式默认整屏 0.01、Runner 为 1；局部 0、颜色容差 8 不变。
 
 结果同时记录 `ignoredRect`、`rawScreenChange` 和 `exclusionScope=global_comparison_only`。标准与新版 Runner 共用此实现；宿主核对 Runner 的算法、矩形及排除范围回执。旧 Runner 不认识新的算法名，会在输入前拒绝，使用此参数前需构建配套 Runner，不能把旧 Runner 的拒绝当作动作执行。未使用参数的旧路径保持兼容。额外指纹仍受原报文预算约束，过大请求明确拒绝。
 
@@ -66,7 +66,7 @@ iphone-use --session "$SESSION" swipe o7 --from-x 315 --from-y 685 --to-x 315 --
 5. Runner 保留前台 App 和 App/System Alert 范围检查；屏幕和 scope 的 frame 最多容忍 0.5 点差异，orientation、键盘数量和截图像素尺寸必须一致。不相符则在输入前拒绝。AX 的完整重采样和 type/identifier/label 查询不再进入 tap/swipe 路径；这些动作的 XCTest 内部行为不在此保证内。
 6. Runner 采集一张新截图，与命令携带的原始基准比较。整屏和每一块保护区域都通过各自阈值后，才进入标记 `execution.started` 的输入调用。Runner 不用历史截图代替本次采集；文本操作另保留观察对应的 AX 身份用于校验。
 
-默认整屏阈值 0.01、局部阈值 0，属于保守工程初值，不是经过多 App 校准的安全值。局部 0 仍允许颜色噪声底限内的变化和降采样无法分辨的变化。
+标准模式默认整屏阈值 0.01（Runner 为 1）、局部阈值 0，属于保守工程初值，不是经过多 App 校准的安全值。局部 0 仍允许颜色噪声底限内的变化和降采样无法分辨的变化。
 
 ### 标准模式的固定截图来源
 

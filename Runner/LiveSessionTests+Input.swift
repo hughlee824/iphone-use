@@ -13,7 +13,8 @@ extension LiveSessionTests {
                 message: "Close this session after unconfirmed event synthesis; do not replay")
         }
         guard let kind = command["kind"] as? String,
-            ["tap", "double-tap", "long-press", "pinch", "swipe", "type", "press", "home"].contains(kind),
+            ["tap", "double-tap", "long-press", "pinch", "swipe", "focus", "clear", "type", "press", "home"]
+                .contains(kind),
             let expected = command["target"] as? [String: Any],
             let scope = expected["scope"] as? String
         else {
@@ -29,21 +30,86 @@ extension LiveSessionTests {
         }
         let (app, root) = try actionRoot(scope: scope)
         if kind == "home" { return try performHome(command, app: app, root: root) }
-        if ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(kind) {
+        if command["gesture"] != nil {
             return try performGesture(command, kind: kind, app: app, root: root)
         }
         let (target, liveSnapshot) = try actionTarget(expected, root: root)
+        if ["tap", "double-tap", "long-press", "swipe"].contains(kind) {
+            return try performElementGesture(command, kind: kind, target: target)
+        }
+        return try performInput(command, expected: expected, context: (app, root), selected: (target, liveSnapshot))
+    }
+
+    @MainActor
+    private func performInput(
+        _ command: [String: Any], expected: [String: Any],
+        context: (XCUIApplication, XCUIElement), selected: (XCUIElement, XCUIElementSnapshot)
+    ) throws -> [String: Any] {
+        let (target, liveSnapshot) = selected
+        let (app, root) = context
+        let kind = command["kind"] as? String ?? ""
+        let scope = expected["scope"] as? String ?? ""
+        let text = command["text"] as? String
+        let pressKey = (command["key"] as? String).flatMap(RunnerPressKey.init(rawValue:))
         try validateTextTarget(target, kind: kind)
-        if ["type", "press"].contains(kind) {
-            postInputContext = screenContext(app: app, root: root)
+        postInputContext = screenContext(app: app, root: root)
+        let primitive = RunnerInputAction()
+        inputAction = primitive
+        let focused = try RunnerAXBinding.keyboardFocus(of: target).boolValue
+        func current() throws -> (XCUIElement, XCUIElementSnapshot) {
+            let (_, latestRoot) = try actionRoot(scope: scope)
+            return try actionTarget(expected, root: latestRoot)
         }
-        switch kind {
-        case "type":
-            try typeText(text, mode: mode, target: target, snapshot: liveSnapshot, expected: expected)
-        case "press": return try press(pressKey, target: target, app: app, root: root)
-        default: break
+        do {
+            switch kind {
+            case "focus":
+                if !focused && !target.isHittable { throw CommandError("target_not_hittable") }
+                try primitive.focus(isFocused: focused, event: { try self.event { target.tap() } }, verify: {
+                    let (element, _) = try current()
+                    return try RunnerAXBinding.keyboardFocus(of: element).boolValue
+                })
+            case "clear":
+                try clear(primitive, target: target, snapshot: liveSnapshot, expected: expected) {
+                    let (_, snapshot) = try current()
+                    return RunnerTextInput.isCleared(snapshot.value)
+                }
+            case "type":
+                try insert(text, target: target, primitive: primitive, focused: focused)
+            case "press":
+                var facts: [String: Any] = [:]
+                try primitive.send(focused: focused) {
+                    facts = try press(pressKey, target: target)
+                }
+                return facts
+            default: throw CommandError("invalid_action")
+            }
+        } catch let failure as RunnerInputAction.Failure {
+            throw CommandError(failure.rawValue, requiresObservation: true)
         }
-        return ["kind": kind]
+        postInputTextFields = [ScreenRect(liveSnapshot.frame)]
+        return ["kind": kind, "noOp": !primitive.attempted, "resultVerified": primitive.verification == "confirmed"]
+    }
+
+    @MainActor
+    private func insert(_ text: String?, target: XCUIElement, primitive: RunnerInputAction, focused: Bool) throws {
+        guard let text else { throw CommandError("invalid_text") }
+        if text.contains("\n") && target.elementType != .textView {
+            throw CommandError("multiline_requires_text_view")
+        }
+        try primitive.send(focused: focused) { try self.event { target.typeText(text) } }
+    }
+
+    @MainActor
+    private func clear(
+        _ primitive: RunnerInputAction, target: XCUIElement, snapshot: XCUIElementSnapshot,
+        expected: [String: Any], verify: () throws -> Bool
+    ) throws {
+        let value = (expected["path"] as? [[String: Any]])?.last?["value"]
+        try primitive.clear(
+            state: .init(value: snapshot.value, secure: target.elementType == .secureTextField,
+                         focused: try RunnerAXBinding.keyboardFocus(of: target).boolValue),
+            expected: value is NSNull ? nil : value,
+            event: { try self.event { target.typeText(XCUIKeyboardKey.delete.rawValue) } }, verify: verify)
     }
 
     private func validateInput(kind: String, pressKey: RunnerPressKey?, text: String?, mode: String?) throws {
@@ -53,7 +119,7 @@ extension LiveSessionTests {
 
     @MainActor
     private func validateTextTarget(_ target: XCUIElement, kind: String) throws {
-        if ["type", "press"].contains(kind),
+        if ["focus", "clear", "type", "press"].contains(kind),
             ![XCUIElement.ElementType.textField, .secureTextField, .textView, .searchField].contains(
                 target.elementType) {
             throw CommandError("not_text_input")
@@ -61,8 +127,7 @@ extension LiveSessionTests {
     }
 
     private func validateText(_ text: String?, mode: String?) throws {
-        guard ["insert", "replace", "append"].contains(mode ?? ""), let text, text.utf8.count <= 4096,
-            mode == "replace" || !text.isEmpty,
+        guard mode == "insert", let text, text.utf8.count <= 4096, !text.isEmpty,
             text.unicodeScalars.allSatisfy({
                 let value = $0.value
                 return value == 10
@@ -113,11 +178,6 @@ extension LiveSessionTests {
         guard screenGuard.context.matches(context) else {
             throw CommandError("screen_context_changed", requiresObservation: true)
         }
-        let screenshot = XCUIScreen.main.screenshot()
-        let check = try screenGuard.check(png: screenshot.pngRepresentation, context: context)
-        screenGuardResult = check.result
-        screenGuardResult?["capturedAt"] = Date().timeIntervalSince1970
-        guard check.accepted else { throw CommandError("screen_changed", requiresObservation: true) }
         try event { XCUIDevice.shared.press(.home) }
         // The next observation can be screenshot-only; never invent an App
         // or SpringBoard element target from a Home press acknowledgement.
@@ -126,19 +186,17 @@ extension LiveSessionTests {
     }
 
     @MainActor
-    private func actionTarget(
-        _ expected: [String: Any], root: XCUIElement, allowingLeafContentChange: Bool = false,
-        classifyingGeometry: Bool = false
-    ) throws -> (
-        XCUIElement, XCUIElementSnapshot
-    ) {
-        guard let path = expected["path"] as? [[String: Any]] else {
+    private func actionTarget(_ expected: [String: Any], root: XCUIElement) throws
+        -> (XCUIElement, XCUIElementSnapshot) {
+        guard let path = expected["path"] as? [[String: Any]], !path.isEmpty else {
             throw CommandError("invalid_action")
         }
-        let target: XCUIElement
-        let liveSnapshot: XCUIElementSnapshot
+        func identityMatches(_ node: XCUIElementSnapshot, _ step: [String: Any]) throws -> Bool {
+            let identity = try commandReferences.identity(for: step["identityToken"] as? String)
+            return try identity.isEqual(RunnerAXBinding.identity(of: node))
+        }
         do {
-            (target, liveSnapshot) = try RunnerAXTree.resolve(
+            let result = try RunnerAXTree.resolve(
                 root: root, path: path, access: .init(snapshot: freshSnapshot, children: { $0.children },
                 bind: { root, selected in
                     guard let element = try RunnerAXBinding.bind(
@@ -146,110 +204,72 @@ extension LiveSessionTests {
                     else { throw CommandError("target_binding_unavailable") }
                     return element
                 }), sameIdentity: { first, second in
-                    try RunnerAXBinding.identity(of: first)
-                        .isEqual(RunnerAXBinding.identity(of: second))
+                    try RunnerAXBinding.identity(of: first).isEqual(RunnerAXBinding.identity(of: second))
                 }, matches: { node, step in
-                    let identity = try self.commandReferences.identity(for: step["identityToken"] as? String)
-                    guard try identity.isEqual(RunnerAXBinding.identity(of: node)) else { return false }
-                    let attributes = RunnerAXTree.validationAttributes(
-                        step, leafToken: path.last?["identityToken"] as? String,
-                        allowingContentChange: allowingLeafContentChange, value: node.value, label: node.label)
-                    return self.matches(node, expected: attributes, ignoringGeometry: classifyingGeometry)
-                }, geometryMatches: classifyingGeometry ? { self.matchesFrame($0, expected: $1) } : nil)
+                    try identityMatches(node, step) && step["type"] as? UInt == node.elementType.rawValue
+                }, identityMatches: identityMatches)
+            guard result.0.isEnabled else { throw CommandError("target_disabled") }
+            return result
         } catch let failure as RunnerAXReferences<NSObject>.Failure {
             throw CommandError(failure.rawValue, requiresObservation: true)
         } catch let failure as RunnerAXTree.Failure {
-            if classifyingGeometry && failure == .geometryChanged { throw failure }
-            throw CommandError(failure.rawValue, requiresObservation: failure != .invalidPath)
+            throw CommandError(failure.rawValue, requiresObservation: true)
         } catch let error as NSError where error.domain == "RunnerAXBinding" {
             throw CommandError("target_binding_unavailable", requiresObservation: true,
                                message: error.localizedDescription)
         }
-        guard target.isEnabled else { throw CommandError("target_disabled") }
-        guard target.isHittable else { throw CommandError("target_not_hittable") }
-        return (target, liveSnapshot)
     }
 
     @MainActor
-    private func preparedText(
-        _ input: String?, mode: String?, kind: String,
-        target: XCUIElement, snapshot: XCUIElementSnapshot
-    ) throws -> String? {
-        var text = input
-        if kind == "type", mode == "append", let suffix = text {
-            do {
-                text = try RunnerTextInput.append(
-                    suffix, to: snapshot.value,
-                    secure: snapshot.elementType == .secureTextField, placeholder: snapshot.placeholderValue)
-            } catch let failure as RunnerTextInput.Failure {
-                throw CommandError(failure.rawValue, message: failure.message)
-            }
+    private func performElementGesture(_ command: [String: Any], kind: String, target: XCUIElement) throws
+        -> [String: Any] {
+        guard target.isHittable else { throw CommandError("target_not_hittable", requiresObservation: true) }
+        switch kind {
+        case "tap": try event { target.tap() }
+        case "double-tap": try event { target.doubleTap() }
+        case "long-press":
+            guard let duration = command["duration"] as? Double, duration.isFinite, (0.5...5).contains(duration)
+            else { throw CommandError("invalid_press_duration") }
+            try event { target.press(forDuration: duration) }
+            return ["kind": kind, "duration": duration, "targetBinding": "ax_identity"]
+        case "swipe": return try swipeElement(target, command: command)
+        default: throw CommandError("invalid_action")
         }
-        if kind == "type", let text,
-            text.unicodeScalars.contains(where: { $0.value == 10 || $0.value == 13 }),
-            target.elementType != .textView {
-            throw CommandError(
-                "multiline_requires_text_view",
-                message: "Runner multiline text requires a text_view; use a separate press for Return")
-        }
-        return text
+        return ["kind": kind, "targetBinding": "ax_identity"]
     }
 
     @MainActor
-    private func typeText(
-        _ text: String?, mode: String?, target initialTarget: XCUIElement,
-        snapshot: XCUIElementSnapshot, expected: [String: Any]
-    ) throws {
-        let transaction = RunnerTextTransaction()
-        textTransaction = transaction
-        var target = initialTarget
-        do {
-            let final = try transaction.run(
-                initial: snapshot, needsFocus: !(try RunnerAXBinding.keyboardFocus(of: target)).boolValue,
-                events: .init(focus: { try self.event { target.tap() } }, position: {
-                    try self.event { target.typeKey(XCUIKeyboardKey.downArrow.rawValue, modifierFlags: .command) }
-                }, sendText: { input in
-                    try self.event { target.typeText(input) }
-                }), validation: .init(read: { allowContentChange in
-                    let (app, root) = try self.actionRoot(scope: expected["scope"] as? String ?? "")
-                    let (current, snapshot) = try self.actionTarget(
-                        expected, root: root, allowingLeafContentChange: allowContentChange,
-                        classifyingGeometry: true)
-                    try self.validateTextTarget(current, kind: "type")
-                    guard try RunnerAXBinding.keyboardFocus(of: current).boolValue else {
-                        throw CommandError("keyboard_focus_unconfirmed", requiresObservation: true,
-                                           message: "Keyboard focus no longer belongs to the selected element")
-                    }
-                    target = current
-                    self.postInputContext = self.screenContext(app: app, root: root)
-                    return snapshot
-                }, isEmpty: { RunnerTextInput.isCleared($0.value) }, resultMatches: { current, input in
-                    input.isEmpty ? RunnerTextInput.isCleared(current.value) : current.value as? String == input
-                }), plan: { current in
-                    let input = try self.preparedText(
-                        text, mode: mode, kind: "type", target: target, snapshot: current) ?? ""
-                    let replacing = mode == "replace" || mode == "append"
-                    let deletion = replacing ? try RunnerTextInput.replacementInput(
-                        "", value: current.value, secure: current.elementType == .secureTextField,
-                        placeholder: current.placeholderValue, deleteKey: XCUIKeyboardKey.delete.rawValue) : ""
-                    return RunnerTextTransaction.Plan(replacing: replacing, deletion: deletion, insertion: input)
-                })
-            postInputTextFields = [ScreenRect(final.frame)]
-        } catch let failure as RunnerTextInput.Failure {
-            throw CommandError(failure.rawValue, requiresObservation: executionStarted, message: failure.message)
-        } catch let failure as RunnerAXTree.Failure {
-            throw CommandError(failure.rawValue, requiresObservation: true)
-        } catch let failure as RunnerTextTransaction.Failure {
-            throw CommandError(
-                failure.rawValue, requiresObservation: true,
-                message: "Text result was not confirmed; inspect textExecution and observe without replay")
+    private func swipeElement(_ target: XCUIElement, command: [String: Any]) throws -> [String: Any] {
+        guard let direction = command["direction"] as? String, ["up", "down", "left", "right"].contains(direction),
+            let raw = command["motion"] as? [String: Any],
+            let motion = try? JSONDecoder().decode(SwipeMotion.self, from: JSONSerialization.data(withJSONObject: raw)),
+            motion.valid else { throw CommandError("invalid_swipe_motion") }
+        let vertical = ["up", "down"].contains(direction)
+        let low = CGVector(dx: vertical ? 0.5 : 0.2, dy: vertical ? 0.2 : 0.5)
+        let high = CGVector(dx: vertical ? 0.5 : 0.8, dy: vertical ? 0.8 : 0.5)
+        let reverse = ["up", "left"].contains(direction)
+        let from = target.coordinate(withNormalizedOffset: reverse ? high : low)
+        let destination = target.coordinate(withNormalizedOffset: reverse ? low : high)
+        let (_, scopeRoot) = try actionRoot(
+            scope: (command["target"] as? [String: Any])?["scope"] as? String ?? "")
+        guard scopeRoot.frame.contains(from.screenPoint), scopeRoot.frame.contains(destination.screenPoint) else {
+            throw CommandError("target_not_visible", requiresObservation: true)
         }
+        let distance = (vertical ? target.frame.height : target.frame.width) * 0.6
+        guard distance.isFinite, distance > 0,
+            distance / motion.velocity + motion.pressDuration + motion.holdDuration <= 10
+        else { throw CommandError("swipe_duration_exceeded") }
+        try event {
+            from.press(forDuration: motion.pressDuration, thenDragTo: destination,
+                       withVelocity: XCUIGestureVelocity(rawValue: CGFloat(motion.velocity)),
+                       thenHoldForDuration: motion.holdDuration)
+        }
+        return ["kind": "swipe", "targetBinding": "ax_identity", "motion": motion.result]
     }
 
     @MainActor
     private func press(
-        _ pressKey: RunnerPressKey?, target: XCUIElement, app: XCUIApplication,
-        root: XCUIElement
+        _ pressKey: RunnerPressKey?, target: XCUIElement
     ) throws -> [String: Any] {
         guard let pressKey else { throw CommandError("invalid_key") }
         let key = keyboardKey(pressKey)
@@ -258,13 +278,8 @@ extension LiveSessionTests {
             // existing text-input path for Delete/Return; no focus tap.
             try event { target.typeText(key.rawValue) }
         } else {
-            try event { target.typeKey(key.rawValue, modifierFlags: pressKey == .shiftTab ? .shift : []) }
-        }
-        postInputTextFields = [ScreenRect(target.frame)]
-        if pressKey == .tab || pressKey == .shiftTab {
-            let after = screenContext(app: app, root: root)
-            postInputContext = after
-            postInputTextFields = visibleTextFields(root: root, context: after)
+            try event { target.typeKey(key.rawValue, modifierFlags: pressKey == .shiftTab ? .shift :
+                    ([.selectAll, .end].contains(pressKey) ? .command : [])) }
         }
         return ["kind": "press", "key": pressKey.rawValue, "keyModifiers": pressKey.modifiers]
     }
@@ -279,28 +294,10 @@ extension LiveSessionTests {
         case .upArrow: key = .upArrow
         case .down: key = .downArrow
         case .tab, .shiftTab: key = .tab
+        case .selectAll: key = XCUIKeyboardKey(rawValue: "a")
+        case .end: key = .downArrow
         }
         return key
     }
 
-    func matches(_ node: XCUIElementSnapshot, expected: [String: Any], ignoringGeometry: Bool = false) -> Bool {
-        guard expected["type"] as? UInt == node.elementType.rawValue,
-            expected["identifier"] as? String == node.identifier, expected["label"] as? String == node.label,
-            expected["enabled"] as? Bool == node.isEnabled
-        else { return false }
-        guard ignoringGeometry || matchesFrame(node, expected: expected) else { return false }
-        return NSDictionary(dictionary: ["value": node.value ?? NSNull()]).isEqual(to: [
-            "value": expected["value"] ?? NSNull()
-        ])
-    }
-
-    private func matchesFrame(_ node: XCUIElementSnapshot, expected: [String: Any]) -> Bool {
-        guard let frame = expected["frame"] as? [String: Any] else { return false }
-        let actual: [String: Double] = [
-            "x": node.frame.minX, "y": node.frame.minY, "width": node.frame.width, "height": node.frame.height
-        ]
-        return actual.allSatisfy({ key, value in
-                (frame[key] as? Double).map { $0.isFinite && abs($0 - value) <= 0.5 } == true
-            })
-    }
 }

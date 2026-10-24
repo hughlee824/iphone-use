@@ -12,7 +12,7 @@ npx iphone-use-skill uninstall --agent cursor
 
 The default target is `.cursor/skills/iphone-use` or `.opencode/skills/iphone-use` in the current project. Use `--project /absolute/project/path` to select a project. Global targets are `~/.cursor/skills/iphone-use` and `$XDG_CONFIG_HOME/opencode/skills/iphone-use` (default `~/.config`). Run checks from the project you will use, even for a global installation.
 
-This package contains instructions and an installer, not the iPhone-use CLI. Install that separately with `brew install HughLee824/tap/iphone-use`. The agent's shell and image reader must run on the Mac connected to the phone. A remote/cloud agent or a multimodal model without local PNG reading does not meet that requirement.
+This package contains instructions and an installer, not the iPhone-use CLI. It requires stable **CLI 0.4.0 or later**; runner mode uses the Runner shipped with that CLI. Install the CLI separately with `brew install HughLee824/tap/iphone-use`. Updating this skill does not upgrade the CLI; update each through its own channel and start a new agent session to load the updated instructions. The agent's shell and image reader must run on the Mac connected to the phone. A remote/cloud agent or a multimodal model without local PNG reading does not meet that requirement.
 
 ## Duplicate handling
 

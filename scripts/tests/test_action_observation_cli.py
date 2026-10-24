@@ -77,6 +77,54 @@ class ActionObservationCLITests(unittest.TestCase):
             self.assertTrue(result.stdout, f"CLI returned no JSON: exit={result.returncode}, stderr={result.stderr!r}, requests={requests!r}")
             return result.returncode, json.loads(result.stdout), requests
 
+    def test_explicit_input_primitives_use_new_protocol_once_without_hidden_steps(self):
+        for args in (["focus", "o1:e2"], ["clear", "o1:e2"],
+                     ["type", "o1:e2", "--text", "once"],
+                     ["press", "o1:e2", "--key", "select-all"],
+                     ["press", "o1:e2", "--key", "end"]):
+            code, _, requests = self.run_cli(args)
+            self.assertEqual(code, 0)
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(requests[0]["version"], 2)
+            self.assertEqual(requests[0]["reference"], "o1:e2")
+            if args[0] == "type":
+                self.assertEqual(requests[0]["mode"], "insert")
+
+    def test_explicit_input_lost_reply_never_replays_or_adds_hidden_steps(self):
+        for args in (["focus", "o1:e2"], ["clear", "o1:e2"],
+                     ["type", "o1:e2", "--text", "once"],
+                     ["press", "o1:e2", "--key", "select-all"],
+                     ["press", "o1:e2", "--key", "end"]):
+            with self.subTest(args=args):
+                code, response, requests = self.run_cli([*args, "--observe"], lose_action=True)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(response["action"]["outcome"], "unknown")
+                self.assertTrue(response["observation"]["ok"])
+                self.assertEqual([r["op"] for r in requests], [args[0], "observe"])
+                self.assertEqual(requests[0]["version"], 2)
+
+    def test_explicit_verification_and_capture_failure_preserve_acknowledgement(self):
+        for operation in ("focus", "clear"):
+            for verification in ("unconfirmed", "unavailable"):
+                with self.subTest(operation=operation, verification=verification):
+                    facts = {"eventAttempted": True, "eventAcknowledged": True,
+                             "verification": verification, "automaticReplayAllowed": False}
+                    details = {"kind": operation, "inputAction": facts,
+                               "execution": {"started": True, "inputCompleted": True, "completed": True},
+                               "observationError": "post_action_capture_unavailable"}
+                    code, response, requests = self.run_cli(
+                        [operation, "o1:e2", "--observe", "--agent-output"],
+                        details=details, capture_ok=False)
+                    try:
+                        self.assertNotEqual(code, 0)
+                        self.assertEqual(response["action"]["outcome"], "completed")
+                        self.assertEqual(response["action"]["result"], details)
+                        self.assertFalse(response["observation"]["ok"])
+                        self.assertFalse(response["agentSummary"]["automaticReplayAllowed"])
+                        self.assertEqual([r["op"] for r in requests], [operation, "observe"])
+                    finally:
+                        shutil.rmtree(Path(response["receipt"]).parent)
+
     def test_touch_paste_is_explicit_staging_and_keeps_prepared_receipt(self):
         details = {"phase": "awaiting_touch_paste", "textInserted": False, "inputReportsSent": 0,
                    "pasteboard": {"transactionID": "touch-token", "restorePending": True}}
@@ -193,7 +241,7 @@ class ActionObservationCLITests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual([r["op"] for r in requests], ["swipe", "observe"])
         self.assertEqual(requests[0]["ignoreRect"], "60,150,180,200")
-        self.assertEqual(requests[0]["maxScreenChange"], 0.01)
+        self.assertNotIn("maxScreenChange", requests[0])  # The host selects its backend default.
         self.assertEqual(requests[0]["maxRegionChange"], 0)
         self.assertNotIn("ignoreRect", requests[1])
 
@@ -233,7 +281,7 @@ class ActionObservationCLITests(unittest.TestCase):
                 self.assertEqual(response["observation"]["result"]["screenshot"], "/fixture/o2.png")
                 self.assertEqual([request["op"] for request in requests], [args[0], "observe"])
                 self.assertNotEqual(requests[0]["id"], requests[1]["id"])
-                self.assertTrue(all(request["version"] == 1 and "observe" not in request for request in requests))
+                self.assertTrue(all(request["version"] == (1 if request["op"] in ("observe", "open") else 2) and "observe" not in request for request in requests))
 
     def test_native_home_and_long_press_never_replay_lost_input(self):
         for args in [["home", "o1"], ["long-press", "o1", "--x", "100", "--y", "200", "--duration", "1.2"]]:

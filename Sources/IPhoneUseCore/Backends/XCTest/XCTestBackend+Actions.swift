@@ -68,8 +68,8 @@ extension XCTestBackend {
         return try ActionReply.decode(
             XCTestCapture.actionResponse(
                 response, directory: paths.directory,
-                expectedGuard: target.gesture?.screenGuard ?? target.textGuard,
-                expectedMotion: target.gesture?.motion,
+                expectedGuard: action.kind == "home" ? nil : target.gesture?.screenGuard ?? target.textGuard,
+                expectedMotion: action.swipeMotion,
                 expectedPinch: target.gesture?.pinch,
                 expectedPressDuration: action.fields["duration"] as? Double,
                 expectedHome: action.kind == "home",
@@ -79,7 +79,7 @@ extension XCTestBackend {
 
     static func validateCapabilities(_ result: [String: Any]) throws {
         let expected = [
-            "observationVersion": 4, "actionVersion": 12, "launchVersion": 2, "frameStabilityVersion": 2,
+            "observationVersion": 4, "actionVersion": 13, "launchVersion": 2, "frameStabilityVersion": 2,
             "screenGuardVersion": 1, "previewGeometryVersion": 2, "inputProgressVersion": 1
         ]
         var differences = expected.keys.sorted().compactMap { key -> String? in
@@ -121,7 +121,7 @@ extension XCTestBackend {
                 throw IPhoneUseError("missing_screen_guard", "Home requires the current screenshot")
             }
             fields = ["kind": "home", "screenGuard": try jsonObject(JSONEncoder().encode(screenGuard))]
-        } else if ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind) {
+        } else if action.coordinate && ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind) {
             guard let gesture = target.gesture else {
                 throw IPhoneUseError("missing_screen_guard", "Guarded coordinates are required")
             }
@@ -130,6 +130,7 @@ extension XCTestBackend {
             if action.kind == "long-press" { fields["duration"] = action.fields["duration"] }
         } else {
             fields = action.fields
+            if let motion = action.swipeMotion { fields["motion"] = try jsonObject(JSONEncoder().encode(motion)) }
         }
         var expected: [String: Any] = [
             "scope": target.context["scope"] ?? NSNull(),

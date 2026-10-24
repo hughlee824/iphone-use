@@ -39,6 +39,7 @@ class VerifiedPublicationTests(unittest.TestCase):
         result = subprocess.run([sys.executable, '-c', CHECKS[index]],
                                 env={**self.env, **env}, capture_output=True, text=True)
         self.assertEqual(result.returncode == 0, success, result.stderr)
+        return result
 
     def test_inputs_reject_unaccepted_or_unsafe_versions_and_digests(self):
         self.run_check(0)
@@ -76,6 +77,43 @@ class VerifiedPublicationTests(unittest.TestCase):
         for field in ['version', 'sourceCommit', 'sha256']:
             self.write('verified.json', {**self.verified, field: 'mismatch'})
             self.run_check(2, False)
+
+    def test_acceptance_states_replace_only_the_acceptance_section(self):
+        prefix = ('## Changes\nKeep changes.\n\n### Installation and Runner\nKeep upgrade advice.\n\n')
+        suffix = ('## Limitations\nKeep limitations.\n\n## Installation\nKeep instructions.\n')
+        for state in ['pending', 'passed', 'passed within the tested scope', 'pending device checks']:
+            with self.subTest(state=state):
+                body = prefix + f'## Local device acceptance — {state}\nOld acceptance.\n\n' + suffix
+                self.write('draft.json', {**self.draft, 'body': body})
+                self.run_check(2)
+                notes = (self.root / 'notes.md').read_text()
+                expected = ('## Local device acceptance — passed\n\n'
+                            + self.env['ACCEPTANCE_SUMMARY'] + '\n\n'
+                            + f"Accepted archive SHA-256: `{self.env['ARCHIVE_SHA256']}`. Published without rebuilding.\n\n")
+                self.assertEqual(notes, prefix + expected + suffix)
+
+    def test_missing_duplicate_or_invalid_sections_fail_without_notes(self):
+        acceptance = '## Local device acceptance — passed\nAccepted.\n\n'
+        installation = '## Installation\nInstructions.\n'
+        cases = {
+            'missing acceptance': installation,
+            'missing installation': acceptance,
+            'duplicate acceptance': acceptance + acceptance + installation,
+            'mixed duplicate acceptance': self.draft['body'] + acceptance,
+            'scoped duplicate acceptance': acceptance + '## Local device acceptance — passed within scope\n' + installation,
+            'duplicate installation': acceptance + installation + installation,
+            'installation before acceptance': installation + acceptance,
+            'installation prefix only': acceptance + '## Installation and Runner\nNot the installation section.\n',
+            'nested acceptance only': '#' + acceptance + installation,
+            'unknown status': '## Local device acceptance — failed\n' + installation,
+            'status prefix only': '## Local device acceptance — passedness\n' + installation,
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                self.write('draft.json', {**self.draft, 'body': body})
+                result = self.run_check(2, False)
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertFalse((self.root / 'notes.md').exists())
 
 
 if __name__ == '__main__':

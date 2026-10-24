@@ -43,12 +43,12 @@ final class DeviceActionTests: XCTestCase {
     }
 
     func testInputModesUnicodeAndControlKeys() throws {
-        for mode in ["insert", "replace", "append"] {
+        for mode in ["insert"] {
             let action = try DeviceAction(
                 operation: "type", request: ["reference": "o1:e27", "mode": mode, "text": "北京👩‍💻e\u{301}"])
             XCTAssertEqual(action.fields["text"] as? String, "北京👩‍💻e\u{301}")
         }
-        XCTAssertNoThrow(
+        XCTAssertThrowsError(
             try DeviceAction(
                 operation: "type", request: ["reference": "o1:e27", "mode": "replace", "text": ""]))
         for text in ["", "\r", "a\r\nb", "\t", "\u{7f}", "\u{F700}", String(repeating: "北", count: 1366)] {
@@ -78,7 +78,7 @@ final class DeviceActionTests: XCTestCase {
             for text in [" 首🙂行\n\n尾e\u{301} \n", "首\n尾\n"] {
                 let action = try DeviceAction(
                     operation: "type",
-                    request: ["reference": "\(observationID):e27", "mode": "replace", "text": text])
+                    request: ["reference": "\(observationID):e27", "mode": "insert", "text": text])
                 XCTAssertEqual(
                     Array(((try XCTUnwrap(action.fields["text"] as? String))).utf8), Array(text.utf8))
                 if role == "text_view" {
