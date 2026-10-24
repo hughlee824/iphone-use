@@ -37,7 +37,7 @@ Standard currently requires the documented macOS/Xcode/iOS 27 environment, pairi
 
 ## Quick start
 
-Install the published CLI through Homebrew or the Release archive, then start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md), including legacy formula migration and formula-scoped Homebrew trust.
+Install the published CLI through Homebrew or the Release archive, then start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md) for installation and upgrades. The current plugin and portable skill require stable **CLI 0.4.0 or later** and update separately; see [client compatibility](docs/plugins.md#先检查环境).
 
 ### 1. Prepare and connect
 
@@ -110,7 +110,7 @@ Use `iphone-use --help` or `iphone-use <command> --help` for all options. Sessio
 | `inspect REF [--query TEXT]` | Read or search a cached observation or subtree. |
 | `tap REF` | Tap an element, or use an observation ID with `--x X --y Y`. |
 | `swipe REF --direction up` | Swipe an element; explicit endpoints, velocity, and hold durations are also supported. |
-| `type REF --mode replace --text TEXT` | Replace text, or use `--mode insert` at an already focused caret. `--stdin` accepts UTF-8 from a file or pipe. |
+| `focus REF --observe` / `type REF --text TEXT --observe` | Runner: explicit focus, then insertion; [replacement/append workflows](docs/runner-actions.md). Standard keeps its native modes. |
 | `press REF --key KEY` | Send an editing key to an already focused text input; see [supported keys](docs/runner-editing-keys.md). |
 | `disconnect` | Finish accepted commands and clean up the session. |
 
@@ -118,9 +118,9 @@ Both modes also support `type oN --mode insert --method touch-paste --text TEXT`
 
 Coordinates use **screen points**, not screenshot pixels. Swipe direction describes finger movement. Text input does not submit automatically; use a separate `press` when appropriate. See [actions](docs/actions.md) for text limits, dragging, and examples.
 
-## Local live preview (source experiment)
+## Local live preview
 
-The current source supports a read-only browser view in both standard and runner modes, sharing the owned native video stream without Device Hub. Use a source build that includes `preview`; this does not establish availability in published CLI packages.
+CLI 0.4.0 includes a read-only browser preview in both standard and runner modes, sharing the owned native video stream without Device Hub. Use `preview` from the installed release package; no source build is required. Device acceptance covers the documented Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro environment, not every device or OS combination. See the [release notes](https://github.com/HughLee824/iphone-use/releases/tag/v0.4.0) for the actual acceptance scope.
 
 The viewer selects the device appearance by exact `productType`: retained official artwork for 23 iPhone 11–16 models, and independently drawn parameterized frames for covered newer models including 17 / Air and 18 Pro / Pro Max. Missing assets or unknown models use a drawn frame; the plain-view toggle has been removed. Portrait and both landscape directions remain supported. The model name and connection indicator sit below the device; the fullscreen button has been removed. Debug builds provide an appearance comparison button when official artwork is available; Release builds hide it. The page follows the system color scheme and keeps the video size and centre unchanged when switching appearances. All 32 supported identifiers have model-specific opening geometry calibrated against the corresponding retained PNG or public dimensional drawing; see the [calibration inventory](docs/preview-hardware-calibration.md). Restricted newer Apple artwork is not included. See [Product Bezels provenance and separate license](assets/preview/README.md).
 
@@ -134,7 +134,7 @@ iphone-use --session "$SESSION" record-stop "$RECORDING_ID"
 iphone-use --session "$SESSION" preview --stop
 ```
 
-CLI 0.3.12 adds `connect --progress`: newline-delimited `connection_progress` JSON events followed by the final connection result. Agents should relay confirmed authorization requests immediately and continue the same pending connection. Enter passcodes only on the iPhone. Confirmation requires a live device log associated with the exact launched Runner PID; timeouts, stalled video and unavailable logging never establish authorization.
+`connect --progress` emits newline-delimited `connection_progress` JSON events followed by the final connection result. Agents should relay confirmed authorization requests immediately and continue the same pending connection. Enter passcodes only on the iPhone. Confirmation requires a live device log associated with the exact launched Runner PID; timeouts, stalled video and unavailable logging never establish authorization.
 
 For Runner, `connect --device "$IOS_UDID" --mode runner --progress --preview` starts the preview page before authentication; `--port 9876` overrides the configured port. It returns a URL without opening a browser. The page shows conditional startup guidance, a prominent confirmed-authorization notice, and then live media on the same URL after authentication and connection complete. Omitting `--progress` preserves the single-JSON output contract. This dedicated screen is only for confirmed UI Automation authentication; Face ID and other app prompts remain visible in the live feed. See [connection progress and authorization](skills/iphone-use/references/connection-progress.md) and [validation procedures](docs/testing.md).
 
@@ -172,7 +172,7 @@ See [portable skill installation](docs/plugins.md#通用-skillcursor--opencode) 
 
 Add `--observe` to `open`, `tap`, `swipe`, `type`, or `press` to return one JSON object containing separate `action` and `observation` responses. Exit code zero requires both to succeed; an observation failure never overwrites the action's outcome or replays input. A confirmed rejection without a refresh requirement skips observation. This client-side sequence uses the existing host protocol, including older hosts; it does not reserve the device between requests. Read `observation.result.text` and its `screenshot` before choosing the next input. See [the contract and examples](docs/actions.md#动作后观察).
 
-Check the installed command's `--help` for `--observe` support. For older CLIs, the skill retains the [action-and-observation fallback template](skills/iphone-use/references/action-observation.md).
+Check the installed command's `--help` for `--observe` support. If that capability is unavailable after version preflight, use the [action-and-observation fallback template](skills/iphone-use/references/action-observation.md).
 
 Successful `observe` and `inspect` commands print multiline text. Other results and runtime errors use single-line JSON. Success exits with `0`; runtime failure exits with `1`. Argument syntax errors are reported on stderr with a nonzero exit code.
 

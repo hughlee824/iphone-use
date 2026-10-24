@@ -48,6 +48,7 @@ public enum RunnerAXTree {
         case invalidPath = "invalid_action"
         case pathChanged = "target_path_changed"
         case targetChanged = "target_changed"
+        case ambiguousIdentity = "target_identity_ambiguous"
         case geometryChanged = "target_geometry_changed"
     }
 
@@ -57,7 +58,8 @@ public enum RunnerAXTree {
         root: Element, path: [[String: Any]], access: Access<Element, Snapshot>,
         sameIdentity: (Snapshot, Snapshot) throws -> Bool,
         matches: (Snapshot, [String: Any]) throws -> Bool,
-        geometryMatches: ((Snapshot, [String: Any]) -> Bool)? = nil
+        geometryMatches: ((Snapshot, [String: Any]) -> Bool)? = nil,
+        identityMatches: ((Snapshot, [String: Any]) throws -> Bool)? = nil
     ) throws -> (Element, Snapshot) {
         var geometryChanged = false
         // Never short-circuit at a moving ancestor: a changed identity or path
@@ -67,14 +69,18 @@ public enum RunnerAXTree {
             if geometryMatches?(node, step) == false { geometryChanged = true }
             return true
         }
-        let selected = try walk(access.snapshot(root), path: path, children: access.children, matches: check)
+        let selected = try walk(
+            access.snapshot(root), path: path, children: access.children,
+            matches: check, identityMatches: identityMatches)
         let element = try access.bind(root, selected)
         let resolved = try access.snapshot(element)
         guard try sameIdentity(selected, resolved), try check(resolved, path[path.count - 1]) else {
             throw Failure.targetChanged
         }
         // Revalidate the complete path after binding, not just the leaf's attributes.
-        let latest = try walk(access.snapshot(root), path: path, children: access.children, matches: check)
+        let latest = try walk(
+            access.snapshot(root), path: path, children: access.children,
+            matches: check, identityMatches: identityMatches)
         guard try sameIdentity(latest, resolved) else { throw Failure.targetChanged }
         guard !geometryChanged else { throw Failure.geometryChanged }
         return (element, latest)
@@ -82,17 +88,26 @@ public enum RunnerAXTree {
 
     private static func walk<Snapshot>(
         _ root: Snapshot, path: [[String: Any]], children: (Snapshot) -> [Snapshot],
-        matches: (Snapshot, [String: Any]) throws -> Bool
+        matches: (Snapshot, [String: Any]) throws -> Bool,
+        identityMatches: ((Snapshot, [String: Any]) throws -> Bool)?
     ) throws -> Snapshot {
         guard let first = path.first else { throw Failure.invalidPath }
         var current = root
         guard try matches(current, first) else { throw Failure.targetChanged }
         for step in path.dropFirst() {
             let descendants = children(current)
-            guard let index = step["childIndex"] as? Int, descendants.indices.contains(index) else {
-                throw Failure.pathChanged
+            guard let index = step["childIndex"] as? Int, index >= 0 else { throw Failure.invalidPath }
+            if let identityMatches {
+                // Only direct siblings under the already verified parent. Never
+                // search another branch or choose the first attribute match.
+                let candidates = try descendants.filter { try identityMatches($0, step) }
+                guard candidates.count <= 1 else { throw Failure.ambiguousIdentity }
+                guard let selected = candidates.first else { throw Failure.targetChanged }
+                current = selected
+            } else {
+                guard descendants.indices.contains(index) else { throw Failure.pathChanged }
+                current = descendants[index]
             }
-            current = descendants[index]
             guard try matches(current, step) else { throw Failure.targetChanged }
         }
         return current

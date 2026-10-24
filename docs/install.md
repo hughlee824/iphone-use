@@ -85,7 +85,7 @@ iphone-use --session "$SESSION" disconnect
 
 示例中的设备、会话、观察 ID 和坐标都必须替换为当前真实值。`--x/--y` 接收屏幕点：`x = screen.x + pixelX × screen.width / imageWidth`，y 同理，尺寸来自本次观察；不能固定除以 3，也不能直接传缩放预览坐标。新用户省略 `--mode` 时默认 standard；旧配置可能保留 runner。单次 `--mode` 不改默认值，需要持久选择时使用 `iphone-use config set mode standard`，保存在 `~/.iphone-use/config.json`。标准模式不安装或启动 Runner，不使用已有签名准备记录，也不隐式切换到 XCTest。
 
-两种模式均可运行 `iphone-use --session "$SESSION" preview` 打开只读本地实时预览，与控制、录屏共享会话。从 0.3.1 起，正式构建隐藏临时外观切换按钮，但仍优先显示对应机型的官方外框，素材不可用时自动回退自绘；Debug 构建保留外观对比按钮。0.3.0 的 Homebrew 符号链接入口会意外跳过官方素材，这是 0.3.1 修复的资源定位问题，并非生产版功能开关。详见源码仓库的 `docs/local-preview.md`。
+两种模式均可运行 `iphone-use --session "$SESSION" preview` 打开只读本地实时预览，与控制、录屏共享会话。正式构建隐藏临时外观切换按钮，优先显示对应机型的官方外框，素材不可用时自动回退自绘；Debug 构建保留外观对比按钮。详见源码仓库的 `docs/local-preview.md`。
 
 标准模式的观察和动作前校验都使用 Apple PNG，不为截图启动或常驻媒体流。显式开始预览或录屏时才创建自有媒体会话；两者共存时共享该流，停止录屏后仍可保持预览，最后一个使用方结束后清理媒体会话。
 
@@ -143,6 +143,6 @@ Homebrew 用户运行 `brew install HughLee824/tap/iphone-use`，升级时以 [T
 
 ### 插件渠道
 
-外部 Agent 插件单独分发，版本号与 CLI 不同。使用对应 Release 附带的 `iphone-use-plugin-<version>.zip` 或仓库文档列出的实际可用客户端渠道；插件不包含 CLI，也不证明设备已就绪。新旧插件不要同时启用，避免同一手机任务匹配到两套操作说明。
+外部 Agent 插件与通用 skill 单独分发，版本号与 CLI 不同。插件/通用 skill 0.2.0 和 0.2.1 均要求稳定版 CLI 0.4.0 或更高版本；升级 CLI 后仍须分别更新客户端插件或 skill，并开始新会话。使用对应 Release 附带的 `iphone-use-plugin-<version>.zip` 或仓库文档列出的实际可用客户端渠道；插件不包含 CLI，也不证明设备已就绪。新旧插件不要同时启用，避免同一手机任务匹配到两套操作说明。
 
 二进制编译下限为 Apple Silicon / macOS 15，不能据此推断标准模式支持旧系统；标准模式当前仍要求上述 27 环境。发布流程见源码仓库的 `docs/release-setup.md`。

@@ -6,7 +6,7 @@ import ImageIO
 
 extension ScreenGuardTests {
 
-    func testUnnamedSiblingControlsResolveToCoordinatesWithoutSendingAXPaths() throws {
+    func testElementSwipesRetainIdentityPathsInsteadOfOldCoordinates() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "guard-targets-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -26,13 +26,10 @@ extension ScreenGuardTests {
             let action = try DeviceAction(
                 operation: "swipe", request: ["reference": "o1:e\(index + 1)", "direction": "up"])
             let target = try cache.resolveTarget(for: action)
-            let gesture = try XCTUnwrap(target.gesture)
-            XCTAssertEqual(gesture.start.x, Double(index - 1) * 195 + 97.5)
-            XCTAssertEqual(gesture.start.y, 457)
-            XCTAssertEqual(gesture.end?.y, 313)
-            XCTAssertTrue(target.path.isEmpty)
+            XCTAssertNil(target.gesture)
+            XCTAssertEqual(target.path.last?["childIndex"] as? Int, index - 1)
             let fields = try XCTestBackend.actionFields(action, target: target)
-            XCTAssertNil((fields["target"] as? [String: Any])?["path"])
+            XCTAssertNotNil((fields["target"] as? [String: Any])?["path"])
             XCTAssertFalse(
                 (try XCTUnwrap(String(data: try jsonData(fields), encoding: .utf8))).contains("o1:e"))
         }
@@ -77,7 +74,7 @@ extension ScreenGuardTests {
 
     func testOlderRunnerCannotSilentlySkipScreenGuards() throws {
         let supported: [String: Any] = [
-            "lifecycleOwner": "host", "observationVersion": 4, "actionVersion": 12,
+            "lifecycleOwner": "host", "observationVersion": 4, "actionVersion": 13,
             "launchVersion": 2, "frameStabilityVersion": 2, "screenGuardVersion": 1,
             "previewGeometryVersion": 2,
             "inputProgressVersion": 1

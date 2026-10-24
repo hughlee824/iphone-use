@@ -26,7 +26,8 @@ final class LiveSessionTests: XCTestCase {
     var lifecycleFacts: [String: Any]?
     var observedReferences = RunnerAXReferences<NSObject>()
     var commandReferences = RunnerAXReferences<NSObject>()
-    var textTransaction: RunnerTextTransaction?
+    var inputAction: RunnerInputAction?
+    var postObservationError: String?
     let stateTimeout = XCTestStateTimeout()
     var postInputTextFields: [ScreenRect] = []
     var postInputContext: ScreenContext?
@@ -100,7 +101,8 @@ final class LiveSessionTests: XCTestCase {
         handlingCommand = true
         lifecycleFacts = nil
         commandReferences = RunnerAXReferences()
-        textTransaction = nil
+        inputAction = nil
+        postObservationError = nil
         executionStarted = false
         inputProgress = nil
         inputCompleted = false
@@ -130,7 +132,11 @@ final class LiveSessionTests: XCTestCase {
                 }
             }
             response["result"] = try await execute(command)
-            try checkIssues()
+            if command["op"] as? String == "act", inputCompleted {
+                if !commandIssues.isEmpty { postObservationError = "post_action_validation_unavailable" }
+            } else {
+                try checkIssues()
+            }
             response["ok"] = true
             stopping = command["op"] as? String == "shutdown"
         } catch {
@@ -152,15 +158,16 @@ final class LiveSessionTests: XCTestCase {
             ]
         }
         if command["op"] as? String == "act" {
-            if let textTransaction {
+            if let inputAction {
                 var result = response["result"] as? [String: Any] ?? [:]
-                result["textExecution"] = textTransaction.facts
+                result["inputAction"] = inputAction.facts
                 response["result"] = result
             }
             response["execution"] = [
                 "started": executionStarted, "inputCompleted": inputCompleted,
                 "completed": response["ok"] as? Bool == true
             ]
+            response["observationError"] = postObservationError
             response["stability"] = frameStability?.result
             if response["ok"] as? Bool == false, let reference = frameStability?.comparisonReferencePNG {
                 response["stabilityReferenceBase64"] = reference.base64EncodedString()

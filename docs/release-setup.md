@@ -27,6 +27,8 @@ CLI 从自身真实路径定位配套资源，支持搬移整个目录和软链�
 
 setup 将包复制到用户状态目录，改写为保存的 App bundle ID、嵌入用户 profile，由本机 codesign 对测试 bundle 和 Runner 签名并校验。随后通过 CoreDevice 显式安装，独立后台启动 Runner 并经 USB 本地通信做真机握手、截图和退出验证，成功后原子更新按 UDID 保存的记录。安装目录不写入用户签名资料。设备能力握手仍是最终兼容性检查；本地文件存在和签名校验成功不能替代它。
 
+交互式 setup 默认提供进度和授权前视频；脚本使用 `setup --progress --preview`。两条入口共用连接、授权监测及媒体清理机制；预览失败只报告诊断，不重启 Runner。参数、NDJSON 和原标签页处理见 [Runner setup](onboarding.md#发布包-setup)。
+
 相同设备重复 setup 复用有效产物，续签时扫描 Xcode profile 和已保存 profile。相同签名配置选择较晚到期的有效 profile；跨团队或证书有歧义时明确报错，不猜测。Runner 内容摘要不包含 CLI release 版本和 CLI 摘要，因此同一 Runner 原样随 CLI 更新时可复用。新的重签目录不会覆盖旧目录，活跃会话继续持有自己的文件。
 
 ## 维护者构建
@@ -116,6 +118,8 @@ formula 将原包的 `bin` 与 `libexec` 一起放在 Homebrew keg 的 `libexec`
 | 支持范围 | 通过、失败及未测试的条件。首发或接入流程变更时补干净 Mac 的首次配置；免费账号等范围按实测声明 |
 
 外部 agent 可以协助执行本地验收，维护者依据观察结果填写草稿的 `Local device acceptance`，通过后改为 `passed`，并完成对应勾选；不适用项写明理由。setup 的截图或输入命令的成功响应不能代替业务结果核对。证书/profile、设备标识及含个人内容的截图和日志保留本地。
+
+发布工作流接受二级标题 `## Local device acceptance — pending`、`## Local device acceptance — passed`，以及状态后附带范围说明的标题（例如 `passed within the tested scope`）。验收章节和后面的 `## Installation` 必须各有且只有一个；缺失、重复或顺序错误会在发布前拒绝。工作流仅替换验收章节，保留其他章节；提交的验收摘要应包含实际结果和未测范围。
 
 ### 版本与失败处理
 

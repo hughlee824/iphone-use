@@ -52,7 +52,7 @@ final class HostRequest {
     }
 
     func validateIdentity() -> Bool {
-        guard request["version"] as? Int == 1, request["session"] as? String == config.session,
+        guard [1, 2].contains(request["version"] as? Int ?? 0), request["session"] as? String == config.session,
             !id.isEmpty,
             ([
                 "status", "apps", "open", "terminate", "relaunch", "observe", "inspect", "disconnect",

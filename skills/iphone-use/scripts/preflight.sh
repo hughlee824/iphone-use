@@ -34,10 +34,10 @@ elif [ "$candidate_workflow" = true ] && printf '%s\n' "$version" | grep -Eq '^[
   echo 'Explicit local candidate: no published-release or device-readiness claim.'
 elif ! printf '%s\n' "$version" | awk -F. '
   /^[0-9]+\.[0-9]+\.[0-9]+$/ {
-    if ($1 > 0 || ($1 == 0 && $2 >= 1)) valid = 1
+    if ($1 > 0 || ($1 == 0 && $2 >= 4)) valid = 1
   }
   END {exit !(valid && NR == 1)}'; then
-  echo "Unsupported CLI version: $version. Install stable iPhone-use 0.1.0 or later." >&2
+  echo "Unsupported CLI version: $version. Install stable iPhone-use 0.4.0 or later." >&2
   exit 1
 fi
 if ! developer_dir=$(xcode-select -p) || [ ! -d "$developer_dir/Platforms/iPhoneOS.platform" ]; then
@@ -56,6 +56,11 @@ if printf '%s\n' "$tap_help" | grep -q -- '--agent-output'; then
 fi
 if text_help=$("$cli" text-prepare --help 2>/dev/null) && printf '%s\n' "$text_help" | grep -q -- '--field-rect'; then
   echo 'Scoped text preparation: available. Before the first input, text-prepare once; then inspect the returned screenshot and focus the field if needed.'
+fi
+if setup_help=$("$cli" setup --help 2>/dev/null) &&
+   printf '%s\n' "$setup_help" | grep -q -- '--preview' &&
+   printf '%s\n' "$setup_help" | grep -q -- '--progress'; then
+  echo 'Setup preview: available. For an authorized packaged Runner setup, use setup --progress --preview (or --no-preview when opted out); relay progress and reuse the original tab before authorization completes. Setup closes its verification session and video source.'
 fi
 connect_help=$("$cli" connect --help)
 if printf '%s\n' "$connect_help" | grep -q -- '--reuse'; then
@@ -78,3 +83,7 @@ else
   echo 'Live preview: unavailable. Continue phone control without preview; do not automatically upgrade or switch the selected CLI.'
 fi
 echo 'Next: iphone-use devices. A successful preflight does not validate device trust or signing.'
+
+if "$cli" focus --help >/dev/null 2>&1 && "$cli" clear --help >/dev/null 2>&1; then
+  echo 'Explicit Runner actions: available. Read references/runner-actions.md; focus and inspect before type. Replace/append are agent workflows, not implicit modes.'
+fi

@@ -4,7 +4,8 @@ import Foundation
 
 struct TypeText: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "type", abstract: "Insert, replace, or append in a text input.")
+        commandName: "type",
+        abstract: "Insert once into existing focus; Runner replacement/append are agent workflows.")
     @OptionGroup var options: SessionOptions
     @OptionGroup var observation: ActionObservationOptions
     @Argument(
@@ -19,11 +20,11 @@ struct TypeText: ParsableCommand {
     @Option(
         help:
             """
-            insert uses the current caret/selection; replace selects all (XCTest also focuses the referenced\
-             field); Runner append reads validated non-secure text and replaces it with the concatenated\
-             result; native append requests document end. Native modes never focus implicitly.
+            Runner: insert only, requires focus on this target; never taps, clears or moves the caret.
+            Standard: insert/replace/append retain the native input contract. Use explicit select-all,
+            observe, clear, observe, type for Runner replacement; end, observe, type for append.
             """
-    ) var mode: String
+    ) var mode: String = "insert"
     @Option(
         help:
             """
@@ -186,7 +187,7 @@ struct Press: ParsableCommand {
             """
     ) var reference: String
     @Option(
-        help: "Key: return, backspace, left, right, up, down, tab, shift-tab. Native oN also supports escape."
+        help: "Keys: return, backspace, arrows, tab, shift-tab. Runner adds select-all, end; native adds escape."
     )
     var key: String
     @Option(
@@ -222,6 +223,34 @@ struct Press: ParsableCommand {
         ) {
             try SessionClient.call(
                 session: session, operation: caretRect == nil ? "press" : "press-with-caret", fields: fields)
+        }
+    }
+}
+
+struct Focus: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Focus one Runner input; inspect the new observation.")
+    @OptionGroup var options: SessionOptions
+    @OptionGroup var observation: ActionObservationOptions
+    @Argument(help: "Current Runner input element reference.") var reference: String
+    mutating func run() throws {
+        let session = try options.requiredSession()
+        try outputAction(session: session, observe: observation.observe, agentOutput: observation.output.agentOutput) {
+            try SessionClient.call(session: session, operation: "focus", fields: ["reference": reference])
+        }
+    }
+}
+
+struct Clear: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Delete a visually confirmed selection once; reports whether the Runner field is empty.")
+    @OptionGroup var options: SessionOptions
+    @OptionGroup var observation: ActionObservationOptions
+    @Argument(help: "Focused Runner input. First press select-all, observe and check selection. No implicit selection.")
+    var reference: String
+    mutating func run() throws {
+        let session = try options.requiredSession()
+        try outputAction(session: session, observe: observation.observe, agentOutput: observation.output.agentOutput) {
+            try SessionClient.call(session: session, operation: "clear", fields: ["reference": reference])
         }
     }
 }

@@ -80,15 +80,25 @@ jobs:
           python3 scripts/release/verify-release.py "$RUNNER_TEMP/assets/iphone-use-$VERSION-macos-arm64.tar.gz" \
             --require-clean --no-execute > "$RUNNER_TEMP/verified.json"
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
           root = Path(os.environ['RUNNER_TEMP'])
           verified = json.loads((root / 'verified.json').read_text())
           if (verified['version'], verified['sourceCommit'], verified['sha256']) != (os.environ['VERSION'], os.environ['GITHUB_SHA'], os.environ['ARCHIVE_SHA256']):
               raise SystemExit('Archive identity differs from the accepted version, source or digest.')
           body = json.loads((root / 'draft.json').read_text())['body']
-          start = body.index('## Local device acceptance — pending')
-          end = body.index('## Installation', start)
+          headings = list(re.finditer(r'^##[ \t]+([^\r\n]+?)[ \t]*\r?$', body, re.MULTILINE))
+          sections = [heading for heading in headings if heading[1].startswith('Local device acceptance')]
+          installation = [heading for heading in headings if heading[1] == 'Installation']
+          if len(sections) != 1 or len(installation) != 1:
+              raise SystemExit('Require exactly one Local device acceptance section and one Installation section.')
+          section = sections[0]
+          if not re.fullmatch(r'Local device acceptance — (?:pending|passed)(?:[ \t]+[^\r\n]+)?', section[1]):
+              raise SystemExit('Acceptance section must be pending or passed, optionally followed by scope details.')
+          if installation[0].start() <= section.start():
+              raise SystemExit('Installation must follow Local device acceptance.')
+          start = section.start()
+          end = headings[headings.index(section) + 1].start()
           acceptance = '## Local device acceptance — passed\n\n' + os.environ['ACCEPTANCE_SUMMARY'].strip() + '\n\n'
           acceptance += f"Accepted archive SHA-256: `{verified['sha256']}`. Published without rebuilding.\n\n"
           (root / 'notes.md').write_text(body[:start] + acceptance + body[end:])

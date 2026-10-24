@@ -73,7 +73,7 @@ Agent rules:
 
 The external agent owns planning and visual verification. No model or automatic cross-backend action router is added.
 
-Runner text now supports insert/replace/append. Append reconstructs a readable non-secure value and replaces the field; it is not a native document-end shortcut. LF multiline input requires a text_view. CR/CRLF remain rejected in Runner’s XCTest typing because XCTest changes their bytes; standard paste keeps them intact. See [text actions](actions.md).
+Runner uses explicit focus and insertion; replace/append are agent workflows, never implicit whole-field rewrites. See [Runner actions](runner-actions.md). LF requires text_view; Runner CR/CRLF remain rejected.
 
 Runner also implements screenshot-coordinate long-press, double-tap and pinch. Drag-and-drop uses swipe with an initial press duration. These actions keep screen guards and never establish a native control session; see [Runner gestures](runner-gestures.md).
 

@@ -32,30 +32,18 @@ Unicode 输入会读取并在内存中备份设备通用剪贴板，写入整段
 
 ## CLI 形式
 
-下面的会话和引用需要替换为实际返回值，每次派发动作后重新 observe。
+Runner 的显式 focus/type/clear、编辑按键、元素手势、替换和追加流程见 [Runner actions](runner-actions.md)。每一步使用新观察中的实际引用，并检查截图。
 
 ```sh
-iphone-use --session "$SESSION" tap o4:e10
-iphone-use --session "$SESSION" swipe o5:e18 --direction up
-iphone-use --session "$SESSION" type o6:e8 --mode insert --text '北京'
-iphone-use --session "$SESSION" type o7:e8 --mode replace --text '完整的新内容'
-iphone-use --session "$SESSION" type o8:e8 --mode replace --text ''
-iphone-use --session "$SESSION" type o9:e8 --mode append --text '追加'
-iphone-use --session "$SESSION" type o9:e8 --mode replace --stdin < text.txt
-iphone-use --session "$SESSION" press o10:e8 --key return
-iphone-use --session "$SESSION" tap o11 --x 100 --y 200
-iphone-use --session "$SESSION" swipe o12 --from-x 100 --from-y 420 --to-x 100 --to-y 380
-iphone-use --session "$SESSION" tap o13:e10 --protect o13:e20
+iphone-use --session "$SESSION" focus o1:e8 --observe
+iphone-use --session "$SESSION" type o2:e8 --text '北京' --observe
+iphone-use --session "$SESSION" press o3:e8 --key return --observe
+iphone-use --session "$SESSION" tap o4:e10 --observe
+iphone-use --session "$SESSION" swipe o5:e18 --direction up --observe
+iphone-use --session "$SESSION" tap o6 --x 100 --y 200 --observe
 ```
 
-- tap 元素用完整 `oN:eN`。点坐标形式用 `oN --x --y`，单位为屏幕点；不是 PNG 像素，不能同时指定元素引用。点击范围限制在当前已确认的 App 或弹窗内。
-- swipe 的 up/down/left/right 描述手指移动方向；宿主根据可见 frame 的 20%/80% 位置生成端点。明确端点形式可控制手指移动距离，两种形式均支持下述速度和停留参数。tap/swipe 先校验画面再执行坐标，不依赖 identifier/label 唯一性；阈值、附加保护区域、限制见 [动作前画面校验](screen-guard.md)。
-- Runner insert 沿完整路径与 AX 身份定位字段，以 `hasKeyboardFocus` 判断键盘焦点。已有焦点时不额外点击；需要聚焦时只点击一次，随后重新采集并复核路径、身份和焦点。焦点切换创建新控件时停止，要求新观察。详见[路径定位与完整采集](architecture.md#runner-路径定位与完整-ax-采集)。
-- Runner replace 在再次核对目标后，用当前可读原文的 UTF-16 长度界定删除次数。聚焦后通过 XCTest `typeKey(Command-Down)` 请求移到全文末尾，再用 `typeText(Delete)` 退格；读取清空后的快照，只有无剩余 AX 文本才插入新正文。UIKit 空字段可能省略 AX value；残留文本或非字符串值返回 `replace_clear_unconfirmed`，不继续插入，也不重试。空文本只执行清空。安全字段、不可读原文、原文与非空 placeholder 相同或原文超过 4096 UTF-8 bytes 时，输入前返回 `replace_value_unavailable`。不使用 Command-A，也不把 Forward Delete 的原始字符交给 typeText（iOS 会将其插入正文）。没有自动 Return 或提交。App 可能在聚焦后打开另一个编辑器并继续暴露原字段的 AX 值，因此调用者仍必须检查动作后画面中的实际正文。
-- Runner append 读取已校验目标的完整可读原文，将原文和新增文本拼接后走 replace；不依赖初始光标/选区；若清空后的快照仍报告文本，则停止而不插入。安全字段、无字符串原文、原文与 placeholder 无法区分、拼接后超过 4096 bytes 或含不支持字符时，在输入前拒绝。nil 值不推断为空文本；已有内容的控件处理、格式和 undo 行为仍可能因整段替换改变。宿主验证旧观察，Runner 使用再次核对后的当前快照值构造正文；不从过期 AX 值重建。
-- Runner 文本上限为 4096 UTF-8 字节，支持 LF 换行，但只允许用于明确的 text_view；text_field、secure_text_field、search_field 在聚焦/输入前拒绝多行。当前 Probe 实测 XCTest 把 CRLF 写成两个 LF，因此 Runner 明确拒绝 CR/CRLF，既不静默规范化，也不借用原生粘贴通道。其他控制键仍拒绝；insert/append 不接受空字符串，replace 空字符串表示清空。
-- `--text` 与 `--stdin` 必须且只能选一个。stdin 读取到 EOF，严格解码 UTF-8，不裁剪首尾空格、不去掉末尾换行、不解释转义或执行文本。可用文件重定向或管道；管道生产者需关闭输出。读取到第 4097 字节就拒绝，不为超长输入继续等待 EOF。`--mode replace --stdin < /dev/null` 表示清空。
-- `press oN:eN --key return` 向当前输入框发送独立 Return，要求已有键盘焦点，不额外 tap。需要聚焦时先 tap、再 observe。也支持 `backspace`、`left`、`right`、`up`、`down`、`tab` 和 `shift-tab`；Runner 的 `escape` 返回 `unsupported_key`，不发送输入。按键名区分大小写，不提供任意组合键或重复次数。详见 [Runner 编辑按键](runner-editing-keys.md)。具体界面效果由 App 决定，可能提交、换行或无业务变化；调用方仍需 observe 核对。
+Runner 不再支持 `type --mode replace/append`，不隐式聚焦。标准模式的上述 HID 模式保持独立契约。坐标与元素形式不能混用；元素 swipe 也支持速度和按住时间，显式端点使用坐标形式。
 
 ## 动作后观察
 
@@ -64,7 +52,7 @@ iphone-use --session "$SESSION" tap o13:e10 --protect o13:e20
 ```sh
 iphone-use --session "$SESSION" open com.example.app --observe
 iphone-use --session "$SESSION" tap o1:e10 --observe
-iphone-use --session "$SESSION" type o2:e8 --mode replace --text '新内容' --observe
+iphone-use --session "$SESSION" type o2:e8 --text '新内容' --observe
 ```
 
 每条命令只执行一个已选择的动作。标准模式在宿主设备队列内完成动作后有界判稳，`--observe` 复用其返回的观察；其他路径根据回执调用既有 `observe`。返回单行 JSON：
@@ -135,65 +123,23 @@ iphone-use --session "$SESSION" observe
 
 ## 宿主与 Runner 的职责
 
-宿主解析参数、验证会话与当前引用。tap/double-tap/long-press/pinch/swipe 从原快照构造坐标与分区截图指纹；type/press 构造目标路径，包含来源节点和祖先的类型、identifier、label、value、enabled、frame，以及每层在父节点内的位置。不向 Runner 发送面向 agent 的观察 ID 或短引用。
-
-这些检查与动作在同一个宿主串行队列执行。两个并发 CLI 命令即使使用同一份当前引用，第一个动作完成后，第二个在解析目标时仍会因引用失效而被拒绝。
-
-薄 Runner 在发送输入前检查：
-
-1. 对应的目标 App 身份与前台状态；SpringBoard Alert 和 App 内 Alert 的存在与数量必须符合观察时的范围。
-2. tap/swipe 检查屏幕/范围/方向/键盘上下文，并重新截图。整屏和各保护区域变化在阈值内才执行坐标；不做 AX 目标路径重采样或名称查找。近似通过不保证业务状态未改变。
-3. type/press 仍检查当前 AX 中的目标路径和每层属性；frame 允许最多 0.5 点的浮点变化。通过观察期 AX 身份绑定快照，再复核绑定元素和最新根路径；不按 type、identifier、label 重新查询候选元素，也不按序号猜测。
-4. type/press 目标仍须启用且 isHittable，并为 text field、secure text field、text view 或 search field。坐标动作不保留这项 live 目标语义保证。
-
-App 内唯一 Alert 现在单独作为 `scope=appAlert` 采集，SpringBoard Alert 使用 `scope=systemAlert`。原来没有弹窗的观察不会被用于点击后来出现的弹窗。
-
-Runner 不缓存历史根快照供动作复用，也不管理宿主短引用、续期计时或任务策略；仅保留观察期 token 对应的 AX 身份用于下一次校验。它处理当前请求的验证与 XCTest 调用；普通手势和文本输入在全部输入步骤结束后采帧判断稳定。它不等待业务状态成功；截图与 AX 的非原子采集限制继续成立。
+宿主管理引用生命周期和请求；Runner 验证当前作用域和执行目标，执行明确动作。Agent 负责页面理解、选区确认和业务结果。具体校验按动作区分，见 [显式动作契约](runner-actions.md)。
 
 ## 执行结果
 
-进入会话的动作结果均为单行 JSON，并保留请求 ID 和 session。stdin 的读取、编码或字节上限错误在 CLI 创建请求前返回 `session`、`ok=false`、`outcome=not_dispatched` 和 error，此时没有请求 ID；带 `--observe` 时同样跳过采集。文本源选择等语法错误继续由 ArgumentParser 输出到 stderr 并非零退出。
+- `completed`：动作或已验证的无操作完成；不等于业务成功。focus/clear 还要检查 `inputAction.verification`。
+- `not_dispatched`：确认尚未进入事件发送。
+- `unknown`：可能部分执行；先检查实际结果，不重发。
 
-```json
-{"id":"example-request","session":"example-session","ok":true,"outcome":"completed","result":{"kind":"tap","execution":{"started":true,"inputCompleted":true,"completed":true},"screenGuard":{"algorithm":"srgb-grid-v1","accepted":true,"screenChange":0,"regionChanges":[0],"maxScreenChange":0.01,"maxRegionChange":0,"pixelTolerance":8},"stability":{"stable":true,"samples":9,"consecutiveFrames":4,"stableForMs":563,"elapsedMs":1700,"observedForMs":1650,"minimumObservationMs":1500,"comparison":{"equivalent":true,"dimensionsMatch":true,"changedPixels":0,"colorTolerance":2.5,"maxChannelDelta":4},"hash":"example-sha256","algorithm":"yiq-local-caret-v1","sampleIntervalMs":200,"requiredStableMs":400,"timeoutMs":5000},"frame":{"screenshot":"/private/tmp/iphone-use-501/example-session/observations/action/screen.png","hash":"example-sha256","capturedAt":1788608247.676,"width":1170,"height":2532},"runnerMs":3634}}
-```
-
-| outcome | 判定 | 引用处理 |
-| --- | --- | --- |
-| prepared | touch-paste 剪贴板已准备，尚未输入文字 | 旧引用失效，读取附带新观察后操作 Paste 菜单 |
-| completed | 普通手势/文本：全部输入调用正常返回且取得足够的新观察帧；画面可以仍在变化。Home：按键完成。生命周期：目标状态已确认；均不等于业务目标达成 | 旧引用失效，agent 再 observe |
-| not_dispatched | 参数、引用或设备目标校验在任何输入 API 调用前拒绝 | 无其他失效原因时保留；若已发现目标或上下文变化则失效 |
-| unknown | 输入后未取得足够有效观察、已进入输入 API 后出错、执行事实缺失/矛盾，或丢失响应 | 旧引用失效；不重发，agent 先 observe |
-
-每次调用可能发送输入的 API 前，Runner 标记 `execution.started`；任一步骤记录 XCTest 错误就停止，不再继续聚焦后的选区/删除/输入等剩余步骤。全部输入调用正常结束时标记 `execution.inputCompleted`，之后才开始检测帧稳定。App 打开和生命周期使用启动/激活/停止的执行及状态事实，不纳入 act 的帧检测。Home 也使用专用按键完成回执，不承诺目的画面静止。
-
-采帧间隔约 200ms，至少观察 1500ms，至少取得 3 帧即可返回当前观察；只有连续至少 3 帧与同一候选帧等价、跨度至少 400ms 才标记 `stable=true`。持续视频返回 `completed`、`stable=false`、`reason=dynamic_or_transitioning`，不代表业务成功，也不允许重放。`yiq-local-caret-v1` 在全尺寸 sRGB 像素上允许小幅色差（Y/I/Q 各分量差不超过 2.5，RGB 每通道差不超过 4，alpha 必须相同）；不允许一定比例的明显变化，不降低分辨率，也不自动忽略抗锯齿边缘。单个超限像素也会重置窗口，因此局部文字变化不会被整屏平均分淹没。固定候选帧防止缓慢累计漂移。
-
-在 type/press 已验证的文本目标范围内，允许符合位置、尺寸、蓝色笔画和明暗变化模型的单根光标变化。tap 后若键盘存在，一次有界只读快照中唯一完整可见的输入框也可作为分析范围；多个字段或截断快照不启用此例外，不通过焦点遍历查找字段。Tab/Shift+Tab 可改变焦点，因此动作后读一次有界快照（遍历返回的完整树，最多 8 个完整可见输入框参与光标检查），仅当这些字段中识别出唯一光标时启用同一例外；其他字段及整屏像素仍参与比较。光标最外侧像素若与抗锯齿文字重叠，还必须有紧邻且完全未变的中性文字边缘，各通道变化不能超过实测光标相位；不扩张遮罩到相邻文字。无法识别的光标保留正常比较。原始截图始终不变，例外区域写入 `comparison.ignoredCaret`。至少观察 1500ms 用于避免延迟键盘展开前提前判稳，并不保证未来不会出现异步更新；后续动作仍需新观察和输入前检查。
-
-全尺寸原始 sRGB RGBA8 像素和尺寸的 SHA-256 继续绑定最终图片与执行证据，不再用它判断视觉等价。比较/光标识别/哈希的处理时间计入 5 秒预算，但不冒充采样稳定跨度。
-
-5 秒预算到期仍未取得足够观察样本时返回 `unknown` 和 `post_action_capture_timeout`，保留输入执行事实与可用的最后一帧。正常持续视频不再因像素变化等到该错误；不能把观察失败解释为没有点击或允许重发。截图/解码失败同样保留可取得的事实；连接丢失且无响应时无法承诺最后一帧可用。预算在截图和处理之间检查，无法中断正在阻塞的 XCTest 截图 API，因此它不是整个 act 的硬超时。
-
-正常结果返回最终原始 PNG 的路径和采集时间；超时还返回最后一次比较的候选原图与差异图路径。差异图标出所有原始像素变化（包括已容忍的光标和色差），不是观察，也不能用于选坐标。不向 agent 输出逐帧图片或 base64。宿主核对图片 hash 与稳定证据后，保存在 `observations/action/screen.png`；下一次带帧的动作覆盖它，disconnect/空闲回收时删除。需要保留时由调用 agent 复制。动作帧不创建观察 ID，不附带旧 AX；后续按引用操作仍需 observe。
-
-Runner 在每个输入原语调用期间，将 XCTest application-state 等待上限设为 1 秒并在结束后恢复原值。这通过运行时能力检查后的 `_XCTApplicationStateTimeout` / `_XCTSetApplicationStateTimeout` 符号实现，没有引入 WDA。连接时能力缺失返回 `unsupported_xctest_runtime`；该内部 API 的兼容性需按工具链与设备验证，1 秒也不是整个动作的耗时上限。
-
-XCTest 的命令错误经 Runner 转成响应；不再把已经返回给调用方的正常运行时错误一并算作 Runner 整个持续会话的 XCTest 失败。会话外的测试断言和异常结束仍由 XCTest 记录。
-
-XCTest 自身可能在一次 API 调用内等待或重试。iPhone-use 的宿主与 Runner 不重新调用结果未知的动作，但单次调用不构成 Apple 内部严格只发送一次底层事件的保证。请求 ID 同样不是去重承诺。
+`execution.started`、`inputCompleted`、`inputAction` 与后续 `observationError` 分别描述事件、原语和观察。画面动态或采集失败不抹去已确认输入。`--observe` 的联合结果可因观察失败返回非零，但必须保留动作事实。
 
 ## 兼容性与验证边界
 
-CLI 与 Runner 必须使用兼容的协议和能力。发布包用户安装配套版本并重新 setup；源码开发者重新 build-runner，显式安装返回的 Runner App 后，再使用新 manifest 连接。连接握手会拒绝不兼容版本，不会静默忽略不支持的参数。
-
-本地测试覆盖输入校验、引用失效、执行事实、画面校验和帧稳定；真机兼容性以 [测试指南中的实测范围](testing.md#recorded-refactor-acceptance)为限。历史操作记录、截图和诊断日志仅保留在本地，不作为公开运行依赖。执行前检查不构成与 App 自行变化原子隔离的事务。
-
-测试流程与验收边界见[测试指南](testing.md)。
+Runner 动作协议 13 要求匹配的 CLI/Runner；旧宿主拒绝新 CLI 的版本 2 动作请求。升级后断开旧会话并重新连接。`inspect` 是历史证据，不能代替新观察。最后一次校验至事件发送仍存在竞态，平台内部执行不能提供通用 exactly-once 保证。替换/追加不再是自动事务，升级步骤见 [Runner actions](runner-actions.md)。
 
 ## 原生文本方式与显式完成
 
-仅 `apple-native` 支持 `type oN --mode insert|replace|append --method auto|keys|paste`。省略方式使用 auto；`keys` 为最多 64 个 ASCII 的 US 键码，结果受活动输入法影响；`paste` 允许最多 4096 UTF-8 字节的整段文本，包括纯 ASCII。auto 遇到 LF/CR 即选择整段粘贴，即使正文全为 ASCII；keys 拒绝换行。LF/CR/CRLF 不裁剪或规范化，其他控制字符仍拒绝。不会在方式失败后静默改用另一通道。此处 auto/keys/paste 和原生快捷键语义不适用于 Runner；Runner append 的原文拼接与替换行为见上文。
+仅 `apple-native` 支持 `type oN --mode insert|replace|append --method auto|keys|paste`。省略方式使用 auto；`keys` 为最多 64 个 ASCII 的 US 键码，结果受活动输入法影响；`paste` 允许最多 4096 UTF-8 字节的整段文本，包括纯 ASCII。auto 遇到 LF/CR 即选择整段粘贴，即使正文全为 ASCII；keys 拒绝换行。LF/CR/CRLF 不裁剪或规范化，其他控制字符仍拒绝。不会在方式失败后静默改用另一通道。此处 auto/keys/paste 和原生快捷键语义不适用于 Runner；Runner 的替换和追加由 agent 显式编排，见上文。
 
 粘贴回执中的 `result.pasteboard.transactionID` 标识当前剪贴板事务。外部 Agent 检查动作后截图并处理完粘贴确认框后，可执行 `text-finish oN --transaction ID`，核对所有权后恢复原剪贴板，保留媒体和键盘会话。要求当前、同设备/会话且在输入尝试结束后采集的截图；不因核对结果耗时超过 30 秒拒绝完成，恢复前仍重新核对剪贴板内容与所有权。完成结果的 `caller_confirmed` 仅记录调用方确认；`completed` 只表示剪贴板恢复并回读成功，不将原本未知的 HID 输入改写成设备确认。失败不重放恢复写入，未知结果需检查后关闭会话。
 

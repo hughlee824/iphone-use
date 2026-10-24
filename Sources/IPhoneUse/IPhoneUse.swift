@@ -21,7 +21,7 @@ struct IPhoneUse: ParsableCommand {
             Status.self,
             Apps.self, Open.self, Terminate.self, Relaunch.self, Observe.self, Inspect.self, Tap.self,
             DoubleTap.self,
-            Pinch.self, LongPress.self, Swipe.self, Home.self, TypeText.self, TextPrepare.self,
+            Pinch.self, LongPress.self, Swipe.self, Home.self, Focus.self, Clear.self, TypeText.self, TextPrepare.self,
             TextFinish.self,
             Press.self, RecordStart.self, RecordStop.self, Preview.self, Disconnect.self, Host.self,
             AuthorizationMonitor.self, PreviewServiceHost.self, PreviewRevoke.self, PreviewServiceStop.self
