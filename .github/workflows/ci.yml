@@ -42,7 +42,7 @@ jobs:
             .build/plugins/*.zip.sha256
       - name: Prepare artifact transfer fixtures
         run: python3 scripts/checks/check-artifact-transfer.py prepare .build/artifact-transfer/source/.build/releases
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-transfer-fixture
           if-no-files-found: error
