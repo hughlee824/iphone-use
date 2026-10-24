@@ -14,7 +14,9 @@ python3 scripts/check.py
 
 This is also the entry point for CI and release checks. It checks documentation links, runs strict SwiftLint, builds the CLI, runs the shared-package and Core Swift suites, Objective-C runtime doubles, Python integration tests and Node template tests, builds the unsigned iOS Runner, and checks/packages the plugin. `--jobs 2` is the default build concurrency. Missing tools or the required CLI fail the check. Root `swift test` alone does not run the dependency package's tests.
 
-CI runs portable checks on Linux first, then runs native checks on macOS. The required `test` gate runs even after failure or a skipped dependency and accepts only success from both groups. Locally, `--suite quick` and `--suite native` select these same groups; the default runs both. See [contribution rules](../CONTRIBUTING.md#development-and-validation).
+CI runs portable checks on Linux first, then runs native checks on macOS and an artifact-transfer check on Linux. The required `test` gate runs even after failure or a skipped dependency and accepts only success from all three groups. Locally, `--suite quick` and `--suite native` select the portable and native groups; the default runs both. See [contribution rules](../CONTRIBUTING.md#development-and-validation).
+
+CI also uploads deterministic, non-installable release-shaped fixtures from a hidden `.build/releases` directory and downloads them in a separate job using the same pinned artifact actions as the draft-release workflow. The download must preserve the exact five-file inventory, directory layout and SHA-256 values; GitHub artifact digest mismatches also fail. The verifier regenerates its expectations independently, outside the downloaded tree. The required `test` gate includes this `artifact-transfer` job. Local quick checks cover missing, extra, renamed, nested, corrupted and symlinked files, but only the cloud job exercises GitHub's upload/download service. This check never creates a tag, Release, npm publication or installable CLI package, and does not replace release-package or physical-device acceptance.
 
 For documentation-only changes:
 

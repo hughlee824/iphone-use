@@ -40,6 +40,36 @@ jobs:
           path: |
             .build/plugins/*.zip
             .build/plugins/*.zip.sha256
+      - name: Prepare artifact transfer fixtures
+        run: python3 scripts/checks/check-artifact-transfer.py prepare .build/artifact-transfer/source/.build/releases
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-transfer-fixture
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: true
+          path: |
+            .build/artifact-transfer/source/.build/releases/*.tar.gz
+            .build/artifact-transfer/source/.build/releases/*.tar.gz.sha256
+            .build/artifact-transfer/source/.build/releases/iphone-use.rb
+            .build/artifact-transfer/source/.build/releases/*.zip
+            .build/artifact-transfer/source/.build/releases/*.zip.sha256
+  artifact-transfer:
+    needs: quick
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-transfer-fixture
+          path: ${{ runner.temp }}/release-transfer-download
+          digest-mismatch: error
+          skip-decompress: false
+      - name: Verify transferred files independently of the upload
+        run: python3 scripts/checks/check-artifact-transfer.py verify "$RUNNER_TEMP/release-transfer-download"
   native:
     needs: quick
     runs-on: xcode-27
@@ -71,7 +101,7 @@ jobs:
   test:
     # Keep the protected status name and fail even when an upstream job was skipped.
     if: always()
-    needs: [quick, native]
+    needs: [quick, native, artifact-transfer]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -79,4 +109,5 @@ jobs:
         env:
           QUICK_RESULT: ${{ needs.quick.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
-        run: test "$QUICK_RESULT" = success && test "$NATIVE_RESULT" = success
+          ARTIFACT_RESULT: ${{ needs.artifact-transfer.result }}
+        run: test "$QUICK_RESULT" = success && test "$NATIVE_RESULT" = success && test "$ARTIFACT_RESULT" = success
