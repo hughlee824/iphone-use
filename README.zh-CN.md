@@ -115,9 +115,9 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 坐标单位为**屏幕点**，不是截图像素。滑动方向表示手指移动方向。文本输入不会自动提交，需要时单独调用 `press`。文本限制、拖动参数与示例见[动作接口](docs/actions.md)。
 
-## 本地实时预览（源码实验功能）
+## 本地实时预览
 
-当前源码的 standard 和 runner 均支持共享原生视频流的只读浏览器预览，无需 Device Hub。请使用包含 `preview` 命令的源码构建，不代表已发布 CLI 包已经包含此能力。
+CLI 0.4.0 已提供 standard 和 runner 两种模式下共享原生视频流的只读浏览器预览，无需 Device Hub。安装正式包后即可使用 `preview`，无需从源码构建。真机验收覆盖文档记录的 Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro 环境，不代表所有设备或系统组合；实际验收范围见[发布说明](https://github.com/HughLee824/iphone-use/releases/tag/v0.4.0)。
 
 预览按 `productType` 精确匹配外观：保留 iPhone 11–16 系列 23 个机型的官方素材；已覆盖的 17 / Air、18 Pro / Pro Max 等机型使用独立绘制的参数化外框。缺失素材和未知机型使用自绘外框，已删除纯画面切换；保留横竖屏，已删除全屏按钮。Debug 构建在有官方素材时提供外观对比按钮，Release 构建隐藏该按钮；页面跟随系统明暗模式，切换外观时保持视频尺寸与中心不变。已支持的 32 个精确标识均有自绘开孔参数，按对应官方 PNG 或公开尺寸图校准，详见[逐机型校准清单](docs/preview-hardware-calibration.md)。新版受限 Apple 素材不随包分发。素材来源与独立许可见 [Product Bezels](assets/preview/README.md)。
 

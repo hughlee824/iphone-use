@@ -118,9 +118,9 @@ Both modes also support `type oN --mode insert --method touch-paste --text TEXT`
 
 Coordinates use **screen points**, not screenshot pixels. Swipe direction describes finger movement. Text input does not submit automatically; use a separate `press` when appropriate. See [actions](docs/actions.md) for text limits, dragging, and examples.
 
-## Local live preview (source experiment)
+## Local live preview
 
-The current source supports a read-only browser view in both standard and runner modes, sharing the owned native video stream without Device Hub. Use a source build that includes `preview`; this does not establish availability in published CLI packages.
+CLI 0.4.0 includes a read-only browser preview in both standard and runner modes, sharing the owned native video stream without Device Hub. Use `preview` from the installed release package; no source build is required. Device acceptance covers the documented Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro environment, not every device or OS combination. See the [release notes](https://github.com/HughLee824/iphone-use/releases/tag/v0.4.0) for the actual acceptance scope.
 
 The viewer selects the device appearance by exact `productType`: retained official artwork for 23 iPhone 11–16 models, and independently drawn parameterized frames for covered newer models including 17 / Air and 18 Pro / Pro Max. Missing assets or unknown models use a drawn frame; the plain-view toggle has been removed. Portrait and both landscape directions remain supported. The model name and connection indicator sit below the device; the fullscreen button has been removed. Debug builds provide an appearance comparison button when official artwork is available; Release builds hide it. The page follows the system color scheme and keeps the video size and centre unchanged when switching appearances. All 32 supported identifiers have model-specific opening geometry calibrated against the corresponding retained PNG or public dimensional drawing; see the [calibration inventory](docs/preview-hardware-calibration.md). Restricted newer Apple artwork is not included. See [Product Bezels provenance and separate license](assets/preview/README.md).
 
