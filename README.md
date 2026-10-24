@@ -11,7 +11,7 @@
 
 [![CI](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138.svg)](Package.swift)
+[![Swift](https://img.shields.io/badge/Swift-6.0%2B-F05138.svg)](Package.swift)
 
 iPhone-use is a macOS CLI that lets an external agent discover apps, read screenshots and accessibility data, and interact with a connected iPhone. Your agent handles natural language, planning, and judging results; iPhone-use provides device observations and actions through a persistent device session.
 
@@ -267,7 +267,7 @@ python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
 ```
 
-Python 3.9+ is used for release tooling and development tests, not the installed CLI runtime. The check entry point requires full Xcode and the pinned SwiftLint and Actionlint versions, builds the CLI before integration tests, and supplies its executable path explicitly. A missing CLI fails the check. Build concurrency defaults to two jobs. The only external Swift package dependency is [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.5.0), pinned to `1.5.0`.
+Python 3.9+ is used for release tooling and development tests, not the installed CLI runtime. The check entry point requires full Xcode and the pinned SwiftLint and Actionlint versions, builds the CLI before integration tests, and supplies its executable path explicitly. A missing CLI fails the check. Build concurrency defaults to two jobs. The only external Swift package dependency is [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2), pinned to `1.8.2`. It requires a Swift 6+ compiler; use the supported full Xcode 27 toolchain for native builds. The package manifest tools version does not imply Swift 5.9 compiler compatibility or enable Swift 6 language mode.
 
 Node.js 22+ runs the documented call templates against controlled tool responses in CI; it is only needed for development tests. After changing the canonical skill, run `python3 scripts/plugin/sync-plugin.py` to update its packaged copy and use `python3 scripts/plugin/set-plugin-version.py X.Y.Z` to update all shared distribution versions before release. CI also compiles the Runner without signing and packages the plugin for review. Website source, tests and Cloudflare deployment are maintained separately in [iphone-use-website](https://github.com/HughLee824/iphone-use-website). See [public-access release checks](docs/public-access-release.md) for the exact commands and hardware acceptance requirements.
 
