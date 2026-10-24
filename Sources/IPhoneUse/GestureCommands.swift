@@ -6,10 +6,10 @@ struct ScreenGuardOptions: ParsableArguments {
     @Option(
         help:
             """
-            Maximum screen-grid change BEFORE input, relative to the observation (0...1); default 0.01. Not\
+            Maximum screen-grid change BEFORE input (0...1); default: Runner 1, standard 0.01. Not\
              the expected scroll or animation size.
             """
-    ) var maxScreenChange = 0.01
+    ) var maxScreenChange: Double?
     @Option(help: "Maximum changed protected-region fraction (0...max-screen-change); default 0.")
     var maxRegionChange =
         0.0
@@ -45,8 +45,9 @@ struct ScreenGuardOptions: ParsableArguments {
 
     var fields: [String: Any] {
         var value: [String: Any] = [
-            "maxScreenChange": maxScreenChange, "maxRegionChange": maxRegionChange, "protect": protect
+            "maxRegionChange": maxRegionChange, "protect": protect
         ]
+        value["maxScreenChange"] = maxScreenChange
         value["ignoreRect"] = ignoreRect
         value["dynamicTarget"] = dynamicTarget; value["dynamicAnchor"] = dynamicAnchor
         return value
@@ -82,9 +83,9 @@ struct DoubleTap: ParsableCommand {
     @OptionGroup var options: SessionOptions
     @OptionGroup var observation: ActionObservationOptions
     @OptionGroup var screenGuard: ScreenGuardOptions
-    @Argument(help: "Current screenshot observation ID.") var reference: String
-    @Option(name: .customLong("x"), help: "Horizontal screen point coordinate.") var column: Double
-    @Option(name: .customLong("y"), help: "Vertical screen point coordinate.") var row: Double
+    @Argument(help: "Current element reference, or screenshot observation ID with coordinates.") var reference: String
+    @Option(name: .customLong("x"), help: "Horizontal screen point coordinate.") var column: Double?
+    @Option(name: .customLong("y"), help: "Vertical screen point coordinate.") var row: Double?
     mutating func run() throws {
         let session = try options.requiredSession()
         var fields = screenGuard.fields
@@ -129,9 +130,9 @@ struct LongPress: ParsableCommand {
     @OptionGroup var options: SessionOptions
     @OptionGroup var observation: ActionObservationOptions
     @OptionGroup var screenGuard: ScreenGuardOptions
-    @Argument(help: "Current screenshot observation ID.") var reference: String
-    @Option(name: .customLong("x"), help: "Horizontal screen point coordinate.") var column: Double
-    @Option(name: .customLong("y"), help: "Vertical screen point coordinate.") var row: Double
+    @Argument(help: "Current element reference, or screenshot observation ID with coordinates.") var reference: String
+    @Option(name: .customLong("x"), help: "Horizontal screen point coordinate.") var column: Double?
+    @Option(name: .customLong("y"), help: "Vertical screen point coordinate.") var row: Double?
     @Option(help: "Hold duration in seconds, 0.5...5; default 0.8.") var duration: Double = 0.8
     mutating func run() throws {
         let session = try options.requiredSession()
@@ -148,7 +149,7 @@ struct LongPress: ParsableCommand {
 
 struct Home: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Press and release Home after checking a current screenshot.")
+        abstract: "Press Home using current session context; observe the destination.")
     @OptionGroup var options: SessionOptions
     @OptionGroup var observation: ActionObservationOptions
     @Argument(help: "Current screenshot observation ID.") var reference: String
@@ -180,7 +181,7 @@ struct Swipe: ParsableCommand {
             The speed and hold values are starting points, not a one-row guarantee. After every dispatched\
              action, including no change, observe and verify the actual selected value. Repeated no-change or\
              overshoot calls for checking the field and geometry before another attempt. completed means input\
-             finished and the screen stabilized.
+             was acknowledged; inspect observation and stability separately.
 
             For drag-and-drop, add --press-duration (for example 0.5). Estimated motion is limited to 10\
              seconds. Keep screen-guard defaults unless a concrete pre-input screen change warrants a\

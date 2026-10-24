@@ -8,6 +8,12 @@ extension ActionRequest {
             guard let mode = request["mode"] as? String, modes.contains(mode) else {
                 throw IPhoneUseError("invalid_input_mode", "Choose --mode insert, replace or append")
             }
+            if !allowScreenText && !touchPaste && mode != "insert" {
+                throw IPhoneUseError(
+                    "explicit_edit_required",
+                    "Runner type only inserts into existing focus. Use focus, observe, explicit editing keys, "
+                        + "clear, observe, then type. Append must never clear or rewrite the field.")
+            }
             let allowNewlines =
                 touchPaste || !allowScreenText
                 || (reference.node == nil && request["textMethod"] as? String != "keys")

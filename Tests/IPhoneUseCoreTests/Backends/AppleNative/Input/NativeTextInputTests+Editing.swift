@@ -52,7 +52,7 @@ extension NativeTextInputTests {
             let changed = try screenPNG(patches: [(CGRect(x: 50, y: 160, width: 4, height: 10), [0, 0, 0])])
             XCTAssertFalse(try guardValue.check(png: changed, context: context).accepted)
         }
-        for native in [false, true] {
+        for native in [true] {
             let action = try DeviceAction(
                 operation: "type", request: ["reference": "o1:e1", "mode": "append", "text": "abc"],
                 allowScreenText: native)

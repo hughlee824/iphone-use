@@ -81,7 +81,8 @@ extension FrameStabilityTests {
         XCTAssertEqual(diff.pixels[4], 0)
         XCTAssertNil(decoded["stabilityReferenceBase64"])
         response["stability"] = ["stable": false, "hash": secondSample.hash, "referenceHash": "incorrect"]
-        XCTAssertThrowsError(try XCTestCapture.actionResponse(response, directory: directory))
+        let invalidDecoded = try XCTestCapture.actionResponse(response, directory: directory)
+        XCTAssertNotNil((invalidDecoded["result"] as? [String: Any])?["observationError"])
     }
 
     func testHostRejectsOldOrPrematureStabilityProof() throws {
@@ -106,7 +107,8 @@ extension FrameStabilityTests {
             ("observedForMs", Double.infinity), ("minimumObservationMs", 0.0), ("comparison", NSNull())
         ] {
             var invalid = proof; invalid[key] = changed; response["stability"] = invalid
-            XCTAssertThrowsError(try XCTestCapture.actionResponse(response, directory: directory))
+            let invalidDecoded = try XCTestCapture.actionResponse(response, directory: directory)
+            XCTAssertNotNil((invalidDecoded["result"] as? [String: Any])?["observationError"])
         }
     }
 
@@ -137,18 +139,17 @@ extension FrameStabilityTests {
             ("samples", 1), ("observedForMs", 200.0), ("reason", "stable"), ("automaticReplayAllowed", true)
         ] {
             var invalid = stability.result; invalid[key] = value; response["stability"] = invalid
-            XCTAssertThrowsError(try XCTestCapture.actionResponse(response, directory: directory))
+            let invalidDecoded = try XCTestCapture.actionResponse(response, directory: directory)
+            XCTAssertNotNil((invalidDecoded["result"] as? [String: Any])?["observationError"])
         }
     }
 
-    func testSuccessWithoutStableFrameEvidenceIsRejected() {
-        let directory = URL(fileURLWithPath: "/private/tmp/as-missing-frame-\(UUID().uuidString.prefix(8))")
-        defer { try? FileManager.default.removeItem(at: directory) }
+    func testMissingObservationDoesNotEraseAcknowledgedInput() throws {
         let response: [String: Any] = [
             "ok": true, "execution": ["started": true, "inputCompleted": true, "completed": true]
         ]
-        XCTAssertThrowsError(try XCTestCapture.actionResponse(response, directory: directory)) { error in
-            XCTAssertEqual((error as? ActionFailure)?.code, "missing_stability_facts")
-        }
+        let decoded = try XCTestCapture.actionResponse(response, directory: URL(fileURLWithPath: "/tmp"))
+        let facts = try ActionReply.decode(decoded)
+        XCTAssertEqual(facts["observationError"] as? String, "invalid_post_action_observation")
     }
 }

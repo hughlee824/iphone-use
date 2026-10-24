@@ -15,9 +15,14 @@ enum XCTestCapture {
         result["stability"] = response["stability"]
         result["runnerMs"] = response["runnerMs"]
         result["screenGuard"] = response["screenGuard"]
+        result["observationError"] = response["observationError"]
         let stability = response["stability"] as? [String: Any]
         do {
-            try saveFrame(response, stability: stability, directory: directory, result: &result)
+            do { try saveFrame(response, stability: stability, directory: directory, result: &result) } catch {
+                result["observationError"] = "invalid_action_frame"
+                result.removeValue(forKey: "frame")
+                result.removeValue(forKey: "stability")
+            }
             if response["ok"] as? Bool == true, let expectedGuard {
                 try validateGuard(response, expectedGuard: expectedGuard)
             }
@@ -25,7 +30,17 @@ enum XCTestCapture {
                 try validateMotion(
                     result, expectedKey: expectedKey, expectedPinch: expectedPinch,
                     expectedPressDuration: expectedPressDuration, expectedMotion: expectedMotion)
-                try validateStability(response, result: result, expectedHome: expectedHome)
+                if expectedHome {
+                    try validateStability(response, result: result, expectedHome: true)
+                } else {
+                    guard (response["execution"] as? [String: Any])?["inputCompleted"] as? Bool == true else {
+                        throw IPhoneUseError("missing_execution_facts", "Runner did not confirm primitive completion")
+                    }
+                    do { try validateStability(response, result: result, expectedHome: false) } catch {
+                        result["observationError"] = result["observationError"] ?? "invalid_post_action_observation"
+                        result.removeValue(forKey: "stability")
+                    }
+                }
             }
         } catch {
             throw ActionFailure(

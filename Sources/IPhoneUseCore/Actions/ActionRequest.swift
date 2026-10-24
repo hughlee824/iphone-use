@@ -11,6 +11,9 @@ struct ActionRequest {
         guard DeviceAction.operations.contains(operation) else {
             throw IPhoneUseError("invalid_action", "Unknown device action")
         }
+        if allowScreenText && ["focus", "clear"].contains(operation) {
+            throw IPhoneUseError("runner_action_required", "focus and clear require Runner element references")
+        }
         if let method = request["textMethod"] {
             guard operation == "type", let method = method as? String,
                 method == "touch-paste" || (allowScreenText && ["auto", "keys", "paste"].contains(method))
@@ -129,12 +132,12 @@ struct ActionRequest {
         if operation == "home", reference.node != nil {
             throw IPhoneUseError("invalid_reference", "Home requires the current screenshot oN")
         }
-        if operation == "double-tap", !coordinate {
+        if operation == "double-tap", !coordinate, allowScreenText {
             throw IPhoneUseError(
                 "invalid_coordinates", "Double tap requires a screenshot reference and --x --y")
         }
         if operation == "long-press" {
-            guard coordinate, let duration = Self.number(request["duration"] ?? 0.8),
+            guard coordinate || !allowScreenText, let duration = Self.number(request["duration"] ?? 0.8),
                 (0.5...5).contains(duration)
             else {
                 throw IPhoneUseError(

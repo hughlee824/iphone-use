@@ -15,7 +15,8 @@ final class RunnerKeyTests: XCTestCase {
             let fields = try XCTestBackend.actionFields(action, target: target)
             XCTAssertEqual(fields["key"] as? String, key.rawValue)
             XCTAssertFalse(target.path.isEmpty)
-            XCTAssertEqual(key.modifiers, key == .shiftTab ? ["shift"] : [])
+            XCTAssertEqual(
+                key.modifiers, key == .shiftTab ? ["shift"] : ([.selectAll, .end].contains(key) ? ["command"] : []))
             XCTAssertThrowsError(
                 try DeviceAction(operation: "press", request: ["reference": "o1", "key": key.rawValue]))
             let wrong = try DeviceAction(
