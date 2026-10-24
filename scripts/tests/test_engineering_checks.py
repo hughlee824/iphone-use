@@ -36,7 +36,7 @@ class EngineeringChecksTests(unittest.TestCase):
         self.assertIn('.build/brand-venv/bin/python -m pip install -r scripts/brand/requirements.txt', native)
         self.assertIn('.build/brand-venv/bin/python scripts/brand/check.py', native)
         self.assertNotIn('continue-on-error:', native)
-        self.assertIn('needs: [quick, native]', workflow.split('\n  test:\n', 1)[1])
+        self.assertIn('needs: [quick, native, artifact-transfer]', workflow.split('\n  test:\n', 1)[1])
 
     def test_missing_or_nonexecutable_cli_is_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
