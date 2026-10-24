@@ -56,13 +56,12 @@ public final class RunnerInputAction {
         event: () throws -> Void, verify: () throws -> Bool
     ) throws {
         guard !attempted else { throw Failure.alreadyAttempted }
-        let value = state.value
-        guard !state.secure, value == nil || value is String else { throw Failure.valueUnavailable }
-        guard NSDictionary(dictionary: ["value": value ?? NSNull()]).isEqual(to: [
-            "value": expected ?? NSNull()
-        ]) else { throw Failure.valueChanged }
+        // A missing pre-input AX value is not evidence that the field is empty.
+        // Nil is only accepted by the post-delete check of a previously readable field.
+        guard !state.secure, let value = state.value as? String else { throw Failure.valueUnavailable }
+        guard let expected = expected as? String, value == expected else { throw Failure.valueChanged }
         guard state.focused else { throw Failure.focusRequired }
-        if RunnerTextInput.isCleared(value) { verification = "confirmed"; return }
+        if value.isEmpty { verification = "confirmed"; return }
         // The agent explicitly selects all and observes before clear. Delete
         // exactly once; incomplete selection never triggers more deletion.
         try send(focused: state.focused, event: event)

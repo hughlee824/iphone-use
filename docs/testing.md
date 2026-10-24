@@ -57,19 +57,23 @@ Choose a sample using a current screenshot-bound action; the sample button clear
 
 | Scenario | Required observations |
 | --- | --- |
-| Settings search | Insert, append and clear; check complete final value and transaction facts after search layout changes. |
-| Adjacent ordinary fields | Enter distinct values in the first and second fields; replace the first. Check both fields and an untouched neighbor, including autofocus transitions. |
+| Settings search | Insert, append and clear; check the complete final value and `inputAction` facts after search layout changes. |
+| Adjacent ordinary fields | Enter distinct values in the first and second fields; replace the first. Check both fields and an untouched neighbor, including explicit focus and Tab/Return transitions. |
 | Custom search field, such as Xiaohongshu | Chinese input, append one distinct suffix, clear. Check the exact value and keyboard state; custom `TextView` exposure must use the same generic path/identity logic. |
 | Stale reference | Obtain a new observation, then submit the old reference. Require rejection before input and an unchanged field. |
-| Read-only convergence | Inspect `textExecution` stage/read/retry facts. Geometry retries must not add input events. Path/identity changes must still stop the transaction. |
+| Missing AX value | Before clear, nil/unreadable value must reject with `clear_value_unavailable` and no event. An explicit empty string may be a verified no-op. A previously readable field may expose nil after one Delete; verify its actual contents. |
+| Explicit primitive completion | Inspect `inputAction.eventAttempted`, `eventAcknowledged` and `verification` separately from `execution` and observation. Focus/clear read failure must retain event acknowledgement; never repeat an event to repair verification. |
+| Focus-changing keys | Tab/Shift-Tab move to another field; Return may remove the old field or navigate. Keep the key acknowledgement without querying or refocusing the departed target. Reject subsequent type into an unfocused old target. |
 | Text fidelity | Exercise Unicode, combining sequences and supported multiline input. Runner LF requires a text view; ordinary XCTest typing rejects CR/CRLF. |
 | Clipboard methods | In standard mode or explicit touch-paste, verify the complete staged text, any system permission UI, and owned clipboard restoration with `text-finish`. Foreign content must not be overwritten. |
 
-Use fresh observations between actions. The full AX capture must remain separate from compact presentation: verify a page with more than 200 exposed nodes and inspect a target beyond the initial display budget. Neither hidden nodes nor identical labels establish that a target is actionable. Automated path/identity, replacement, fresh-snapshot and bounded-validation tests cover adversarial cases that cannot be reliably induced manually; device tests complement them.
+Use fresh observations between actions. The full AX capture must remain separate from compact presentation: verify a page with more than 200 exposed nodes and inspect a target beyond the initial display budget. Neither hidden nodes nor identical labels establish that a target is actionable. Automated multi-level identity tests cover sibling reordering, replaced/duplicate ancestors, reparenting and second-snapshot changes. The device-free input runtime harness compiles `Runner/LiveSessionTests+Input.swift` directly against test-only platform objects to exercise focus changes, removed elements, nil values and failed events. CLI fault tests check lost replies and separate observation failures. These tests do not certify Apple API behavior; device tests complement them.
 
 There must be no host/Runner replay of an uncertain command. A single XCTest call can still perform internal work or retries controlled by Apple; input-event counters do not prove a universal exactly-once delivery guarantee. Full-path and AX-identity validation also cannot eliminate the final check-to-input race or platform identity reuse. See [AX design](architecture.md#runner-路径定位与完整-ax-采集) and [action outcomes](actions.md#执行结果).
 
-### Recorded refactor acceptance
+### Historical refactor acceptance (before action protocol 13)
+
+This record describes the previous transactional text implementation, not acceptance of the current explicit-action contract. Use the matrix above for current releases.
 
 Source `931b4b726d47605148f5c5481ba07b11bd5ff0e9` was checked using a rebuilt CLI and newly built, explicitly installed Runner on **iPhone 12 Pro / iOS 27.0.1**. This is a bounded source-build result, not a release-package or all-device certification.
 

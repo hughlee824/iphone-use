@@ -90,6 +90,41 @@ class ActionObservationCLITests(unittest.TestCase):
             if args[0] == "type":
                 self.assertEqual(requests[0]["mode"], "insert")
 
+    def test_explicit_input_lost_reply_never_replays_or_adds_hidden_steps(self):
+        for args in (["focus", "o1:e2"], ["clear", "o1:e2"],
+                     ["type", "o1:e2", "--text", "once"],
+                     ["press", "o1:e2", "--key", "select-all"],
+                     ["press", "o1:e2", "--key", "end"]):
+            with self.subTest(args=args):
+                code, response, requests = self.run_cli([*args, "--observe"], lose_action=True)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(response["action"]["outcome"], "unknown")
+                self.assertTrue(response["observation"]["ok"])
+                self.assertEqual([r["op"] for r in requests], [args[0], "observe"])
+                self.assertEqual(requests[0]["version"], 2)
+
+    def test_explicit_verification_and_capture_failure_preserve_acknowledgement(self):
+        for operation in ("focus", "clear"):
+            for verification in ("unconfirmed", "unavailable"):
+                with self.subTest(operation=operation, verification=verification):
+                    facts = {"eventAttempted": True, "eventAcknowledged": True,
+                             "verification": verification, "automaticReplayAllowed": False}
+                    details = {"kind": operation, "inputAction": facts,
+                               "execution": {"started": True, "inputCompleted": True, "completed": True},
+                               "observationError": "post_action_capture_unavailable"}
+                    code, response, requests = self.run_cli(
+                        [operation, "o1:e2", "--observe", "--agent-output"],
+                        details=details, capture_ok=False)
+                    try:
+                        self.assertNotEqual(code, 0)
+                        self.assertEqual(response["action"]["outcome"], "completed")
+                        self.assertEqual(response["action"]["result"], details)
+                        self.assertFalse(response["observation"]["ok"])
+                        self.assertFalse(response["agentSummary"]["automaticReplayAllowed"])
+                        self.assertEqual([r["op"] for r in requests], [operation, "observe"])
+                    finally:
+                        shutil.rmtree(Path(response["receipt"]).parent)
+
     def test_touch_paste_is_explicit_staging_and_keeps_prepared_receipt(self):
         details = {"phase": "awaiting_touch_paste", "textInserted": False, "inputReportsSent": 0,
                    "pasteboard": {"transactionID": "touch-token", "restorePending": True}}

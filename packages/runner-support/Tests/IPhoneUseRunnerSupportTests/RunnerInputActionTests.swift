@@ -75,9 +75,9 @@ final class RunnerInputActionTests: XCTestCase {
 
     func testEmptyClearIsVerifiedNoOpAndPostDeleteReadFailureKeepsAcknowledgement() throws {
         let empty = RunnerInputAction()
-        try empty.clear(state: .init(value: nil, secure: false, focused: true), expected: nil,
+        try empty.clear(state: .init(value: "", secure: false, focused: true), expected: "",
                         event: { XCTFail("Unexpected callback") },
-                                                 verify: { XCTFail("Unexpected callback"); return false })
+                        verify: { XCTFail("Unexpected callback"); return false })
         XCTAssertEqual(empty.verification, "confirmed")
         XCTAssertFalse(empty.attempted)
         let changed = RunnerInputAction()
@@ -88,4 +88,31 @@ final class RunnerInputActionTests: XCTestCase {
         XCTAssertTrue(changed.acknowledged)
         XCTAssertEqual(changed.verification, "unavailable")
     }
+
+    func testMissingOrNonStringValueCannotConfirmEmptyBeforeInput() {
+        for value: Any? in [nil, NSNull(), 42] {
+            for expected: Any? in [nil, "", "old"] {
+                let action = RunnerInputAction()
+                XCTAssertThrowsError(try action.clear(
+                    state: .init(value: value, secure: false, focused: true), expected: expected,
+                    event: { XCTFail("Must not delete") }, verify: { XCTFail("Must not verify"); return true }
+                )) { XCTAssertEqual($0 as? RunnerInputAction.Failure, .valueUnavailable) }
+                XCTAssertFalse(action.attempted)
+                XCTAssertFalse(action.acknowledged)
+                XCTAssertEqual(action.verification, "not_requested")
+            }
+        }
+    }
+
+    func testPreviouslyReadableValueCanBecomeNilAfterOneDelete() throws {
+        let action = RunnerInputAction()
+        var value: Any? = "old"
+        var deletes = 0
+        try action.clear(state: .init(value: value, secure: false, focused: true), expected: "old",
+                         event: { deletes += 1; value = nil }, verify: { RunnerTextInput.isCleared(value) })
+        XCTAssertEqual(deletes, 1)
+        XCTAssertTrue(action.acknowledged)
+        XCTAssertEqual(action.verification, "confirmed")
+    }
+
 }

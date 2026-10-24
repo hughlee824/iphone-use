@@ -17,7 +17,7 @@ Element actions resolve a fresh root snapshot. Each observed ancestor identity m
 | `focus oN:eN` | Enabled input; hittable if a tap is needed | Already focused is a verified no-op. Otherwise tap once and read focus. A changed page or unconfirmed focus returns verification facts; never retap automatically. |
 | `type oN:eN --text TEXT` | Enabled input owns keyboard focus; supported literal text | Insert once at the existing caret/selection. No implicit focus, clearing, movement or final-value assertion. Inspect the result. `--mode insert` is optional; Runner replace/append modes reject before dispatch. |
 | `press oN:eN --key KEY` | Enabled input owns keyboard focus | Send one key. Return/Tab may submit or move focus; never require the old page/focus afterward. `select-all` and `end` request Command-A and Command-Down; they do not certify a selection. |
-| `clear oN:eN` | Focused, non-secure input; current readable value agrees with the new observation | After the agent selects all and inspects the selection, send Delete once. Report whether the field is empty. Partial selection may delete only part of the text; never repair or repeat deletion automatically. Empty fields are a verified no-op. |
+| `clear oN:eN` | Focused, non-secure input; current readable value agrees with the new observation | After the agent selects all and inspects the selection, send Delete once. Report whether the field is empty. Partial selection may delete only part of the text; never repair or repeat deletion automatically. An explicit empty string is a verified no-op; a missing pre-input AX value rejects as `clear_value_unavailable`. |
 | Element tap/double-tap/long-press | Enabled, currently hittable identity | Use the current element, not its old screenshot center. Observe resulting navigation. |
 | Element swipe | Enabled, hittable container identity and direction | Use the current element's 20%–80% path and requested velocity/holds. Use a coordinate swipe for explicit endpoints. |
 | Coordinate gestures | Current screen/scope/orientation, valid points and strict local protected pixels | No AX identity guarantee. Runner's default global change limit is 1; local limit remains 0. Standard retains global 0.01. Explicit thresholds and dynamic target/anchor checks remain available. |
@@ -42,6 +42,8 @@ Append:
 1. Focus and inspect.
 2. `press CURRENT --key end --observe`; verify the insertion point is at the end and the original text is intact.
 3. Insert only the suffix with `type`, then inspect.
+
+Nil is accepted as a post-delete empty value only after the same field was readable before Delete. Missing value before input is not proof of emptiness and must not authorize the next replacement step.
 
 There is no general selected-range API in this implementation. If the current screenshot/AX cannot establish the required selection or end position, stop or choose a different visible UI action. Do not assume shortcut acknowledgement proves its effect. Never implement append by clearing and rewriting the original text.
 
