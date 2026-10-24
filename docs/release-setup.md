@@ -119,6 +119,8 @@ formula 将原包的 `bin` 与 `libexec` 一起放在 Homebrew keg 的 `libexec`
 
 外部 agent 可以协助执行本地验收，维护者依据观察结果填写草稿的 `Local device acceptance`，通过后改为 `passed`，并完成对应勾选；不适用项写明理由。setup 的截图或输入命令的成功响应不能代替业务结果核对。证书/profile、设备标识及含个人内容的截图和日志保留本地。
 
+发布工作流接受二级标题 `## Local device acceptance — pending`、`## Local device acceptance — passed`，以及状态后附带范围说明的标题（例如 `passed within the tested scope`）。验收章节和后面的 `## Installation` 必须各有且只有一个；缺失、重复或顺序错误会在发布前拒绝。工作流仅替换验收章节，保留其他章节；提交的验收摘要应包含实际结果和未测范围。
+
 ### 版本与失败处理
 
 - RC（例如 `0.2.0-rc.1`）通过后可作为预发布版本公开供测试，使用手动安装。正式版 `0.2.0` 需要生成并验收它自己的包，不能只重命名 RC 资产或修改 Release 标题。
