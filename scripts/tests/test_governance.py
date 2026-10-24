@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import itertools
 import json
 from pathlib import Path
 import subprocess
@@ -122,14 +123,14 @@ class GovernanceTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/ci.yml').read_text()
         gate = workflow.split('\n  test:\n', 1)[1]
         self.assertIn('if: always()', gate)
-        self.assertIn('needs: [quick, native]', gate)
+        self.assertIn('needs: [quick, native, artifact-transfer]', gate)
         command = next(line.strip().removeprefix('run: ') for line in gate.splitlines()
                        if line.strip().startswith('run: '))
-        for quick in ['success', 'failure', 'cancelled', 'skipped']:
-            for native in ['success', 'failure', 'cancelled', 'skipped']:
-                result = subprocess.run(['/bin/sh', '-c', command],
-                                        env={'QUICK_RESULT': quick, 'NATIVE_RESULT': native})
-                self.assertEqual(result.returncode == 0, quick == native == 'success')
+        for quick, native, artifact in itertools.product(['success', 'failure', 'cancelled', 'skipped'], repeat=3):
+            with self.subTest(quick=quick, native=native, artifact=artifact):
+                result = subprocess.run(['/bin/sh', '-c', command], env={
+                    'QUICK_RESULT': quick, 'NATIVE_RESULT': native, 'ARTIFACT_RESULT': artifact})
+                self.assertEqual(result.returncode == 0, quick == native == artifact == 'success')
 
 
 class ActionlintInstallerTests(unittest.TestCase):
