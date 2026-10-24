@@ -9,7 +9,7 @@
 
 ## 先检查环境
 
-新安装使用已发布的 CLI，安装和升级步骤见[安装指南](install.md)。
+插件与通用 skill **0.2.0 / 0.2.1 均要求稳定版 CLI 0.4.0 或更高版本**；Runner 使用与 CLI 配套的版本。最低版本要求不代表所有 macOS、iOS 或 App 均已验收，实际范围以对应发布说明为准。新安装使用各渠道实际已发布的版本，安装和升级步骤见[安装指南](install.md)。
 
 ```sh
 brew install HughLee824/tap/iphone-use
@@ -19,7 +19,7 @@ iphone-use --version
 
 正式版及开发工作流的环境以 [first-task](first-task.md) 为准：标准模式已验收 Apple Silicon / macOS 27、Xcode 27、iOS 27；需要设备信任、Developer Mode 和解锁。**只有 Runner 模式需要开发签名与 setup**。包内只读 `scripts/preflight.sh` 检查一次 CLI、Xcode 和输出能力，随后复用检测结果。
 
-本地候选包不在 PATH 时，通过 `IPHONE_USE_CLI=/absolute/path/to/bin/iphone-use sh /absolute/path/to/skill/scripts/preflight.sh --candidate` 检查；源码 `development` 版本使用 `--source`。设备调用继续使用同一个可执行文件。不要为了通过版本检查切到另一个已安装版本。preflight 的兼容版本下限仍为 CLI 0.1.0，新安装应从正式发布渠道选择兼容版本；实际能力以所用 CLI 的帮助和会话返回值为准。
+本地候选包不在 PATH 时，通过 `IPHONE_USE_CLI=/absolute/path/to/bin/iphone-use sh /absolute/path/to/skill/scripts/preflight.sh --candidate` 检查；源码 `development` 版本使用 `--source`。设备调用继续使用同一个可执行文件。不要为了通过版本检查切到另一个已安装版本。这些开发选项不会改变正式分发的最低版本要求；实际能力仍以所用 CLI 的帮助和会话返回值为准。
 
 安装后重启原本已打开的客户端，使其取得更新的 PATH。插件安装成功不等于 signing/setup 成功。免费 Personal Team 和全新 Mac 配置仍未验收；详见[前置条件和签名](first-task.md#before-you-start)。
 
@@ -139,7 +139,7 @@ OpenCode 使用 `--agent opencode`。默认安装到当前项目 `.cursor/skills
 
 - 明确说“不要预览”“不要打开浏览器”即可跳过服务启动和开页，该选择在本任务重连后仍有效；不会写入全局偏好。
 - 按 session ID 记录启动尝试和 URL，后台命令只续读、不重跑。复用会话时若已有预览，直接复用；后续操作或新一轮对话不再次开页。用户关闭页面后也不自动重开。
-- 预检仅用 `preview --help` 检测能力。旧 CLI 不支持时跳过；启动失败只检查一次状态，必要时提供 URL，不反复重试、不自动升级或切模式。默认预览不是独立后台 hook，而是 Agent 执行的技能步骤。
+- 预检仅用 `preview --help` 检测能力。通过版本预检后，若该可执行文件未提供预览能力则跳过；这不表示支持低于最低版本的 CLI。启动失败只检查一次状态，必要时提供 URL，不反复重试、不自动升级或切模式。默认预览不是独立后台 hook，而是 Agent 执行的技能步骤。
 - Codex 没有内置浏览器工具时（例如纯终端环境），提供 URL，不擅自改开系统浏览器。记录开页尝试和已返回的标签 ID，失败或结果不确定时不再开第二页。
 - 用户指定浏览器时使用 `--no-open` 后只打开一次 URL。预览用于用户观看；Agent 仍读取原始截图、使用新引用操作。启动/停止预览后重新观察。
 - 任务结束或取消时断开自己新建的会话，核对预览、媒体与控制资源清理；复用已有连接时保留连接和预览，除非用户明确要求断开。有准确的任务自建标签句柄时可关闭该标签；没有浏览器工具时，失效页面可能留在浏览器中。关闭标签不等于停止服务，也不应退出整个浏览器。
