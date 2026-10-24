@@ -125,7 +125,7 @@ class PluginPreflightTests(unittest.TestCase):
         (self.xcode / "Platforms/iPhoneOS.platform").mkdir(parents=True)
         self.write_command("uname", "printf 'Darwin\\n'")
         self.write_command("xcode-select", f"printf '%s\\n' '{self.xcode}'")
-        self.write_cli("0.1.0")
+        self.write_cli("0.4.0")
 
     def write_command(self, name, body):
         path = self.bin / name
@@ -211,7 +211,7 @@ fi
         result = self.run_check()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("brew install", result.stderr)
-        for version in ("0.0.9", "0.1.0-rc.1", "bad", "0.1", "1.0.0\nmalformed"):
+        for version in ("0.0.9", "0.3.9", "0.1.0-rc.1", "bad", "0.1", "1.0.0\nmalformed"):
             self.write_cli(version)
             result = self.run_check()
             self.assertNotEqual(result.returncode, 0, version)
