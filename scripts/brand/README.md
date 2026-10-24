@@ -2,7 +2,7 @@
 
 These tools maintain the approved assets in `assets/brand/`. They are development dependencies, not CLI or plugin runtime dependencies. The npm package is private. Do not install Sharp into the generated root plugin manifest.
 
-Use Node.js 22+ and Python 3.9+. From the repository root:
+Use Node.js 22+ and Python 3.11+ for these tools. Pillow 13 no longer supports Python 3.9 or 3.10; use a Python 3.11+ interpreter when creating the virtual environment below. This requirement is specific to brand tooling; the general release tooling and development tests still support Python 3.9+. From the repository root:
 
 ```sh
 npm ci --prefix scripts/brand --ignore-scripts
@@ -10,7 +10,7 @@ python3 -m venv .build/brand-venv
 .build/brand-venv/bin/python -m pip install -r scripts/brand/requirements.txt
 ```
 
-The npm lockfile pins Sharp 0.35.5 and its dependency tree; requirements.txt pins Pillow 11.3.0. Sharp uses the locked prebuilt packages, with install scripts disabled. Both dependency directories are ignored. Keep the pinned versions and lockfile together when upgrading; compare generated assets before accepting changes.
+The npm lockfile pins Sharp 0.35.5 and its dependency tree; requirements.txt pins Pillow 13.0.0. Sharp uses the locked prebuilt packages, with install scripts disabled. Both dependency directories are ignored. Keep the pinned versions and lockfile together when upgrading; compare generated assets before accepting changes.
 
 Check reproducibility without updating the checkout:
 
