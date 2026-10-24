@@ -15,6 +15,11 @@ struct TestModifiers: OptionSet {
     let rawValue: Int
     static let shift = Self(rawValue: 1), command = Self(rawValue: 2)
 }
+enum TestInputEvent: Equatable {
+    case tap, doubleTap, longPress
+    case text(String)
+    case key(String, TestModifiers)
+}
 struct XCUIGestureVelocity: RawRepresentable { let rawValue: CGFloat }
 final class XCUIElementSnapshot {
     let element: XCUIElement
@@ -35,6 +40,7 @@ class XCUIElement {
     var value: Any? = "old"
     var focused = false
     var removed = false
+    private(set) var inputEvents: [TestInputEvent] = []
     var onEvent: (String) -> Void = { _ in }
     var elementType: ElementType { checkAlive(); return .textView }
     var isEnabled: Bool { checkAlive(); return true }
@@ -42,11 +48,13 @@ class XCUIElement {
     var frame: CGRect { checkAlive(); return CGRect(x: 0, y: 0, width: 390, height: 844) }
     func checkAlive() { precondition(!removed, "Runner queried an element after navigation removed it") }
     func descendants(matching: ElementType) -> XCUIElement { self }
-    func tap() { onEvent("tap") }
-    func doubleTap() { onEvent("double-tap") }
-    func press(forDuration: Double) { onEvent("long-press") }
-    func typeText(_ text: String) { onEvent(text) }
-    func typeKey(_ key: String, modifierFlags: TestModifiers) { onEvent(key) }
+    func tap() { inputEvents.append(.tap); onEvent("tap") }
+    func doubleTap() { inputEvents.append(.doubleTap); onEvent("double-tap") }
+    func press(forDuration: Double) { inputEvents.append(.longPress); onEvent("long-press") }
+    func typeText(_ text: String) { inputEvents.append(.text(text)); onEvent(text) }
+    func typeKey(_ key: String, modifierFlags: TestModifiers) {
+        inputEvents.append(.key(key, modifierFlags)); onEvent(key)
+    }
     func coordinate(withNormalizedOffset: CGVector) -> TestCoordinate { TestCoordinate() }
 }
 struct TestCoordinate {
