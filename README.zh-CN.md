@@ -39,7 +39,7 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 ## 快速开始
 
-通过 Homebrew 或 Release 归档安装正式 CLI，然后从标准模式开始；Runner 签名是独立的可选流程。完整安装与升级步骤见[首次任务](docs/first-task.md)和[安装说明](docs/install.md)。
+通过 Homebrew 或 Release 归档安装正式 CLI，然后从标准模式开始；Runner 签名是独立的可选流程。完整安装与升级步骤见[首次任务](docs/first-task.md)和[安装说明](docs/install.md)。当前插件与通用 skill 要求稳定版 **CLI 0.4.0 或更高版本**，需单独更新；详见[客户端兼容说明](docs/plugins.md#先检查环境)。
 
 ### 1. 准备并连接
 
@@ -131,7 +131,7 @@ iphone-use --session "$SESSION" record-stop "$RECORDING_ID"
 iphone-use --session "$SESSION" preview --stop
 ```
 
-CLI 0.3.12 新增 `connect --progress`：连接过程中逐行输出 `connection_progress` JSON，最后仍返回连接结果。Agent 应立即转达明确的授权提示，继续等待同一次连接；密码只在手机上输入。只有与本次 Runner PID 匹配的设备日志才会确认“需要授权”，普通超时、断流或日志不可用不会被当作授权请求。
+`connect --progress`：连接过程中逐行输出 `connection_progress` JSON，最后仍返回连接结果。Agent 应立即转达明确的授权提示，继续等待同一次连接；密码只在手机上输入。只有与本次 Runner PID 匹配的设备日志才会确认“需要授权”，普通超时、断流或日志不可用不会被当作授权请求。
 
 Runner 可用 `connect --device "$IOS_UDID" --mode runner --progress --preview` 在认证前启动预览页，`--port 9876` 可覆盖端口；工具返回 URL，不自动打开浏览器。页面先显示等待指引，确认授权请求后显示醒目提示，完成认证并连接后在同一网址显示实时画面。默认不加 `--progress` 的单份 JSON 输出保持兼容。专属引导只用于明确的 UI Automation 认证；Face ID 等 App 弹窗保留在真实画面中。详情见 [连接进度与授权](skills/iphone-use/references/connection-progress.md) 和 [测试流程](docs/testing.md)。
 
@@ -161,7 +161,7 @@ DeepSeek Harness 可通过同目录中的 `dsh-iphone-use` bundle 接入，复�
 
 在 `open/tap/swipe/type/press` 后添加 `--observe`，即可返回包含独立 `action` 与 `observation` 回执的单个 JSON。两者均成功才退出 0；观察失败不会覆盖动作结果或重放输入。明确未派发且无需刷新时跳过观察。客户端顺序调用既有协议，兼容旧宿主，但不在两次请求之间独占设备。读取 `observation.result.text` 和其中的 `screenshot` 后再选择下一动作。详见[契约与示例](docs/actions.md#动作后观察)。
 
-先通过已安装命令的 `--help` 确认是否支持 `--observe`；旧 CLI 可使用 skill 中保留的[动作与观察回退模板](skills/iphone-use/references/action-observation.md)。
+先通过已安装命令的 `--help` 确认是否支持 `--observe`；版本预检通过后，若该能力不可用，可使用 skill 中保留的[动作与观察回退模板](skills/iphone-use/references/action-observation.md)。
 
 `observe` 和 `inspect` 成功时输出多行文本；其他结果及运行时错误为单行 JSON。成功退出码为 `0`，运行失败为 `1`。参数语法错误输出到 stderr，并以非零状态退出。
 

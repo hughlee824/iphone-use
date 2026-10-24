@@ -37,7 +37,7 @@ Standard currently requires the documented macOS/Xcode/iOS 27 environment, pairi
 
 ## Quick start
 
-Install the published CLI through Homebrew or the Release archive, then start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md), including legacy formula migration and formula-scoped Homebrew trust.
+Install the published CLI through Homebrew or the Release archive, then start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md) for installation and upgrades. The current plugin and portable skill require stable **CLI 0.4.0 or later** and update separately; see [client compatibility](docs/plugins.md#先检查环境).
 
 ### 1. Prepare and connect
 
@@ -134,7 +134,7 @@ iphone-use --session "$SESSION" record-stop "$RECORDING_ID"
 iphone-use --session "$SESSION" preview --stop
 ```
 
-CLI 0.3.12 adds `connect --progress`: newline-delimited `connection_progress` JSON events followed by the final connection result. Agents should relay confirmed authorization requests immediately and continue the same pending connection. Enter passcodes only on the iPhone. Confirmation requires a live device log associated with the exact launched Runner PID; timeouts, stalled video and unavailable logging never establish authorization.
+`connect --progress` emits newline-delimited `connection_progress` JSON events followed by the final connection result. Agents should relay confirmed authorization requests immediately and continue the same pending connection. Enter passcodes only on the iPhone. Confirmation requires a live device log associated with the exact launched Runner PID; timeouts, stalled video and unavailable logging never establish authorization.
 
 For Runner, `connect --device "$IOS_UDID" --mode runner --progress --preview` starts the preview page before authentication; `--port 9876` overrides the configured port. It returns a URL without opening a browser. The page shows conditional startup guidance, a prominent confirmed-authorization notice, and then live media on the same URL after authentication and connection complete. Omitting `--progress` preserves the single-JSON output contract. This dedicated screen is only for confirmed UI Automation authentication; Face ID and other app prompts remain visible in the live feed. See [connection progress and authorization](skills/iphone-use/references/connection-progress.md) and [validation procedures](docs/testing.md).
 
@@ -172,7 +172,7 @@ See [portable skill installation](docs/plugins.md#通用-skillcursor--opencode) 
 
 Add `--observe` to `open`, `tap`, `swipe`, `type`, or `press` to return one JSON object containing separate `action` and `observation` responses. Exit code zero requires both to succeed; an observation failure never overwrites the action's outcome or replays input. A confirmed rejection without a refresh requirement skips observation. This client-side sequence uses the existing host protocol, including older hosts; it does not reserve the device between requests. Read `observation.result.text` and its `screenshot` before choosing the next input. See [the contract and examples](docs/actions.md#动作后观察).
 
-Check the installed command's `--help` for `--observe` support. For older CLIs, the skill retains the [action-and-observation fallback template](skills/iphone-use/references/action-observation.md).
+Check the installed command's `--help` for `--observe` support. If that capability is unavailable after version preflight, use the [action-and-observation fallback template](skills/iphone-use/references/action-observation.md).
 
 Successful `observe` and `inspect` commands print multiline text. Other results and runtime errors use single-line JSON. Success exits with `0`; runtime failure exits with `1`. Argument syntax errors are reported on stderr with a nonzero exit code.
 
