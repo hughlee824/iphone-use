@@ -43,7 +43,10 @@ jobs:
       - name: Install Actionlint
         run: python3 scripts/tools/install-actionlint.py
       - name: Run shared engineering checks
-        run: python3 scripts/check.py
+        run: |
+          python3 -m venv .build/test-venv
+          .build/test-venv/bin/python -m pip install -r scripts/tests/requirements.txt
+          .build/test-venv/bin/python scripts/check.py
       - name: Validate and package the client plugin
         run: |
           python3 scripts/plugin/sync-plugin.py --check

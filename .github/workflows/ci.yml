@@ -30,7 +30,10 @@ jobs:
       - name: Install Actionlint
         run: python3 scripts/tools/install-actionlint.py
       - name: Run portable checks
-        run: python3 scripts/check.py --suite quick
+        run: |
+          python3 -m venv .build/test-venv
+          .build/test-venv/bin/python -m pip install -r scripts/tests/requirements.txt
+          .build/test-venv/bin/python scripts/check.py --suite quick
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: client-plugins
@@ -91,7 +94,10 @@ jobs:
       - name: Install SwiftLint
         run: python3 scripts/tools/install-swiftlint.py
       - name: Run shared engineering checks
-        run: python3 scripts/check.py --suite native
+        run: |
+          python3 -m venv .build/test-venv
+          .build/test-venv/bin/python -m pip install -r scripts/tests/requirements.txt
+          .build/test-venv/bin/python scripts/check.py --suite native
       - name: Verify brand toolchain and reproducible assets
         run: |
           npm ci --prefix scripts/brand --ignore-scripts

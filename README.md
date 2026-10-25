@@ -262,6 +262,9 @@ Issues, focused pull requests, and reproducible device reports are welcome. For 
 Run the same checks configured in [CI](.github/workflows/ci.yml):
 
 ```sh
+python3 -m venv .build/test-venv
+. .build/test-venv/bin/activate
+python3 -m pip install -r scripts/tests/requirements.txt
 python3 scripts/tools/install-swiftlint.py
 python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py

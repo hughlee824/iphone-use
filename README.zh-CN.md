@@ -251,6 +251,9 @@ iPhone-use 处于早期开发阶段。真机验收覆盖上述实测环境，不
 提交前运行与 [CI](.github/workflows/ci.yml) 一致的检查：
 
 ```sh
+python3 -m venv .build/test-venv
+. .build/test-venv/bin/activate
+python3 -m pip install -r scripts/tests/requirements.txt
 python3 scripts/tools/install-swiftlint.py
 python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
