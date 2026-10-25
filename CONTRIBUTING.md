@@ -25,7 +25,9 @@ For device-facing changes, also validate the affected workflow with the exact CL
 
 ## Branches, commits and pull requests
 
-Use short-lived branches from `main`, such as `fix/runner-focus` or `docs/install-guide`; automated Codex work uses `codex/…`. Submit a PR and use squash merging. Do not force-push `main`, rewrite published tags or replace published assets. A release remains an explicit maintainer operation, never a side effect of an ordinary merge.
+Use a short-lived branch from the latest `main` for each independent task, such as `fix/runner-focus` or `docs/install-guide`; automated Codex work uses `codex/…`. Submit a PR and use squash merging. The repository automatically deletes source branches after their PRs are merged. For follow-up changes, fetch the latest `main` and create a new branch; do not reuse a merged branch. Contributors using forks should enable automatic deletion in their fork or delete completed branches themselves.
+
+Do not force-push `main`, rewrite published tags or replace published assets. A release remains an explicit maintainer operation, never a side effect of an ordinary merge.
 
 Use this format for PR titles and final commits on `main`:
 

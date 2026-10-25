@@ -8,6 +8,10 @@ The `Protect main: PR and CI required` ruleset targets `main` and the default br
 
 Allow squash merging only and use the PR title as the squash commit title. The `quick` CI job validates titles on PR creation, title edits and source updates. Its input is read from the event JSON, never inserted into shell code. Development commit titles remain unrestricted.
 
+Keep **Automatically delete head branches** enabled under **Settings → General → Pull Requests** (`delete_branch_on_merge: true`) so short-lived source branches are deleted after merge. Preserve `main` protection. Follow-up work starts on a new branch from the latest `main`, rather than reusing a merged branch. Branches in contributor forks are governed by the fork's settings and permissions.
+
+When cleaning up older branches, verify that their current tips are covered by PRs merged into `main` and that no open PR depends on them. Check any commits added after merge and any PRs merged into another feature branch before deleting. Squash merging changes commit identities, so `git branch --merged` alone is not sufficient evidence. Save branch names and SHAs under `.local/` before bulk cleanup, then run `git fetch --prune origin` to remove stale local remote-tracking references.
+
 Keep the required GitHub Actions status context **`test`**. It is an always-run final gate: `quick`, `native` and the non-publishing `artifact-transfer` check must report `success`. A failed, cancelled or skipped upstream job must fail the gate. Do not replace it with a job that is simply skipped when prerequisites fail; skipped status checks can satisfy branch requirements. Coordinate any context rename with the repository ruleset.
 
 The quick job runs on Linux and native checks run on the Xcode macOS image. The default local `python3 scripts/check.py` runs both groups. Draft releases also use the full entry point; publication workflows require successful push CI for the exact `main` commit. A local pass does not establish a cloud workflow run.
