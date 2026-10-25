@@ -6,6 +6,7 @@ import re
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import yaml
@@ -178,22 +179,67 @@ class ArtifactTransferTests(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
         release = (ROOT / ".github/workflows/release.yml").read_text()
         check_transfer_contract(ci, release)
-        upload = ci.split("      - name: Prepare artifact transfer fixtures\n", 1)[1].split("\n  artifact-transfer:", 1)[0]
-        download = ci.split("\n  artifact-transfer:\n", 1)[1].split("\n  native:\n", 1)[0]
-        self.assertIn("needs: quick", download)
-        self.assertIn("check-artifact-transfer.py verify", download)
-        self.assertNotIn("check-artifact-transfer.py prepare", download)
-        self.assertNotIn("continue-on-error:", upload + download)
-        gate = ci.split("\n  test:\n", 1)[1]
-        self.assertIn("needs: [quick, native, artifact-transfer]", gate)
-        self.assertIn("ARTIFACT_RESULT: ${{ needs.artifact-transfer.result }}", gate)
-        self.assertIn('test "$ARTIFACT_RESULT" = success', gate)
+        jobs = load_workflow(ci)["jobs"]
+        for name in ("quick", "artifact-transfer"):
+            job = jobs[name]
+            # Check values, including the producer and verifier steps: an ignored
+            # verification failure must not satisfy the required test gate.
+            for entry in [job, *job["steps"]]:
+                self.assertEqual(entry.get("continue-on-error", "false"), "false",
+                                 f"{name} must not ignore errors")
+        download = jobs["artifact-transfer"]
+        self.assertEqual(download["needs"], "quick")
+        commands = "\n".join(step.get("run", "") for step in download["steps"])
+        self.assertIn("check-artifact-transfer.py verify", commands)
+        self.assertNotIn("check-artifact-transfer.py prepare", commands)
+        gate = jobs["test"]
+        self.assertEqual(set(gate["needs"]), {"quick", "native", "artifact-transfer"})
+        required = next(step for step in gate["steps"] if step.get("name") == "Require every check group")
+        self.assertEqual(required["env"]["ARTIFACT_RESULT"], "${{ needs.artifact-transfer.result }}")
+        self.assertIn('test "$ARTIFACT_RESULT" = success', required["run"])
 
 
 class ArtifactWorkflowContractTests(unittest.TestCase):
     def setUp(self):
         self.ci = (ROOT / ".github/workflows/ci.yml").read_text()
         self.release = (ROOT / ".github/workflows/release.yml").read_text()
+
+    def test_continue_on_error_defaults_false_and_true_through_actual_ci_check(self):
+        targets = []
+        for job_name in ("quick", "artifact-transfer"):
+            steps = load_workflow(self.ci)["jobs"][job_name]["steps"]
+            targets.extend(("ci", job_name, index) for index in [None, *range(len(steps))])
+        for job_name in ("build", "draft"):
+            steps = load_workflow(self.release)["jobs"][job_name]["steps"]
+            targets.extend(("release", job_name, index) for index, step in enumerate(steps)
+                           if any(step.get("uses", "").startswith(f"actions/{action}@") for action in
+                                  ("upload-artifact", "download-artifact")))
+        original_read = Path.read_text
+        check = ArtifactTransferTests("test_ci_exercises_release_action_pins_and_requires_transfer_success")
+        for target, job_name, index in targets:
+            for value in (None, False, True):
+                with self.subTest(target=target, job=job_name, step=index, value=value):
+                    document = load_workflow(self.ci if target == "ci" else self.release)
+                    job = document["jobs"][job_name]
+                    entry = job if index is None else job["steps"][index]
+                    if value is None:
+                        entry.pop("continue-on-error", None)
+                    else:
+                        entry["continue-on-error"] = value
+                    changed = yaml.safe_dump(document, sort_keys=False)
+                    path = ROOT / ".github/workflows" / ("ci.yml" if target == "ci" else "release.yml")
+
+                    def read(candidate, *args, **kwargs):
+                        return changed if candidate == path else original_read(candidate, *args, **kwargs)
+
+                    # Exercise the real top-level test, not just its contract
+                    # helper, so leftover text assertions cannot reject false.
+                    with patch.object(Path, "read_text", read):
+                        if value is True:
+                            with self.assertRaisesRegex(AssertionError, "must not ignore errors"):
+                                check.test_ci_exercises_release_action_pins_and_requires_transfer_success()
+                        else:
+                            check.test_ci_exercises_release_action_pins_and_requires_transfer_success()
 
     def test_check_jobs_install_pinned_yaml_in_isolated_environment(self):
         pin = next(line for line in (ROOT / "scripts/tests/requirements.txt").read_text().splitlines()
