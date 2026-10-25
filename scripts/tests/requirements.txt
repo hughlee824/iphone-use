@@ -1,0 +1,2 @@
+# Development/CI tests only; not an installed CLI or plugin dependency.
+PyYAML==6.0.3

@@ -13,7 +13,7 @@ Run `python3 scripts/check.py` from the repository root for the shared device-fr
 | [brand/](brand/README.md) | Isolated, pinned design-time dependencies and asset generation. |
 | `tests/` | Python/Node regression suites and sanitized fixtures for engineering tools. |
 
-Install check tools first:
+First follow the [shared test environment setup](../docs/testing.md#shared-engineering-checks) to create and activate `.build/test-venv` and install the pinned test dependencies. Run the commands below in that environment; reactivate it in a new shell. Then install the check tools:
 
 ```sh
 python3 scripts/tools/install-actionlint.py

@@ -173,7 +173,7 @@ claude plugin update iphone-use@iphone-use
 
 ## 维护者本地验证
 
-canonical skill 位于 `skills/iphone-use/`；已提交的自包含副本位于 `plugins/iphone-use/skills/iphone-use/`。修改源文件后执行：
+canonical skill 位于 `skills/iphone-use/`；已提交的自包含副本位于 `plugins/iphone-use/skills/iphone-use/`。先按[统一测试环境准备步骤](testing.md#shared-engineering-checks)创建并激活 `.build/test-venv`、安装固定的测试依赖；新终端需要重新激活。修改源文件后，在该环境中执行：
 
 ```sh
 python3 scripts/plugin/sync-plugin.py

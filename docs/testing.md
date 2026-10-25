@@ -7,10 +7,15 @@ Build and test the exact source you intend to distribute. Device-free checks, in
 On a Mac with full Xcode selected, Python 3.9+ and Node.js 22+, install the pinned SwiftLint and run:
 
 ```sh
+python3 -m venv .build/test-venv
+. .build/test-venv/bin/activate
+python3 -m pip install -r scripts/tests/requirements.txt
 python3 scripts/tools/install-swiftlint.py
 python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
 ```
+
+The isolated test environment installs the pinned dependencies in [scripts/tests/requirements.txt](../scripts/tests/requirements.txt). PyYAML parses workflow structures for regression checks; it is not a CLI or plugin runtime dependency. Use this environment for direct Python test commands too.
 
 This is also the entry point for CI and release checks. It checks documentation links, runs strict SwiftLint, builds the CLI, runs the shared-package and Core Swift suites, Objective-C runtime doubles, Python integration tests and Node template tests, builds the unsigned iOS Runner, and checks/packages the plugin. `--jobs 2` is the default build concurrency. Missing tools or the required CLI fail the check. Root `swift test` alone does not run the dependency package's tests.
 

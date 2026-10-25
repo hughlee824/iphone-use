@@ -15,6 +15,8 @@ The [website](https://iphone-use.com), CLI releases, Git marketplace and npm pac
 
 ## Validate changes
 
+First follow the [shared test environment setup](testing.md#shared-engineering-checks), including activation of `.build/test-venv`, pinned Python test dependencies and check tools. Run the following command in that environment; reactivate it in a new shell.
+
 ```sh
 python3 scripts/check.py
 ```

@@ -7,6 +7,9 @@ Keep changes focused and behavior explicit. Discuss substantial architecture or 
 Read the [architecture](docs/architecture.md) and [testing guide](docs/testing.md). Use full Xcode 27 for native builds (the ArgumentParser dependency requires a Swift 6+ compiler), Python 3.9+ and Node.js 22+. The pinned SwiftLint release and checksum live in [scripts/tools/swiftlint.json](scripts/tools/swiftlint.json).
 
 ```sh
+python3 -m venv .build/test-venv
+. .build/test-venv/bin/activate
+python3 -m pip install -r scripts/tests/requirements.txt
 python3 scripts/tools/install-swiftlint.py
 python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py

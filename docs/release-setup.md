@@ -36,6 +36,9 @@ setup 将包复制到用户状态目录，改写为保存的 App bundle ID、嵌
 在 macOS/Xcode 主机的源码目录执行，需要 Python 3.9+；Python 仅用于维护者打包，不是用户运行依赖：
 
 ```sh
+python3 -m venv .build/test-venv
+. .build/test-venv/bin/activate
+python3 -m pip install -r scripts/tests/requirements.txt
 python3 scripts/tools/install-swiftlint.py
 python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
