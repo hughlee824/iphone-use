@@ -60,6 +60,14 @@ extension AppleDeviceBackend {
             }.display
             let recovery = previewContinuity.needsRecovery(
                 media?.recordingReceiver?.snapshots?.status() ?? [:])
+            if !recovery, media?.health()["healthy"] as? Bool == true,
+                let bound = media?.boundDisplay,
+                NativePreviewGeometry.continuousDisplay(
+                    frame: media?.recordingReceiver?.snapshots?.previewFrame(includeReducedResolution: true),
+                    bound: bound, current: display) != nil {
+                attachPreview()
+                return preview.takeRotationChange()
+            }
             var changed = recovery || media?.matchesDisplay(display) != true
             var reason = recovery ? "decoder_continuity_lost" : "display_metadata_changed"
             do { try media?.recordingReceiver?.snapshots?.rejectConflictingGeometry(display) } catch {

@@ -77,8 +77,9 @@ final class NativeSnapshotContinuityTests: XCTestCase {
         XCTAssertThrowsError(try stream.rejectConflictingGeometry(left)) {
             XCTAssertEqual(($0 as? IPhoneUseError)?.code, "native_snapshot_geometry_unavailable")
         }
-        XCTAssertThrowsError(
-            try NativePreview.encode(frame, display: left), "Do not publish an inverted preview frame")
+        XCTAssertEqual(
+            try NativePreview.encode(frame, display: left), try NativePreview.encode(frame, display: right),
+            "Preview follows the frame while input still rejects stale display geometry")
         XCTAssertNoThrow(try stream.rejectConflictingGeometry(right))
         // Quiet retained frames are only conflict evidence, never fresh input.
         XCTAssertFalse(

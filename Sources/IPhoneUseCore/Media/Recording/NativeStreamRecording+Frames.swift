@@ -15,6 +15,9 @@ extension NativeStreamRecording {
             guard job.result == nil, job === current, job.refreshStarted == nil,
                 job.sourceGeneration == generation
             else { return }
+            if let rotation = frame.displayRotation, rotation != job.rotation {
+                finish(job, reason: "display_changed"); return
+            }
             do {
                 if job.firstFrameAt == nil {
                     job.decodedSeedAge = max(0, job.started - frame.firstPacketAt)
@@ -84,6 +87,9 @@ extension NativeStreamRecording {
                 else { return }
                 job.packets += 1
                 if let unit = job.parser.receive(packet, receivedAt: receivedAt) {
+                    if let rotation = unit.displayRotation, rotation != job.rotation {
+                        finish(job, reason: "display_changed"); return
+                    }
                     let before = job.writer.frames
                     try job.writer.append(unit)
                     if job.writer.hasFrame, job.firstFrameAt == nil {

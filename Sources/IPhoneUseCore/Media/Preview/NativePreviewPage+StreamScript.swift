@@ -2,6 +2,8 @@ extension NativePreviewPage {
     static let streamScript = """
         let sequence = -1, streamGeneration=null, displayEpoch=0;
         function clearStream(generation=null){
+          resetPreviewMotion();
+          device.dataset.ready='false';layoutKey='';
           streamGeneration=generation;displayEpoch++;sequence=-1;lastSequence=null;lastFrameAt=0;
           screen.removeAttribute('src');screen.style.opacity=0;
           if(objectURL)URL.revokeObjectURL(objectURL);objectURL=null;
@@ -29,7 +31,8 @@ extension NativePreviewPage {
             }
             const decodeWaitMs=performance.now()-decodeStarted,layoutStarted=performance.now();
             const nextRotation=frameRotation||rotation;
-            const geometryChanged=next.naturalWidth!==screen.naturalWidth||next.naturalHeight!==screen.natura\
+            const geometryChanged=device.dataset.ready!=='true'||next.naturalWidth!==screen.naturalWidth\
+        ||next.naturalHeight!==screen.natura\
         lHeight||nextRotation!==rotation;
             // Copy the current style after await: resize/health can change it while
             // decoding. Do not carry handlers or replace the gesture overlay.

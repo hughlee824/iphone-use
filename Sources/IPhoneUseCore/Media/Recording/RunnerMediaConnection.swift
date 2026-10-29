@@ -117,6 +117,15 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
         guard media?.health()["healthy"] as? Bool == true else {
             throw IPhoneUseError("native_media_unhealthy", "Preview media connection lost")
         }
+        if let display, NativePreviewGeometry.continuousDisplay(
+            frame: previewReceiver?.snapshots?.previewFrame(includeReducedResolution: true),
+            bound: display, current: current) != nil {
+            // A verified frame can rotate the viewer without replacing the stream.
+            // Retain CoreDevice facts here for recording and input checks.
+            self.display = current
+            previewRefreshReason = "none"
+            return false
+        }
         if current.geometry != display?.geometry {
             previewRefreshReason = "display_metadata_changed"
             return true

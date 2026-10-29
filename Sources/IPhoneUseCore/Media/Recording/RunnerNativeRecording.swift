@@ -45,6 +45,12 @@ extension RunnerRecordingConnection {
     var previewDevice: NativePreviewDevice { .unknown }
     func previewNeedsRefresh() throws -> Bool { try verifyDisplay(); return false }
     func refreshPreview() throws { try verifyDisplay() }
+    func synchronizeRecordingOrientation() throws -> Bool {
+        guard let frameRotation = previewReceiver?.snapshots?.previewFrame()?.displayRotation,
+            frameRotation != rotation else { return false }
+        try refreshPreview()
+        return true
+    }
 }
 
 // Calls are serialized on SessionHost's work queue. The shared recording sink
@@ -113,6 +119,12 @@ final class RunnerNativeRecording {
         currentRecordingID = nil
         do {
             let media = try connection ?? connect(); connection = media
+            if try media.synchronizeRecordingOrientation() {
+                // An explicit recording needs a verified fixed transform even
+                // when the read-only viewer can follow stale-metadata rotations.
+                try validateRefreshedPreview(media)
+                if preview != nil { try attachPreview() }
+            }
             try media.verifyDisplay()
             try cancellation.check()
             let result = try recording.start(
@@ -255,10 +267,12 @@ final class RunnerNativeRecording {
                 if changed { reason = connection.previewRefreshReason }
             }
             checkingDisplay = false
-            if !changed, let previewGeometry, let display = connection.previewDisplay {
-                // CoreDevice can report the SAME stale axes for both its PNG
-                // and display metadata. XCTest supplies only negative evidence;
-                // never derive an input transform or render pixels from this probe.
+            if !changed, let previewGeometry, let display = connection.previewDisplay,
+                NativePreviewGeometry.continuousDisplay(
+                    frame: connection.previewReceiver?.snapshots?.previewFrame(includeReducedResolution: true),
+                    bound: display, current: display) == nil {
+                // XCTest and video can sample opposite sides of a rotation.
+                // Keep the independent fallback for frames without verified tags.
                 changed = try previewGeometry().conflicts(with: display)
                 if changed { independentOrientationConflicts += 1; reason = "xctest_geometry_conflict" }
             }
@@ -271,7 +285,7 @@ final class RunnerNativeRecording {
             }
             try attachPreview()
             if changed { previewEvent("refresh_completed", reason: reason, connection: connection) }
-            return changed
+            return preview.takeRotationChange() || changed
         } catch {
             if checkingDisplay, !cancellation.isCancelled,
                 NativePreviewPoll.canDefer(error, health: connection.source.health()) {

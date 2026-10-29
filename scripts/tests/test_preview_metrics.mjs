@@ -18,8 +18,18 @@ function fixture(productType='iPhone13,3', navigator={language:'zh-CN'}, appeara
   let clock = 0;
   const elements = Object.fromEntries(['notice', 'placeholder', 'gestures', 'screen', 'state', 'diagnostics', 'metrics', 'device', 'stage', 'bezel', 'shell', 'hardware', 'cutout', 'speaker', 'device-name', 'connection', 'appearance-toggle', 'viewer', 'placeholder-label', 'diagnostics-label', 'identity'].map(id => [id, { dataset: {}, style: { setProperty(name,value) { this[name]=value; } }, clientWidth: 1000, clientHeight: id==='identity'?32:700, getBoundingClientRect() { return {left:0,right:0,top:0,bottom:0}; }, events: {}, addEventListener(name, fn) { this.events[name]=fn; }, setAttribute(name,value) { this[name]=value; }, removeAttribute(name) { delete this[name]; } }]));
   const document = { documentElement:{}, events:{}, visibilityState: 'visible', getElementById: id => elements[id], addEventListener: (name, fn) => { document.events[name]=fn;if(name==='visibilitychange'){const previous=document.visibilityChanged;document.visibilityChanged=()=>{previous?.();fn();};} } };
+  const motionPreference={matches:false,addEventListener(_,fn){this.change=fn;}};
+  for(const element of Object.values(elements)){
+    element.animations=[];
+    element.animate=(frames,options)=>{
+      const animation={frames,options,playState:'running',cancel(){this.playState='idle';}};
+      element.animations.push(animation);return animation;
+    };
+  }
   let report;
   const context = vm.createContext({ document, navigator, URLSearchParams, location: { search: '?diagnostics=1' },
+    matchMedia:()=>motionPreference,DOMMatrixReadOnly:class {constructor(matrix){Object.assign(this,matrix);}},
+    getComputedStyle:element=>({transform:element.renderedTransform||{a:1,b:0,f:0}}),
     ResizeObserver: class { observe() {} }, performance: { now: () => clock }, Date: { now: () => clock },
     requestAnimationFrame: fn => fn(), setInterval: fn => { report = fn; }, setTimeout() {}, clearTimeout() {},
     AbortSignal: { timeout() {} }, fetch: () => new Promise(() => {}) });
@@ -28,7 +38,7 @@ function fixture(productType='iPhone13,3', navigator={language:'zh-CN'}, appeara
   const profile=catalog.models[productType]||null;
   vm.runInContext(`setDevice(${JSON.stringify({device:{productType,name:profile?.name||'Unknown iPhone'},bezel:profile})})`,context);
   return {
-    elements, document,
+    elements, document, motionPreference,
     run(code) { return vm.runInContext(code,context); },
     layout(w, h, rotation='rot0') {
       elements.screen.naturalWidth=w;elements.screen.naturalHeight=h;
@@ -450,6 +460,7 @@ function decodingFixture() {
     URL={createObjectURL:()=> 'blob:'+ ++urlID,revokeObjectURL:url=>revoked.push(url)};
     layout=()=>{layoutCalls++;};
     screen.naturalWidth=444;screen.naturalHeight=960;screen.style.cssText='width:100px';
+    device.dataset.ready='true';
     function candidate(){
       const image={naturalWidth:444,naturalHeight:960,style:{},cloneNode:()=>candidate(),replaceWith(next){this.replacement=next;}};
       image.removeAttribute=name=>{delete image[name];};
@@ -607,6 +618,7 @@ test('first decoded frame clears the cover immediately without a health poll', a
     {phase:'ready',authorization:'enabled'}
   ]){
     const p=decodingFixture();p.frame(100,1);
+    p.elements.device.dataset.ready='false';
     p.run(`renderHealth(${JSON.stringify({connection,mediaHealthy:true,frameAgeSeconds:0})})`);
     assert.equal(p.elements.notice.hidden,false);
     const pending=p.run("displayFrame({},'rot0')");
@@ -691,4 +703,110 @@ test('old generation HTTP frame response cannot be decoded', async () => {
   await p.run('frames()');
   assert.equal(p.run('candidates.length'),0);
   assert.equal(p.elements.notice.hidden,false);
+});
+
+test('rotation moves the complete device around its screen centre without delaying frames', () => {
+  const p=fixture();p.layout(1170,2532);
+  p.elements.device.dataset.ready='true';p.layout(1170,2532);
+  // The first delivered frame establishes geometry; it must not spin in from the placeholder.
+  p.run('layoutKey="";layout()');
+  assert.equal(p.elements.device.animations.length,0);
+  const before=p.run('previousGeometry.scale');
+  p.layout(2532,1170,'rot90');
+  const animation=p.elements.device.animations.at(-1);
+  assert.equal(animation.options.duration,250);
+  assert.match(animation.frames[0].transform,/rotate\(-90deg\)/);
+  const scale=Number(animation.frames[0].transform.match(/scale\(([^)]+)\)/)[1]);
+  assert.ok(Math.abs(scale*p.run('previousGeometry.scale')-before)<1e-8);
+  const screen=p.elements.screen.style;
+  assert.equal(p.elements.device.style.transformOrigin,
+    `${parseFloat(screen.left)+parseFloat(screen.width)/2}px ${parseFloat(screen.top)+parseFloat(screen.height)/2}px`);
+  animation.playState='finished';
+  p.layout(2532,1170,'rot270');
+  assert.match(p.elements.device.animations.at(-1).frames[0].transform,/rotate\(-180deg\)/);
+  assert.equal(p.elements.screen.style.transform,undefined,'JPEG pixels are not rotated a second time at rest');
+  assert.equal(p.elements.identity.animations.length,2);
+});
+
+test('an interrupted rotation starts from the currently rendered angle and scale', () => {
+  const p=fixture();p.elements.device.dataset.ready='true';p.layout(1170,2532);
+  p.layout(2532,1170,'rot90');
+  const interrupted=p.elements.device.animations.at(-1);
+  const current=p.run('previousGeometry');
+  const angle=-45*Math.PI/180,scale=.8;
+  p.elements.device.renderedTransform={a:Math.cos(angle)*scale,b:Math.sin(angle)*scale,f:current.translateY};
+  p.elements.identity.renderedTransform={f:10};
+  p.layout(1170,2532,'rot0');
+  assert.equal(interrupted.playState,'idle');
+  const next=p.elements.device.animations.at(-1);
+  assert.match(next.frames[0].transform,/rotate\(45deg\)/);
+  const startScale=Number(next.frames[0].transform.match(/scale\(([^)]+)\)/)[1]);
+  assert.ok(Math.abs(startScale*p.run('previousGeometry.scale')-current.scale*scale)<1e-8);
+});
+
+test('reduced motion, hidden pages and a replaced stream cancel rotation instead of replaying it', () => {
+  for(const stop of ['reduced','hidden','stream']){
+    const p=fixture();p.elements.device.dataset.ready='true';p.layout(1170,2532);
+    p.layout(2532,1170,'rot90');
+    const animation=p.elements.device.animations.at(-1);
+    if(stop==='reduced'){p.motionPreference.matches=true;p.motionPreference.change();}
+    if(stop==='hidden')p.visibility('hidden');
+    if(stop==='stream')p.run('clearStream("replacement")');
+    assert.equal(animation.playState,'idle',stop);
+    p.layout(1170,2532,'rot0');
+    assert.equal(p.elements.device.animations.length,1,stop);
+  }
+});
+
+for(const pause of ['hidden','reduced'])test(`first fresh rotation animates after ${pause} resumes without replaying old motion`, () => {
+  for(const scenario of ['settled','interrupted','updated-while-paused']){
+    const p=fixture();p.elements.device.dataset.ready='true';p.layout(1170,2532);
+    if(scenario==='interrupted')p.layout(2532,1170,'rot90');
+    const count=p.elements.device.animations.length;
+    const deviceAnimation=p.elements.device.animations.at(-1);
+    const captionAnimation=p.elements.identity.animations.at(-1);
+    if(pause==='hidden')p.visibility('hidden');
+    else {p.motionPreference.matches=true;p.motionPreference.change();}
+    if(deviceAnimation){
+      assert.equal(deviceAnimation.playState,'idle');
+      assert.equal(captionAnimation.playState,'idle');
+    }
+    if(scenario==='updated-while-paused')p.layout(2532,1170,'rot90');
+    if(pause==='hidden')p.visibility('visible');
+    else {p.motionPreference.matches=false;p.motionPreference.change();}
+    // Ordinary frame/health updates keep the same cached layout after resuming.
+    p.layout(scenario==='settled'?1170:2532,scenario==='settled'?2532:1170,
+      scenario==='settled'?'rot0':'rot90');
+    assert.equal(p.elements.device.animations.length,count,'resuming must not replay old motion');
+    assert.equal(p.elements.identity.animations.length,count);
+    p.layout(2532,1170,scenario==='settled'?'rot90':'rot270');
+    assert.equal(p.elements.device.animations.length,count+1,scenario);
+    assert.equal(p.elements.identity.animations.length,count+1,scenario);
+    assert.match(p.elements.device.animations.at(-1).frames[0].transform,
+      scenario==='settled'?/rotate\(-90deg\)/:/rotate\(-180deg\)/);
+  }
+});
+
+test('rotation keyframes fit the diagonal envelope in narrow and wide viewers', () => {
+  for(const [width,height] of [[445,695],[1280,720],[360,380]]){
+    for(const [from,to] of [['rot0','rot90'],['rot90','rot270'],['rot270','rot0']]){
+      const p=fixture();p.elements.stage.clientWidth=width;p.elements.stage.clientHeight=height;
+      p.elements.device.dataset.ready='true';
+      const turn=rotation=>p.layout(rotation==='rot0'?1170:2532,rotation==='rot0'?2532:1170,rotation);
+      turn(from);p.run('layoutKey="";layout()');
+      // Establish a settled start, as after an ordinary completed transition.
+      p.run('deviceMotion=null;captionMotion=null');
+      turn(to);
+      const geometry=p.run('previousGeometry'),animation=p.elements.device.animations.at(-1);
+      assert.ok(animation,`${from} -> ${to}`);
+      for(const frame of animation.frames){
+        const extra=Number(frame.transform.match(/rotate\(([^d]+)deg\)/)[1]);
+        const scale=Number(frame.transform.match(/scale\(([^)]+)\)/)[1])*geometry.scale;
+        const radians=(geometry.angle+extra)*Math.PI/180;
+        const cos=Math.abs(Math.cos(radians)),sin=Math.abs(Math.sin(radians));
+        assert.ok((geometry.fitWidth*cos+geometry.fitHeight*sin)*scale<=width-40+1e-7);
+        assert.ok((geometry.fitWidth*sin+geometry.fitHeight*cos)*scale<=height-88+1e-7);
+      }
+    }
+  }
 });
