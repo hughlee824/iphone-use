@@ -203,15 +203,12 @@ Details: [observations](docs/observations.md), [actions](docs/actions.md), and [
 
 ## How it works
 
-```mermaid
-flowchart LR
-    Agent[External AI agent] --> CLI[iphone-use CLI]
-    CLI <-->|Unix socket| Host[Swift session host on Mac]
-    Host <-->|standard| Native[Apple native services / HID]
-    Host <-->|runner| Runner[XCTest Runner on iPhone]
-    Native <--> Apps[iPhone apps]
-    Runner <--> Apps
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture/architecture-en-dark.svg">
+  <img src="assets/architecture/architecture-en-light.svg" alt="iPhone-use runtime architecture: agent, CLI, session host, standard and runner control paths, observation cache, read-only preview, and recording.">
+</picture>
+
+The host manages preview and recording through the selected backend; browser preview is read-only. See [architecture and repository layout](docs/architecture.md) for component responsibilities, shared modules and session lifecycle.
 
 Standard observations and pre-input image checks use Apple CoreDevice PNG exclusively; media starts for explicit recording or preview requests, with geometry checks while in use. Screenshot failures never fall back to media pixels.
 
