@@ -190,19 +190,16 @@ Runner 输入动作约每 200 ms 采样一次画面，通过允许小范围光�
 
 ## 工作原理
 
-```mermaid
-flowchart LR
-    Agent[外部 AI agent] --> CLI[iphone-use CLI]
-    CLI <-->|Unix socket| Host[Mac 上的 Swift 会话宿主]
-    Host <-->|standard| Native[Apple 原生服务 / HID]
-    Host <-->|runner| Runner[iPhone 上的 XCTest Runner]
-    Native <--> Apps[iPhone App]
-    Runner <--> Apps
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture/architecture-en-dark.svg">
+  <img src="assets/architecture/architecture-en-light.svg" alt="iPhone-use 运行时架构：Agent、CLI、会话宿主、standard 与 runner 控制路线、观察缓存、只读预览和录屏。">
+</picture>
+
+宿主通过所选后端管理预览和录屏；浏览器预览只读。组件职责、共享模块和会话生命周期见[架构与仓库布局](docs/architecture.md)。
 
 标准模式的观察和动作前图片校验统一使用 Apple CoreDevice PNG；自有媒体在显式录屏或预览请求时启动，并保留媒体使用期间的几何校验。截图失败不会回退到媒体像素。
 
-`connect` 启动宿主并固定所选模式。标准模式连接 Apple 原生服务、持有 HID 连接及显式请求的自有录屏/预览流；Runner 模式通过 Xcode 的 `test-without-building` 安装并启动 Runner。宿主跨 CLI 调用保持连接、串行请求、缓存观察并管理清理，不自动切换控制路线。
+`connect` 启动宿主并固定所选模式。标准模式连接 Apple 原生服务、持有 HID 连接及显式请求的自有录屏/预览流；Runner 模式在后台启动已安装的 XCTest App，通过 USB 回环发送带认证的命令，部署由显式 `setup` 完成。宿主跨 CLI 调用保持连接、串行请求、缓存观察并管理清理，不自动切换控制路线。
 
 会话文件默认位于 `/private/tmp/iphone-use-<uid>`，目录权限为 `0700`，可通过 `IPHONE_USE_STATE_DIR` 更换路径。发布包 Runner 的准备状态位于 `~/Library/Application Support/iphone-use`。签名私钥留在 Keychain，设备 token 仅保存在宿主内存和 XCTest 子进程环境中。
 
