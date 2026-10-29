@@ -1,6 +1,6 @@
 # Documentation
 
-Start with [your first iPhone task](first-task.md). These documents describe the current source; an installed release may expose fewer features. Check `iphone-use --version`, command `--help`, and the session's support/readiness fields. Release-specific compatibility and distribution status belong in [GitHub Releases](https://github.com/HughLee824/iphone-use/releases), not an undated promise in a guide.
+Start with [your first iPhone task](first-task.md). These documents describe the current source; an installed release may expose fewer features. Check `iphone-use --version`, command `--help`, and the session's support/readiness fields. Release-specific compatibility and distribution status belong in [GitHub Releases](https://github.com/hughlee824/iphone-use/releases), not an undated promise in a guide.
 
 ## Use iPhone-use
 
@@ -11,6 +11,7 @@ Start with [your first iPhone task](first-task.md). These documents describe the
 | [Setup and troubleshooting](onboarding.md) | Xcode, device authorization, Runner signing and source installation. |
 | [Client plugins](plugins.md) | Codex, Claude Code, DeepSeek Harness, Cursor and OpenCode. |
 | [Control modes](control-modes.md) | Standard/Runner differences, configuration and compatibility. |
+| [Privacy and data flow](privacy.md) · [中文](privacy.zh-CN.md) | Local device control, client/model data handling and local artifacts. |
 | [Connection reuse](session-reuse.md) | Continue a connection sequentially without taking over another task. |
 | [Preview](local-preview.md) · [Recording](runner-recording.md) | Read-only viewing, shared media, cleanup and limitations. |
 

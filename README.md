@@ -9,23 +9,27 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-[![CI](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml)
+[![CI](https://github.com/hughlee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/hughlee824/iphone-use/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-F05138.svg)](Package.swift)
 
-iPhone-use is a macOS CLI that lets an external agent discover apps, read screenshots and accessibility data, and interact with a connected iPhone. Your agent handles natural language, planning, and judging results; iPhone-use provides device observations and actions through a persistent device session.
+iPhone-use is an open-source macOS CLI that lets Codex, Claude Code and other AI agents operate a real iPhone. It provides device observations and actions; your agent interprets the task, plans actions and checks the result.
 
-An agent needs local command execution and the ability to read PNG files. The device control path runs locally on your Mac and iPhone.
+Your agent needs local command execution on the Mac and the ability to read PNG images. Device control runs locally; the client may still send screenshots and UI text to its model. See [privacy and data flow](docs/privacy.md).
 
 [Website](https://iphone-use.com) · [First iPhone task](docs/first-task.md) · [Client plugins](docs/plugins.md) · [Commands](#commands) · [Documentation](#documentation)
 
-CLI and plugin channels update independently. These guides describe the current source; use [release notes](https://github.com/HughLee824/iphone-use/releases) and installed command help to check version-specific support.
+CLI and plugin channels update independently. These guides describe the current source; use [release notes](https://github.com/hughlee824/iphone-use/releases) and installed command help to check version-specific support.
 
 ## Control modes
 
-This checkout supports **standard** (screenshot + native HID) and **runner** (XCTest). Choose with `iphone-use config set mode standard` or `runner`, then `iphone-use connect --device "$DEVICE"`; override one connection with `--mode standard|runner`. Preferences live in `~/.iphone-use/config.json`. Existing `--backend` and signed `--xctestrun` usage remain compatible. New users default to standard; valid legacy Runner setup migrates to runner. An active session never changes backend when preferences change.
+| | standard | runner |
+| --- | --- | --- |
+| Observe | Screenshots | Screenshots and available accessibility elements |
+| Act | Native HID | XCTest Runner |
+| Runner installation and development signing | Not required | Required |
 
-Standard currently requires the documented macOS/Xcode/iOS 27 environment, pairing, Developer Mode and unlock, but no Runner signing. Both modes provide the main gestures, app lifecycle operations and shared native recording; element access and text/key behavior still differ. Consult the returned support/readiness fields. See [mode selection, migration and Agent rules](docs/control-modes.md). The walkthrough below starts with standard mode; Runner signing is optional.
+Start with standard for screenshot-based operation without Runner setup. Choose runner when you need XCTest and available element references. Both require full Xcode, device trust, Developer Mode and an unlocked phone; see the quick start below and [mode configuration](docs/control-modes.md) for the supported environment.
 
 ## Why iPhone-use?
 
@@ -120,7 +124,7 @@ Coordinates use **screen points**, not screenshot pixels. Swipe direction descri
 
 ## Local live preview
 
-CLI 0.4.0 includes a read-only browser preview in both standard and runner modes, sharing the owned native video stream without Device Hub. Use `preview` from the installed release package; no source build is required. Device acceptance covers the documented Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro environment, not every device or OS combination. See the [release notes](https://github.com/HughLee824/iphone-use/releases/tag/v0.4.0) for the actual acceptance scope.
+CLI 0.4.0 includes a read-only browser preview in both standard and runner modes, sharing the owned native video stream without Device Hub. Use `preview` from the installed release package; no source build is required. Device acceptance covers the documented Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro environment, not every device or OS combination. See the [release notes](https://github.com/hughlee824/iphone-use/releases/tag/v0.4.0) for the actual acceptance scope.
 
 The viewer selects the device appearance by exact `productType`: retained official artwork for 23 iPhone 11–16 models, and independently drawn parameterized frames for covered newer models including 17 / Air and 18 Pro / Pro Max. Missing assets or unknown models use a drawn frame; the plain-view toggle has been removed. Portrait and both landscape directions remain supported. The model name and connection indicator sit below the device; the fullscreen button has been removed. Debug builds provide an appearance comparison button when official artwork is available; Release builds hide it. The page follows the system color scheme and keeps the video size and centre unchanged when switching appearances. All 32 supported identifiers have model-specific opening geometry calibrated against the corresponding retained PNG or public dimensional drawing; see the [calibration inventory](docs/preview-hardware-calibration.md). Restricted newer Apple artwork is not included. See [Product Bezels provenance and separate license](assets/preview/README.md).
 
@@ -148,17 +152,17 @@ Install the self-contained [iPhone-use plugin](plugins/iphone-use/README.md) fro
 
 ```sh
 # Codex (command names checked on CLI 0.146.0)
-codex plugin marketplace add HughLee824/iphone-use
+codex plugin marketplace add hughlee824/iphone-use
 codex plugin add iphone-use@iphone-use
 
 # Claude Code
-claude plugin marketplace add HughLee824/iphone-use
+claude plugin marketplace add hughlee824/iphone-use
 claude plugin install iphone-use@iphone-use
 ```
 
 Start a new client session and invoke `$iphone-use:iphone-use` in Codex or `/iphone-use:iphone-use` in Claude Code. Follow [the first-task guide](docs/first-task.md) for Xcode, signing, setup, verification, and upgrades. The plugin contains shared device rules, a read-only prerequisite check, [Codex call templates](skills/iphone-use/references/codex-calls.md), and [Claude Code Bash/Read instructions](skills/iphone-use/references/claude-code.md). It does not install the CLI or prepare signing. Distribution through this project's marketplace is separate from an official-directory listing.
 
-DeepSeek Harness can use the `dsh-iphone-use` bundle in the same package, reusing this skill. In Add plugin, enter `dsh-iphone-use` or `https://github.com/HughLee824/iphone-use`; see [Harness installation and validation scope](docs/plugins.md#deepseek-harness-安装).
+DeepSeek Harness can use the `dsh-iphone-use` bundle in the same package, reusing this skill. In Add plugin, enter `dsh-iphone-use` or `https://github.com/hughlee824/iphone-use`; see [Harness installation and validation scope](docs/plugins.md#deepseek-harness-安装).
 
 For Cursor and OpenCode, use the portable skill installer with conflict checks:
 
@@ -257,7 +261,7 @@ The complete first-task and architecture guides are in English; detailed command
 
 [Contribution and Git/PR conventions](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 
-Issues, focused pull requests, and reproducible device reports are welcome. For a substantial change, open an [issue](https://github.com/HughLee824/iphone-use/issues) to discuss the scope first.
+Issues, focused pull requests, and reproducible device reports are welcome. For a substantial change, open an [issue](https://github.com/hughlee824/iphone-use/issues) to discuss the scope first.
 
 Run the same checks configured in [CI](.github/workflows/ci.yml):
 
@@ -272,7 +276,7 @@ python3 scripts/check.py
 
 Python 3.9+ is used for release tooling and development tests, not the installed CLI runtime. The check entry point requires full Xcode and the pinned SwiftLint and Actionlint versions, builds the CLI before integration tests, and supplies its executable path explicitly. A missing CLI fails the check. Build concurrency defaults to two jobs. The only external Swift package dependency is [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2), pinned to `1.8.2`. It requires a Swift 6+ compiler; use the supported full Xcode 27 toolchain for native builds. The package manifest tools version does not imply Swift 5.9 compiler compatibility or enable Swift 6 language mode.
 
-Node.js 22+ runs the documented call templates against controlled tool responses in CI; it is only needed for development tests. After changing the canonical skill, run `python3 scripts/plugin/sync-plugin.py` to update its packaged copy and use `python3 scripts/plugin/set-plugin-version.py X.Y.Z` to update all shared distribution versions before release. CI also compiles the Runner without signing and packages the plugin for review. Website source, tests and Cloudflare deployment are maintained separately in [iphone-use-website](https://github.com/HughLee824/iphone-use-website). See [public-access release checks](docs/public-access-release.md) for the exact commands and hardware acceptance requirements.
+Node.js 22+ runs the documented call templates against controlled tool responses in CI; it is only needed for development tests. After changing the canonical skill, run `python3 scripts/plugin/sync-plugin.py` to update its packaged copy and use `python3 scripts/plugin/set-plugin-version.py X.Y.Z` to update all shared distribution versions before release. CI also compiles the Runner without signing and packages the plugin for review. Website source, tests and Cloudflare deployment are maintained separately in [iphone-use-website](https://github.com/hughlee824/iphone-use-website). See [public-access release checks](docs/public-access-release.md) for the exact commands and hardware acceptance requirements.
 
 CI does not have a physical iPhone. For device-facing changes, also build a fresh Runner and verify the affected workflow on hardware. Include Mac/Xcode/iOS versions, reproduction steps, expected behavior, and relevant errors in reports. Remove private screen content, provisioning profiles, and signing material before sharing logs. Keep the English and Chinese READMEs in sync when changing shared instructions. Follow the [repository layout](docs/architecture.md#repository-layout) when adding files; local experiments and device records stay outside Git.
 
