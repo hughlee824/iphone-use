@@ -4,6 +4,14 @@ iPhone-use provides explicit mode selection. Use `--version` and `connect --help
 
 ## Choose a mode
 
+| | standard | runner |
+| --- | --- | --- |
+| Observation | Screenshots | Screenshots and available accessibility elements |
+| Input | Native HID | XCTest Runner |
+| Runner installation and development signing | Not required | Required |
+
+Start with standard for screenshot-based control without Runner setup. Choose runner when you need XCTest and available element references. Both require full Xcode, device trust, Developer Mode and an unlocked phone. See [first-use requirements](first-task.md#before-you-start) for the supported environment and Runner signing prerequisites.
+
 - **standard** → `apple-native`: screenshots, visual coordinate selection and native HID; Unicode/multiline input uses the device clipboard and HID Paste. It does not install/start a Runner or fall back to XCTest. Current acceptance requires the documented macOS/Xcode/iOS 27 environment, pairing, Developer Mode and an unlocked device. No Runner signing is needed for control; the signed Probe is only a development fixture. This is not a claim of no-Xcode or no-Developer-Mode support.
 - **runner** → `xctest`: the existing signed XCTest Runner, screenshots and available element data. Existing setup/build-runner workflows remain. Both modes implement the main gestures, app lifecycle operations and shared native recording. Element access and text/key behavior differ; identical operation names do not promise identical behavior in every app.
 

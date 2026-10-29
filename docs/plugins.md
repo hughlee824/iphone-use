@@ -7,12 +7,25 @@
 
 插件是 **CLI + skill** 封装，共用设备操作契约，分别适配 Codex 的命令执行、后台续读和图片工具，Claude Code 的 Bash、TaskOutput 和 Read，以及 DeepSeek Harness 的 bash、job_output 和 read_image。它不含 CLI、不创建开发签名、不自动接入手机，也不要求 MCP 服务。
 
+## 插件与包名
+
+iPhone-use 的 CLI、客户端插件和通用 skill 安装器使用以下名称：
+
+| 名称 | 用途 |
+| --- | --- |
+| `iphone-use` | 在 Mac 上运行的 CLI，通过 Homebrew 或 GitHub Release 安装。 |
+| `iphone-use@iphone-use` | 本仓库 marketplace 中的 Codex／Claude Code 插件身份。 |
+| `dsh-iphone-use` | 本项目的 DeepSeek Harness 插件包，复用同一份设备 skill。 |
+| `iphone-use-skill` | 本项目面向 Cursor／OpenCode 的通用 skill 安装器。 |
+
+客户端可能将截图和文字发送给所选模型；使用个人 App 前请查看[隐私与数据流](privacy.zh-CN.md)。
+
 ## 先检查环境
 
 插件与通用 skill **0.2.0 / 0.2.1 均要求稳定版 CLI 0.4.0 或更高版本**；Runner 使用与 CLI 配套的版本。最低版本要求不代表所有 macOS、iOS 或 App 均已验收，实际范围以对应发布说明为准。新安装使用各渠道实际已发布的版本，安装和升级步骤见[安装指南](install.md)。
 
 ```sh
-brew install HughLee824/tap/iphone-use
+brew install hughlee824/tap/iphone-use
 command -v iphone-use
 iphone-use --version
 ```
@@ -28,7 +41,7 @@ iphone-use --version
 以下是终端命令，已核对 Codex CLI 0.146.0。使用支持 `codex plugin --help` 的版本：
 
 ```sh
-codex plugin marketplace add HughLee824/iphone-use
+codex plugin marketplace add hughlee824/iphone-use
 codex plugin add iphone-use@iphone-use
 codex plugin list --marketplace iphone-use --json
 ```
@@ -42,12 +55,12 @@ codex plugin list --marketplace iphone-use --json
 以下命令已在 Claude Code 2.1.250 上验收。在终端执行：
 
 ```sh
-claude plugin marketplace add HughLee824/iphone-use
+claude plugin marketplace add hughlee824/iphone-use
 claude plugin install iphone-use@iphone-use
 claude plugin list --json
 ```
 
-开始新的 Claude Code 会话，调用 **`/iphone-use:iphone-use`**。交互模式中也可使用 `/plugin marketplace add HughLee824/iphone-use` 和 `/plugin install iphone-use@iphone-use`；若安装结果要求 reload，按提示执行。
+开始新的 Claude Code 会话，调用 **`/iphone-use:iphone-use`**。交互模式中也可使用 `/plugin marketplace add hughlee824/iphone-use` 和 `/plugin install iphone-use@iphone-use`；若安装结果要求 reload，按提示执行。
 
 仓库索引位于 `.claude-plugin/marketplace.json`，插件同样从 `./plugins/iphone-use` 安装，读取自己的 `.claude-plugin/plugin.json`。两份清单共用一套内置 skill，不会引用维护者 checkout。[官方插件说明](https://code.claude.com/docs/en/plugins)与[marketplace 说明](https://code.claude.com/docs/en/plugin-marketplaces)。
 
@@ -64,7 +77,7 @@ claude plugin list --json
 | 安装来源 | 输入内容 |
 | --- | --- |
 | Package name（选择 Official npm registry） | `dsh-iphone-use` |
-| GitHub repository address | `https://github.com/HughLee824/iphone-use` |
+| GitHub repository address | `https://github.com/hughlee824/iphone-use` |
 
 终端对应命令如下。桌面应用使用 `desktop` profile，Web 用户换成自己的 `web` profile：
 
@@ -73,7 +86,7 @@ claude plugin list --json
 dsh plugin --profile desktop add dsh-iphone-use
 
 # 或直接使用 GitHub 仓库地址
-dsh plugin --profile desktop add https://github.com/HughLee824/iphone-use
+dsh plugin --profile desktop add https://github.com/hughlee824/iphone-use
 
 dsh --profile desktop --dump-config
 ```
@@ -165,7 +178,7 @@ claude plugin marketplace update iphone-use
 claude plugin update iphone-use@iphone-use
 ```
 
-以上更新命令适用于跟随默认分支的 Git 来源。若曾固定 `v0.2.0` 标签，更新仍会留在该标签：Codex CLI 0.146.0 需要先 `codex plugin marketplace remove iphone-use`，再 `codex plugin marketplace add HughLee824/iphone-use`；Claude Code 2.1.250 可再次 `claude plugin marketplace add HughLee824/iphone-use` 切回默认分支。然后执行上面的更新命令。此处更换 Codex marketplace 来源会保留已安装插件，不是卸载插件。
+以上更新命令适用于跟随默认分支的 Git 来源。若曾固定 `v0.2.0` 标签，更新仍会留在该标签：Codex CLI 0.146.0 需要先 `codex plugin marketplace remove iphone-use`，再 `codex plugin marketplace add hughlee824/iphone-use`；Claude Code 2.1.250 可再次 `claude plugin marketplace add hughlee824/iphone-use` 切回默认分支。然后执行上面的更新命令。此处更换 Codex marketplace 来源会保留已安装插件，不是卸载插件。
 
 重开客户端会话，核对安装缓存中 SKILL.md 的 workflow version，而非只看开发目录。发布方修改 skill/adapter 时必须同步三份客户端清单版本，再运行同步脚本更新仓库根清单；Claude 的版本缓存尤其需要版本号变化。正式包的 Runner 变化或签名过期时按 CLI 提示重新 setup。
 

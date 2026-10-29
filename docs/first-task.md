@@ -1,6 +1,6 @@
 # Your first iPhone task
 
-> This guide describes the current source. Check your installed CLI’s version/help and the [release notes](https://github.com/HughLee824/iphone-use/releases) for compatibility. CLI and plugin versions update independently.
+> This guide describes the current source. Check your installed CLI’s version/help and the [release notes](https://github.com/hughlee824/iphone-use/releases) for compatibility. CLI and plugin versions update independently.
 
 Start with **standard mode**: screenshots and native HID, without Runner installation, signing or `setup`. Choose **runner mode** explicitly when you want XCTest and available element references. Both modes use the same CLI and persistent session; they never switch control routes automatically.
 
@@ -15,7 +15,7 @@ Start with **standard mode**: screenshots and native HID, without Runner install
 
 ## Install the CLI
 
-Install the public package with `brew install HughLee824/tap/iphone-use`, or download and verify an archive from [GitHub Releases](https://github.com/HughLee824/iphone-use/releases). For a manual package, retain its `bin` and `libexec` layout and add `bin` to PATH. It can run outside the source repository. Local candidate packages and `swift build` remain separate development paths.
+Install the public package with `brew install hughlee824/tap/iphone-use`, or download and verify an archive from [GitHub Releases](https://github.com/hughlee824/iphone-use/releases). For a manual package, retain its `bin` and `libexec` layout and add `bin` to PATH. It can run outside the source repository. Local candidate packages and `swift build` remain separate development paths.
 
 ```sh
 command -v iphone-use
@@ -77,11 +77,21 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 Runner observations also include available elements; actions can use current references such as `o1:e9` where supported. Consult `connect/status` support fields and [actions](actions.md), rather than assuming the routes have identical text semantics. Explicit recording in both modes uses the shared owned native media recorder; Runner input remains XCTest.
 
-## Optional: external agent
+## Use Codex or Claude Code
 
-A client with local Mac command execution and PNG-reading tools can perform the same loop. See [client plugins](plugins.md) for the separate plugin workflow. The plugin does not install the CLI or grant device access. The current plugin and portable skill require stable **CLI 0.4.0 or later**, with the Runner shipped by that CLI when using runner mode. Choose an available version from the documented distribution channel; source manifests are not proof of publication. The shared workflow defaults to one local preview after connection (Codex built-in browser; Claude Code and DeepSeek Harness Mac default browser), honors explicit opt-out and reuses existing previews. It disconnects task-created sessions at the end and preserves borrowed sessions unless asked to disconnect. See [preview lifecycle](plugins.md#默认实时预览). Update the plugin separately and start a new session to load the new workflow. Manual CLI `connect` does not open a browser.
+After preparing the CLI and phone, follow the [Codex](plugins.md#codex-安装) or [Claude Code](plugins.md#claude-code-安装) installation steps. The client needs local Mac command execution and PNG-reading tools. The plugin calls the CLI directly; no MCP server is required. It does not install the CLI or grant device access.
 
-Tell the agent which device and mode to use, and the intended task. It must view the PNG before selecting coordinates, keep the returned session and observation IDs, inspect the actual result, and disconnect its own session. A command tool's background job ID is not an iPhone-use session ID; collect the original command's output instead of starting it again.
+The current plugin and portable skill require stable **CLI 0.4.0 or later**, with its matching Runner when using runner mode. CLI and plugin updates are separate; install from an available distribution channel and start a new client session after updating the plugin.
+
+Invoke `$iphone-use:iphone-use` in Codex, or `/iphone-use:iphone-use` in Claude Code, then send:
+
+> Use standard mode on my USB-connected iPhone. Open Settings, navigate to General and read a fresh screenshot to confirm the page. Do not change any settings. If General is already open, return and enter it again. Disconnect the session you create when finished; preserve an existing borrowed session.
+
+If several phones are connected, specify which one to use. The agent must read the actual PNG, confirm the General page and report whether it disconnected a task-created session or preserved a borrowed one. A successful command or screenshot filename alone does not establish completion. If an input result is `unknown`, inspect the attached observation, or capture one if absent, before choosing the next action; never replay automatically.
+
+The plugin workflow opens one local preview by default, honors an explicit opt-out and reuses an existing preview. It closes task-created sessions and preserves borrowed sessions unless asked to disconnect. See [preview behavior](plugins.md#默认实时预览). Manual CLI `connect` does not open a browser. A command tool's background job ID is not a device session ID; collect the original command's output instead of starting it again.
+
+Review [privacy and data flow](privacy.md) before using personal apps. Other clients with local command execution and image reading can use the same loop through the [client adapters](plugins.md).
 
 ## When something stops
 

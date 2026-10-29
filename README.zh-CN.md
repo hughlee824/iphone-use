@@ -9,25 +9,27 @@
 
 [English](README.md) · **简体中文**
 
-[![CI](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/HughLee824/iphone-use/actions/workflows/ci.yml)
+[![CI](https://github.com/hughlee824/iphone-use/actions/workflows/ci.yml/badge.svg)](https://github.com/hughlee824/iphone-use/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6.0%2B-F05138.svg)](Package.swift)
 
-iPhone-use 是一个 macOS CLI，让外部 agent 能够发现 App、读取截图与辅助功能数据，并操作连接的 iPhone。自然语言理解、任务规划和结果判断由调用 agent 负责；iPhone-use 通过所选模式的持续会话提供设备观察与动作能力。
+iPhone-use 是让 Codex、Claude Code 等 AI Agent 操作真实 iPhone 的开源 macOS 命令行工具。它提供设备观察与操作，Agent 负责理解任务、规划动作并核对结果。
 
-调用 agent 需要具备本机命令执行和 PNG 读图能力。设备控制链路在你的 Mac 和 iPhone 上本地运行。
+Agent 需要在 Mac 上执行本地命令并读取 PNG 图片。设备控制在本地执行；客户端仍可能将截图和界面文字发送给模型，详见[隐私与数据流](docs/privacy.zh-CN.md)。
 
 [网站](https://iphone-use.com) · [首个 iPhone 任务](docs/first-task.md) · [客户端插件](docs/plugins.md) · [命令概览](#命令概览) · [文档导航](#文档导航)
 
-CLI 与插件独立更新。文档描述当前源码；具体版本支持范围以[发布说明](https://github.com/HughLee824/iphone-use/releases)和已安装命令的帮助为准。
+CLI 与插件独立更新。文档描述当前源码；具体版本支持范围以[发布说明](https://github.com/hughlee824/iphone-use/releases)和已安装命令的帮助为准。
 
 ## 控制模式
 
-当前源码提供 **standard**（截图 + 原生 HID）和 **runner**（XCTest）两种模式。用 `iphone-use config set mode standard` 或 `runner` 设置默认，再运行 `iphone-use connect --device "$DEVICE"`；单次覆盖使用 `--mode standard|runner`。偏好保存在 `~/.iphone-use/config.json`，原有 `--backend` 和签名 `--xctestrun` 用法保持兼容。新用户默认 standard，有效的旧 Runner 配置迁移为 runner；修改偏好不会改变已有会话。
+| | standard | runner |
+| --- | --- | --- |
+| 观察 | 截图 | 截图与可用辅助功能元素 |
+| 操作 | 原生 HID | XCTest Runner |
+| Runner 安装与开发签名 | 不需要 | 需要 |
 
-标准模式目前仍要求已记录的 macOS/Xcode/iOS 27 环境、配对、Developer Mode 和解锁，但不需要 Runner 签名。两种模式已提供主要手势、应用生命周期和共享原生录屏；元素访问、文字与按键行为仍有差异，以会话返回的支持能力和就绪状态为准。详见[模式配置、迁移与 Agent 规则](docs/control-modes.md)。下方以标准模式入门，Runner 签名为可选步骤。
-
-两种模式还可显式使用 `type oN --mode insert --method touch-paste --text TEXT`：只准备剪贴板，再触摸可见的粘贴菜单，核验后用 `text-finish` 恢复剪贴板；不发送键盘事件。详见[操作流程](docs/actions.md#纯剪贴板与触摸粘贴两种模式)。
+从 standard 开始，通过截图操作手机，无需准备 Runner。需要 XCTest 和可用元素引用时选择 runner。两种模式都需要完整 Xcode、设备信任、开发者模式和解锁；具体环境见下方快速开始及[模式配置](docs/control-modes.md)。
 
 ## 为什么选择 iPhone-use？
 
@@ -117,7 +119,7 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 ## 本地实时预览
 
-CLI 0.4.0 已提供 standard 和 runner 两种模式下共享原生视频流的只读浏览器预览，无需 Device Hub。安装正式包后即可使用 `preview`，无需从源码构建。真机验收覆盖文档记录的 Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro 环境，不代表所有设备或系统组合；实际验收范围见[发布说明](https://github.com/HughLee824/iphone-use/releases/tag/v0.4.0)。
+CLI 0.4.0 已提供 standard 和 runner 两种模式下共享原生视频流的只读浏览器预览，无需 Device Hub。安装正式包后即可使用 `preview`，无需从源码构建。真机验收覆盖文档记录的 Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro 环境，不代表所有设备或系统组合；实际验收范围见[发布说明](https://github.com/hughlee824/iphone-use/releases/tag/v0.4.0)。
 
 预览按 `productType` 精确匹配外观：保留 iPhone 11–16 系列 23 个机型的官方素材；已覆盖的 17 / Air、18 Pro / Pro Max 等机型使用独立绘制的参数化外框。缺失素材和未知机型使用自绘外框，已删除纯画面切换；保留横竖屏，已删除全屏按钮。Debug 构建在有官方素材时提供外观对比按钮，Release 构建隐藏该按钮；页面跟随系统明暗模式，切换外观时保持视频尺寸与中心不变。已支持的 32 个精确标识均有自绘开孔参数，按对应官方 PNG 或公开尺寸图校准，详见[逐机型校准清单](docs/preview-hardware-calibration.md)。新版受限 Apple 素材不随包分发。素材来源与独立许可见 [Product Bezels](assets/preview/README.md)。
 
@@ -145,17 +147,17 @@ Runner 可用 `connect --device "$IOS_UDID" --mode runner --progress --preview` 
 
 ```sh
 # Codex：命令名已核对 CLI 0.146.0
-codex plugin marketplace add HughLee824/iphone-use
+codex plugin marketplace add hughlee824/iphone-use
 codex plugin add iphone-use@iphone-use
 
 # Claude Code
-claude plugin marketplace add HughLee824/iphone-use
+claude plugin marketplace add hughlee824/iphone-use
 claude plugin install iphone-use@iphone-use
 ```
 
 在新会话中分别调用 Codex 的 `$iphone-use:iphone-use` 或 Claude Code 的 `/iphone-use:iphone-use`。插件共用设备规则，包含只读前置检查、[Codex 模板](skills/iphone-use/references/codex-calls.md)及 [Claude Code Bash/Read 指引](skills/iphone-use/references/claude-code.md)。它不安装 CLI 或准备签名。Xcode、setup、首个任务和升级步骤见[插件指南](docs/plugins.md)与[完整首次任务路径](docs/first-task.md)。自有 marketplace 分发不代表已进入官方目录。
 
-DeepSeek Harness 可通过同目录中的 `dsh-iphone-use` bundle 接入，复用上述 skill。在 Add plugin 中填写 `dsh-iphone-use` 或 `https://github.com/HughLee824/iphone-use` 即可选择安装来源，验证范围见[DeepSeek Harness 安装](docs/plugins.md#deepseek-harness-安装)。
+DeepSeek Harness 可通过同目录中的 `dsh-iphone-use` bundle 接入，复用上述 skill。在 Add plugin 中填写 `dsh-iphone-use` 或 `https://github.com/hughlee824/iphone-use` 即可选择安装来源，验证范围见[DeepSeek Harness 安装](docs/plugins.md#deepseek-harness-安装)。
 
 仍支持手动将完整 `skills/iphone-use` 复制到客户端 skill 目录（Codex 为 `$CODEX_HOME/skills`，未设置时为 `~/.codex/skills`），在新任务中调用 `$iphone-use`。同时安装了两种形式时，用插件的命名空间调用避免混淆。明确选择源码流程时，前置检查支持 `--source`，连接使用已提供的签名 `.xctestrun`。
 
@@ -246,7 +248,7 @@ iPhone-use 处于早期开发阶段。真机验收覆盖上述实测环境，不
 
 [贡献与 Git/PR 规范](CONTRIBUTING.md) · [安全问题报告](SECURITY.md)
 
-欢迎提交 issue、聚焦的 pull request 和可复现的设备问题报告。较大改动建议先通过 [issue](https://github.com/HughLee824/iphone-use/issues) 讨论范围。
+欢迎提交 issue、聚焦的 pull request 和可复现的设备问题报告。较大改动建议先通过 [issue](https://github.com/hughlee824/iphone-use/issues) 讨论范围。
 
 提交前运行与 [CI](.github/workflows/ci.yml) 一致的检查：
 
@@ -261,7 +263,7 @@ python3 scripts/check.py
 
 Python 3.9+ 仅用于发布工具和开发测试，不是已安装 CLI 的运行依赖。检查入口需要完整 Xcode，以及固定版本的 SwiftLint 和 Actionlint，先构建 CLI，再把可执行文件路径显式传给集成测试；缺少 CLI 会报错。默认构建并发为两个任务。唯一外部 Swift 包依赖为 [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2)，锁定版本 `1.8.2`。该依赖要求 Swift 6+ 编译器；原生构建请使用受支持的完整 Xcode 27 工具链。Package.swift 的 tools version 不代表兼容 Swift 5.9 编译器，也不表示启用 Swift 6 语言模式。
 
-CI 使用 Node.js 22+ 将文档中的调用模板用于受控工具响应；Node 仅为开发测试所需。修改 canonical skill 后运行 `python3 scripts/plugin/sync-plugin.py` 更新包内副本；发布变更前使用 `python3 scripts/plugin/set-plugin-version.py X.Y.Z` 同步更新所有共享分发版本。CI 还会无签名编译 Runner，并打包插件供审阅。官网源码、测试和 Cloudflare 部署独立维护于 [iphone-use-website](https://github.com/HughLee824/iphone-use-website)。具体命令和真机验收要求见[公开接入发布检查](docs/public-access-release.md)。
+CI 使用 Node.js 22+ 将文档中的调用模板用于受控工具响应；Node 仅为开发测试所需。修改 canonical skill 后运行 `python3 scripts/plugin/sync-plugin.py` 更新包内副本；发布变更前使用 `python3 scripts/plugin/set-plugin-version.py X.Y.Z` 同步更新所有共享分发版本。CI 还会无签名编译 Runner，并打包插件供审阅。官网源码、测试和 Cloudflare 部署独立维护于 [iphone-use-website](https://github.com/hughlee824/iphone-use-website)。具体命令和真机验收要求见[公开接入发布检查](docs/public-access-release.md)。
 
 CI 没有真实 iPhone。涉及设备行为的改动还需重新构建 Runner，并在真机验证受影响流程。问题报告应包含 Mac/Xcode/iOS 版本、复现步骤、预期行为和相关错误。分享日志前移除私人画面内容、provisioning profile 和签名资料。修改公共使用说明时，请同步更新中英文 README。新增文件请遵循[目录约定](docs/architecture.md#repository-layout)，本地实验和设备记录不进入 Git。
 
