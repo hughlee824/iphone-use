@@ -101,7 +101,7 @@ final class NativeRecordingTests: XCTestCase {
     }
     func packets(
         _ units: [NativeVideoAccessUnit], to source: RecordingSource, omitMarkerAt: UInt32? = nil,
-        beforeUnit: ((NativeVideoAccessUnit) -> Void)? = nil
+        beforeUnit: ((NativeVideoAccessUnit) -> Void)? = nil, rotationProfiles: [UInt32: UInt8] = [:]
     ) {
         var sequence: UInt16 = 1
         for unit in units {
@@ -113,6 +113,10 @@ final class NativeRecordingTests: XCTestCase {
                 ])
                 for value in [unit.timestamp, UInt32(123)] {
                     var big = value.bigEndian; withUnsafeBytes(of: &big) { packet.append(contentsOf: $0) }
+                }
+                if let profile = rotationProfiles[unit.timestamp] {
+                    packet[0] = 0x90
+                    packet.append(contentsOf: [profile, 1, 0, 1, 0, 0, 0, 0])
                 }
                 packet.append(nal); source.send(packet); sequence &+= 1
             }

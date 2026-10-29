@@ -22,8 +22,9 @@ extension NativePreviewPage {
           const name=profile?.name||model?.[0]||connectedDevice.name||connectedDevice.productType||'iPhone';
           if(deviceName.textContent!==name){deviceName.textContent=name;deviceName.title=name;}
           const key=[w,h,rotation,artworkAvailable,forceDrawing,identityKey,stage.clientWidth\
-        ,stage.clientHeight,identity.clientHeight].join(':');
+        ,stage.clientHeight,identity.clientHeight,device.dataset.ready].join(':');
           if(key===layoutKey)return;layoutKey=key;
+          const previous=capturePreviewGeometry();
           appearanceToggle.hidden=!appearanceComparisonEnabled||!canShowOfficial;
           labelButton(appearanceToggle,forceDrawing?text.official:text.drawn);
           const angle=landscape?(rotation==='rot90'?90:-90):(rotation==='rot180'?180:0);
@@ -49,8 +50,10 @@ extension NativePreviewPage {
           const screenScale=placement.scale;
           const scale=screenScale/p.screenWidth;
           device.style.width=width*scale+'px';device.style.height=height*scale+'px';
-          device.style.transform='translate('+((width-sw)/2-x)*scale+'px\
-        ,'+(((height-sh)/2-y)*scale+placement.offsetY)+'px)';
+          const translateX=((width-sw)/2-x)*scale;
+          const translateY=((height-sh)/2-y)*scale+placement.offsetY;
+          device.style.transform='translate('+translateX+'px,'+translateY+'px)';
+          device.style.transformOrigin=(x+sw/2)*scale+'px '+(y+sh/2)*scale+'px';
           device.dataset.appearance=official?'official':exact?'drawn':'generic';
           screen.style.left=x*scale+'px';screen.style.top=y*scale+'px';
           screen.style.width=sw*scale+'px';screen.style.height=sh*scale+'px';
@@ -88,6 +91,10 @@ extension NativePreviewPage {
               speaker.style.width=sw+'em';speaker.style.height=sh+'em';
             }
           }
+          movePreview(previous,{angle,scale:screenScale,translateX,translateY,offsetY:placement.offsetY\
+        ,captionTop:placement.captionTop,live:device.dataset.ready==='true',surface:identityKey+':'+official\
+        +':'+exact+':'+screenRatio.toFixed(3),fitWidth,fitHeight,availableWidth:Math.max(0,stage.clientWidth-40)\
+        ,availableHeight:Math.max(0,stage.clientHeight-40-identity.clientHeight-16)});
         }
         appearanceToggle.addEventListener('click'\
         ,()=>{if(appearanceComparisonEnabled){forceDrawing=!forceDrawing;layout();}});

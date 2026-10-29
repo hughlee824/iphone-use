@@ -74,8 +74,10 @@ extension NativePreview {
         if let frameAt, frame.completedAt <= frameAt { discardedEncodes += 1; return }
         switch result {
         case .success(let encoded):
+            let rotation = encoded.rotation ?? display.rotation
+            if jpegRotation != rotation { gestures.clear() }
             jpegActiveWidth = frame.image.activeWidth; jpegActiveHeight = frame.image.activeHeight
-            jpeg = encoded.data; jpegRotation = display.rotation; frameAt = frame.completedAt
+            jpeg = encoded.data; jpegRotation = rotation; frameAt = frame.completedAt
             lastEncodeMs = timing.encodeMs; encodedFrames += 1; error = nil; firstFrameDeadline = nil
         case .failure(let failure):
             error = String(describing: failure); jpeg = nil
@@ -95,6 +97,7 @@ extension NativePreview {
 
     static func encodeJPEG(_ frame: NativeVideoSnapshot.Frame, display: NativeDisplay, context: CIContext)
         throws -> EncodedJPEG {
+        let display = try NativePreviewGeometry.display(for: frame, bound: display)
         let native = try NativeSnapshotImage.validateGeometry(
             frame, display: display, allowReducedResolution: true)
         let pixels = frame.pixels
@@ -140,6 +143,6 @@ extension NativePreview {
         else {
             throw IPhoneUseError("preview_encoding_failed", "JPEG encoding failed")
         }
-        return EncodedJPEG(data: data)
+        return EncodedJPEG(data: data, rotation: display.rotation)
     }
 }

@@ -33,7 +33,9 @@ final class NativePreviewTests: XCTestCase {
         return try NativeDisplay(facts)
     }
 
-    func withPreviewReceiver(_ body: (NativeRTPReceiver, (UInt8) -> Void) throws -> Void) throws {
+    func withPreviewReceiver(
+        profiles: [UInt8: UInt8] = [:], _ body: (NativeRTPReceiver, (UInt8) -> Void) throws -> Void
+    ) throws {
         var pixels: CVPixelBuffer?
         XCTAssertEqual(
             CVPixelBufferCreate(nil, 12, 18, kCVPixelFormatType_32BGRA, nil, &pixels), kCVReturnSuccess)
@@ -70,7 +72,7 @@ final class NativePreviewTests: XCTestCase {
         ])
         address.sin6_port = receiver.port.bigEndian
         func send(_ sequence: UInt8) {
-            let packet = Data([0x80, 0xe4, 0, sequence, 0, 0, 0, sequence, 0, 0, 0, 123, 40, 1, 1])
+            let packet = previewPacket(sequence, profile: profiles[sequence])
             _ = packet.withUnsafeBytes { bytes in
                 withUnsafePointer(to: &address) {
                     $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -82,5 +84,15 @@ final class NativePreviewTests: XCTestCase {
             }
         }
         try body(receiver, send)
+    }
+
+    private func previewPacket(_ sequence: UInt8, profile: UInt8?) -> Data {
+        var packet = Data([0x80, 0xe4, 0, sequence, 0, 0, 0, sequence, 0, 0, 0, 123])
+        if let profile {
+            packet[0] = 0x90
+            packet.append(contentsOf: [profile, 1, 0, 1, 0, 0, 0, 0])
+        }
+        packet.append(contentsOf: [40, 1, 1])
+        return packet
     }
 }

@@ -44,8 +44,10 @@ final class RunnerRecordingConnectionStub: RunnerRecordingConnection {
     }
     lazy var previewVideo = try? NativeRTPReceiver(deviceAddress: "::1", captureSnapshots: true)
     var previewReceiver: NativeRTPReceiver? { previewVideo }
+    var previewDisplayOverride: NativeDisplay?
     var previewDisplay: NativeDisplay? {
-        try? NativeDisplay([
+        if let previewDisplayOverride { return previewDisplayOverride }
+        return try? NativeDisplay([
             "backlightState": "activeOn",
             "displays": [
                 [

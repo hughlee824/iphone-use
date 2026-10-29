@@ -8,6 +8,7 @@ import ImageIO
 final class NativePreview {
     struct EncodedJPEG {
         let data: Data
+        var rotation: String?
     }
     let queue = DispatchQueue(label: "iphone-use.preview", qos: .userInitiated)
     let encoderQueue = DispatchQueue(
@@ -36,6 +37,7 @@ final class NativePreview {
     private var device: NativePreviewDevice
     var bezel: NativePreviewBezel?
     var jpegRotation = "rot0"
+    private var checkedRotation: String?
     var jpegActiveWidth = 0
     var jpegActiveHeight = 0
     var jpeg: Data?
@@ -154,10 +156,13 @@ final class NativePreview {
             if let device, device.productType != self.device.productType || device.name != self.device.name {
                 self.device = device; bezel = NativePreviewBezel.load(device: device)
             }
-            if self.receiver !== receiver || self.display?.geometry != display.geometry {
+            let sameSurface = self.display.map { NativePreviewGeometry.sameSurface($0, display) } ?? false
+            if self.display?.rotation != display.rotation { gestures.clear() }
+            if self.receiver !== receiver || !sameSurface {
                 gestures.clear()
                 jpeg = nil; frameAt = nil; lastSubmittedFrameAt = nil; bindingGeneration += 1
                 firstFrameDeadline = ProcessInfo.processInfo.systemUptime + 3; error = nil
+                checkedRotation = display.rotation
             }
             self.receiver = receiver; self.display = display
         }
@@ -170,12 +175,20 @@ final class NativePreview {
         }
     }
 
-    var gestureRotation: String? { queue.sync { display?.rotation } }
+    var gestureRotation: String? { queue.sync { jpeg == nil ? display?.rotation : jpegRotation } }
+
+    func takeRotationChange() -> Bool {
+        queue.sync {
+            guard jpeg != nil else { return false }
+            defer { checkedRotation = jpegRotation }
+            return checkedRotation != nil && checkedRotation != jpegRotation
+        }
+    }
 
     func showGesture(_ gesture: NativePreviewGesture) {
         queue.async { [weak self] in
             guard let self, !self.closed, let display = self.display,
-                display.rotation == gesture.rotation
+                (self.jpeg == nil ? display.rotation : self.jpegRotation) == gesture.rotation
             else { return }
             self.gestures.append(gesture, now: ProcessInfo.processInfo.systemUptime)
             self.flushWaitingGestures()
@@ -211,7 +224,7 @@ final class NativePreview {
                 "maxConversionMs": NSNull(), "maxCompressionMs": NSNull(),
                 "maxTickGapMs": maxTickGapMs, "slowFrames": slowFrames
             ],
-            "mediaHealthy": healthy, "rotation": display?.rotation as Any? ?? NSNull(),
+            "mediaHealthy": healthy, "rotation": (jpeg == nil ? display?.rotation : jpegRotation) as Any? ?? NSNull(),
             "error": previewError as Any? ?? NSNull(), "media": health
         ]
     }

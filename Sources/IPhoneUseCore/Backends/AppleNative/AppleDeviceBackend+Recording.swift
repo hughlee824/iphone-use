@@ -80,6 +80,14 @@ extension AppleDeviceBackend {
         } else {
             try media.refreshForRecording(display, mayReplace: hid?.state == .ready)
         }
+        var display = display
+        if let rotation = media.recordingReceiver?.snapshots?.previewFrame()?.displayRotation,
+            rotation != display.rotation {
+            try media.resynchronizeOrientation(
+                mayReplace: hid?.state == .ready, check: { try self.cancellation.check() },
+                readDisplay: { try cli.display() })
+            display = media.boundDisplay ?? display
+        }
         attachPreview()
         guard let receiver = media.recordingReceiver,
             let mediaID = media.health()["mediaSessionID"] as? String

@@ -53,7 +53,7 @@ extension NativePreviewResolutionTests {
         }
     }
 
-    func testInvalidActiveRectangleAndConflictingOrientationAreRejected() throws {
+    func testInvalidActiveRectangleIsRejectedAndFrameRotationIsPreviewOnly() throws {
         let buffer = try pixels(activeWidth: 64, activeHeight: 128)
         for (width, height) in [(0, 48), (32, -16), (80, 128), (64, 144), (31, 48)] {
             let frame = NativeVideoSnapshot.Frame(
@@ -67,7 +67,10 @@ extension NativePreviewResolutionTests {
                 pixels: buffer, nativeWidth: 48, nativeHeight: 96,
                 activeWidth: 32, activeHeight: 48), firstPacketAt: 1, completedAt: 2, timestamp: 1,
             displayRotation: "rot90")
-        XCTAssertThrowsError(try NativePreview.encode(frame, display: display()))
+        XCTAssertNoThrow(try NativePreview.encode(frame, display: display()))
+        XCTAssertThrowsError(
+            try NativeSnapshotImage.validateGeometry(frame, display: display(), allowReducedResolution: true),
+            "Presentation rotation must not relax screenshot/input geometry checks")
     }
 
     func testAlignedNativeHeightStillCropsToAppleDisplayBounds() throws {
