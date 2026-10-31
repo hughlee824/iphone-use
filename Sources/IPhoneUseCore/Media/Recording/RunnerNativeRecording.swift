@@ -68,6 +68,8 @@ final class RunnerNativeRecording {
         if preview == nil { releaseMedia() }
         guard failure == nil else { throw IPhoneUseError("recording_reconnect_required", failure!) }
         currentRecordingID = nil
+        let recordingOnly = preview == nil
+        var preparing = true
         do {
             let media = try connection ?? connect(); connection = media
             if try media.synchronizeRecordingOrientation() {
@@ -78,6 +80,7 @@ final class RunnerNativeRecording {
             }
             try media.verifyDisplay()
             try cancellation.check()
+            preparing = false
             let result = try recording.start(
                 duration: duration, receiver: media.source, mediaID: media.sessionID,
                 rotation: media.rotation,
@@ -96,9 +99,15 @@ final class RunnerNativeRecording {
             if recoverPreview(error) { throw error }
             failure = String(describing: error)
             preview?.suspend(failure!); preview?.close(); preview = nil
+            let hadConnection = connection != nil
             releaseMedia()
+            let ownedCleanup = hadConnection ? cleanup : nil
             if let facts = (error as? ActionFailure)?.result?["recordingCleanup"] as? [String: Any] {
                 cleanup = facts
+            }
+            // Format/clock validation in recording.start also precedes writer creation.
+            if recordingOnly, preparing || (error as? IPhoneUseError)?.code == "native_recording_format_unavailable" {
+                resetReleasedRecordingPreparation(error, ownedCleanup: ownedCleanup)
             }
             throw error
         }

@@ -60,14 +60,15 @@ extension RunnerRecordingTests {
     }
 
     func testUnconfirmedRecordingClockPreservesOnlyHealthyExistingPreview() throws {
-        for (withPreview, healthy) in [(true, true), (true, false), (false, true)] {
+        // Recording-only cleanup/retry is covered by PreviewCaptureHostTests.
+        for healthy in [true, false] {
             let connection = RunnerRecordingConnectionStub()
             var opens = 0
             let owner = RunnerNativeRecording(root: try root(), cancellation: NativeCancellation()) {
                 opens += 1; return connection
             }
             defer { _ = owner.close() }
-            let preview = withPreview ? try owner.startPreview(options: .init(port: 0)) : nil
+            let preview = try owner.startPreview(options: .init(port: 0))
             connection.receiver.clockConfirmed = false
             connection.receiver.healthy = healthy
             XCTAssertThrowsError(try owner.start(duration: 30)) {
@@ -75,9 +76,9 @@ extension RunnerRecordingTests {
             }
             XCTAssertFalse(connection.receiver.attached, "No writer or packet subscription was started")
             XCTAssertEqual(opens, 1, "Rejected starts never reconnect automatically")
-            if withPreview && healthy {
+            if healthy {
                 XCTAssertEqual(connection.closed, 0)
-                XCTAssertEqual(owner.previewStatus["url"] as? String, preview?["url"] as? String)
+                XCTAssertEqual(owner.previewStatus["url"] as? String, preview["url"] as? String)
                 XCTAssertNil(owner.status()["reconnectRequired"])
                 XCTAssertEqual(owner.status()["state"] as? String, "idle")
                 connection.receiver.clockConfirmed = true
@@ -87,8 +88,8 @@ extension RunnerRecordingTests {
                 XCTAssertEqual(connection.closed, 0)
             } else {
                 XCTAssertEqual(connection.closed, 1)
-                XCTAssertEqual(owner.status()["reconnectRequired"] as? Bool, withPreview ? nil : true)
-                if withPreview { XCTAssertNotNil(owner.previewStatus["url"]) }
+                XCTAssertNil(owner.status()["reconnectRequired"])
+                XCTAssertNotNil(owner.previewStatus["url"])
                 XCTAssertThrowsError(try owner.start(duration: 30))
                 XCTAssertEqual(opens, 1)
             }

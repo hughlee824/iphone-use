@@ -1,6 +1,26 @@
 import Foundation
 
 extension RunnerNativeRecording {
+    // A rejected pre-writer request remains a failure for its caller, but must
+    // not poison the independent daemon after proven cleanup. Only a later
+    // explicit record-start may open new media; this never replays the request.
+    func resetReleasedRecordingPreparation(_ error: Error, ownedCleanup: [String: Any]?) {
+        guard !closed, !cancellation.isCancelled, connection == nil, preview == nil,
+            !recording.isActive else { return }
+        if let ownedCleanup, !RunnerPreviewRecovery.released(ownedCleanup) { return }
+        let code: String
+        if let action = error as? ActionFailure {
+            guard !action.possiblyExecuted,
+                let facts = action.result?["recordingCleanup"] as? [String: Any],
+                RunnerPreviewRecovery.released(facts) else { return }
+            code = action.code
+        } else if let rejection = error as? IPhoneUseError, ownedCleanup != nil {
+            code = rejection.code
+        } else { return }
+        guard code == "device_locked" || RunnerPreviewRecovery.permits(error) else { return }
+        failure = nil
+    }
+
     func close() -> [String: Any] {
         recovery = RunnerPreviewRecovery()
         closed = true; unlockCheck = nil
