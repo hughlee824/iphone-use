@@ -1,30 +1,31 @@
 import Foundation
 import AppleNativeBridge
 
-// Calls are serialized on SessionHost's work queue. The shared recording sink
+// Calls are serialized on the capture owner's work queue. The shared recording sink
 // owns its timer/packet queue; signal cancellation only flips a thread-safe flag.
 final class RunnerNativeRecording {
-    private let recording: NativeStreamRecording
-    private let cancellation: NativeCancellation
-    private let connect: () throws -> RunnerRecordingConnection
+    let recording: NativeStreamRecording
+    let cancellation: NativeCancellation
+    let connect: () throws -> RunnerRecordingConnection
     private let previewGeometry: ((NativeDisplay) throws -> RunnerPreviewGeometry)?
     private let previewDevice: NativePreviewDevice
-    private var connection: RunnerRecordingConnection?
-    private var failure: String?
-    private var validation: RunnerPreviewValidation?
-    private var unlockCheck: (() throws -> Bool)?
-    private let now: () -> Double
-    private var cleanup: [String: Any] = [:]
+    var connection: RunnerRecordingConnection?
+    var failure: String?
+    var validation: RunnerPreviewValidation?
+    var recovery = RunnerPreviewRecovery()
+    var unlockCheck: (() throws -> Bool)?
+    let now: () -> Double
+    var cleanup: [String: Any] = [:]
     private var cleanupByRecordingID: [String: [String: Any]] = [:]
     private var currentRecordingID: String?
-    private var closed = false
+    var closed = false
     var hasConsumers: Bool { preview != nil || recording.isActive }
-    private var preview: NativePreview?
+    var preview: NativePreview?
     var previewOwner: PreviewOwner?
     var connectionStatus: () -> [String: Any]? = { nil }
     private var independentOrientationConflicts = 0
     private let previewContinuity = NativePreviewContinuity()
-    private let previewEventsURL: URL
+    let previewEventsURL: URL
     var previewStatus: [String: Any] {
         var result =
             preview?.status() ?? [
@@ -92,6 +93,7 @@ final class RunnerNativeRecording {
                 connection?.source.health()["healthy"] as? Bool == true {
                 throw error
             }
+            if recoverPreview(error) { throw error }
             failure = String(describing: error)
             preview?.suspend(failure!); preview?.close(); preview = nil
             releaseMedia()
@@ -112,6 +114,9 @@ final class RunnerNativeRecording {
         }
         guard validation == nil else {
             throw IPhoneUseError("preview_validation_pending", "Wait for the display transition before recording")
+        }
+        guard recovery.nextAttempt == nil else {
+            throw IPhoneUseError("preview_validation_pending", "Wait for preview media recovery before recording")
         }
         guard !recording.isActive else {
             throw IPhoneUseError("recording_busy", "A recording is already active")
@@ -156,7 +161,7 @@ final class RunnerNativeRecording {
         return result
     }
 
-    private func releaseMedia() {
+    func releaseMedia() {
         guard let connection else { return }
         cleanup = connection.close(); self.connection = nil
         if let currentRecordingID { cleanupByRecordingID[currentRecordingID] = cleanup }
@@ -183,7 +188,9 @@ final class RunnerNativeRecording {
         guard !closed, failure == nil else {
             throw IPhoneUseError("preview_unavailable", failure ?? "Connection closed")
         }
-        if let preview, connection != nil || unlockCheck != nil { return try preview.status(for: options) }
+        if let preview, connection != nil || unlockCheck != nil || recovery.nextAttempt != nil {
+            return try preview.status(for: options)
+        }
         // Reserve the HTTP port before touching media. A collision must not
         // poison this owner or interrupt an existing recording.
         _ = try reservePreview(options: options)
@@ -192,6 +199,7 @@ final class RunnerNativeRecording {
             try attachPreview()
             return preview!.status()
         } catch {
+            if recoverPreview(error) { return preview!.status() }
             // Video readiness and Runner authorization are independent. Keep
             // the startup page and its diagnostics when media is unavailable.
             if duringStartup {
@@ -218,6 +226,7 @@ final class RunnerNativeRecording {
         preview?.attach(receiver, display: display, device: connection?.previewDevice)
     }
     func stopPreview() throws -> [String: Any] {
+        recovery = RunnerPreviewRecovery()
         validation = nil; unlockCheck = nil
         preview?.close(); preview = nil
         if !recording.isActive { releaseMedia() }
@@ -227,24 +236,13 @@ final class RunnerNativeRecording {
         return ["state": "stopped", "mediaRetainedForRecording": recording.isActive]
     }
 
-    func close() -> [String: Any] {
-        closed = true; unlockCheck = nil
-        preview?.close(); preview = nil
-        var result = recording.close()
-        releaseMedia()
-        result["mediaCleanup"] = cleanup
-        result["recordingCleanupAcknowledged"] =
-            cleanup.isEmpty
-            || (cleanup["mediaStopAcknowledged"] as? Bool == true
-                && cleanup["tunnelReleaseAcknowledged"] as? Bool == true)
-        return result
-    }
 }
 
 extension RunnerNativeRecording {
     func previewTick() -> Bool {
         guard let preview, !closed, !cancellation.isCancelled else { return false }
         if unlockCheck != nil { return resumeAfterUnlock(preview) }
+        if recovery.nextAttempt != nil { return resumePreview() }
         guard let connection else { return false }
         return tickPreview(preview, connection: connection)
     }
@@ -281,28 +279,33 @@ extension RunnerNativeRecording {
             try attachPreview()
             return preview.takeRotationChange() || changed
         } catch {
-            if pauseForUnlock(error, connection: connection, preview: preview) { return true }
-            if !cancellation.isCancelled, let validation,
-                validation.canWait(error, healthy: connection.source.health()["healthy"] as? Bool == true, now: now()) {
-                previewEvent("validation_deferred", reason: String(describing: error), connection: connection)
-                return true
-            }
-            if checkingDisplay, validation == nil, !cancellation.isCancelled,
-                NativePreviewPoll.canDefer(error, health: connection.source.health()) {
-                previewEvent("poll_deferred", reason: String(describing: error), connection: connection)
-                return false // A status timeout is not evidence that the independent video stopped.
-            }
-            validation = nil
-            failure = failure ?? String(describing: error)
-            // A failed rebind may already have cleared its media session ID.
-            // Retain the error without reading identities that require a live stream.
-            NativePreviewEvents.append(
-                to: previewEventsURL, event: "preview_failed", reason: failure!, source: connection.source.health())
-            preview.suspend(failure!); preview.close(); self.preview = nil
-            recording.endSegment(reason: "preview_display_unavailable")
-            releaseMedia()
+            return handlePreviewFailure(error, preview: preview, connection: connection,
+                                        checkingDisplay: checkingDisplay)
+        }
+    }
+    private func handlePreviewFailure(
+        _ error: Error, preview: NativePreview, connection: RunnerRecordingConnection, checkingDisplay: Bool
+    ) -> Bool {
+        if pauseForUnlock(error, connection: connection, preview: preview) { return true }
+        if canWaitForValidation(error) {
+            previewEvent("validation_deferred", reason: String(describing: error), connection: connection)
             return true
         }
+        if checkingDisplay && canDeferPoll(error, connection: connection) {
+            previewEvent("poll_deferred", reason: String(describing: error), connection: connection)
+            return false // A status timeout is not evidence that the independent video stopped.
+        }
+        if recoverPreview(error) { return true }
+        validation = nil
+        failure = failure ?? String(describing: error)
+        // A failed rebind may already have cleared its media session ID.
+        // Retain the error without reading identities that require a live stream.
+        NativePreviewEvents.append(
+            to: previewEventsURL, event: "preview_failed", reason: failure!, source: connection.source.health())
+        preview.suspend(failure!); preview.close(); self.preview = nil
+        recording.endSegment(reason: "preview_display_unavailable")
+        releaseMedia()
+        return true
     }
     private func pauseForUnlock(
         _ error: Error, connection: RunnerRecordingConnection, preview: NativePreview
@@ -330,6 +333,10 @@ extension RunnerNativeRecording {
             preview.suspend("Synchronizing unlocked display", transitioning: true)
             return true
         } catch {
+            if unlockCheck != nil, !cancellation.isCancelled, RunnerPreviewRecovery.permits(error) {
+                return false // A read timeout is not permission to start a stream while locked.
+            }
+            if recoverPreview(error) { return true }
             unlockCheck = nil; validation = nil
             failure = String(describing: error)
             NativePreviewEvents.append(to: previewEventsURL, event: "unlock_resume_failed",
@@ -342,7 +349,7 @@ extension RunnerNativeRecording {
             return true
         }
     }
-    private func finishPreviewRefresh(_ connection: RunnerRecordingConnection) throws -> Bool {
+    func finishPreviewRefresh(_ connection: RunnerRecordingConnection) throws -> Bool {
         try cancellation.check()
         guard let pending = validation, now() < pending.deadline else {
             throw IPhoneUseError("preview_validation_timeout", "Display did not settle after media rebind")
@@ -356,6 +363,7 @@ extension RunnerNativeRecording {
         try cancellation.check()
         try attachPreview()
         validation = nil
+        recovery = RunnerPreviewRecovery()
         previewEvent("refresh_completed", reason: pending.reason, connection: connection)
         return true
     }
@@ -379,4 +387,5 @@ extension RunnerNativeRecording {
         facts["mediaSessionID"] = connection.sessionID; facts["displayRotation"] = connection.rotation
         NativePreviewEvents.append(to: previewEventsURL, event: event, reason: reason, source: facts)
     }
+
 }

@@ -44,9 +44,9 @@ function fixture(productType='iPhone13,3', navigator={language:'zh-CN'}, appeara
     getComputedStyle:element=>({transform:element.renderedTransform||{a:1,b:0,f:0}}),
     ResizeObserver: class { observe() {} }, performance: { now: () => clock }, Date: { now: () => clock },
     requestAnimationFrame: fn => fn(), setInterval: fn => { report = fn; }, setTimeout() {}, clearTimeout() {},
-    AbortSignal: { timeout() {} }, fetch: () => new Promise(() => {}) });
+    AbortController, AbortSignal: { timeout() {} }, fetch: () => new Promise(() => {}) });
   vm.runInContext(script.replace('\\(appearanceComparisonEnabled ? "true" : "false")', String(appearanceComparisonEnabled)), context);
-  vm.runInContext("streamGeneration='test-generation'",context);
+  vm.runInContext("stateRequest=null;streamGeneration='test-generation'",context);
   const profile=catalog.models[productType]||null;
   vm.runInContext(`setDevice(${JSON.stringify({device:{productType,name:profile?.name||'Unknown iPhone'},bezel:profile})})`,context);
   return {
@@ -549,7 +549,7 @@ test('frame polling waits for the bounded candidate and retries a decode error',
   const p=decodingFixture();
   p.run(`let requested=[],scheduled=[];
     fetch=async url=>{requested.push(url);return {ok:true,headers:{get:key=>({'X-Preview-Generation':'test-generation','X-Preview-Sequence':'4','X-Preview-Rotation':'rot0'})[key]||'1'},blob:async()=>({})};};
-    setTimeout=(fn,delay)=>scheduled.push({fn,delay});
+    setTimeout=(fn,delay)=>{if(fn===frames)scheduled.push({fn,delay});};
     let polling=frames();`);
   // Flush the fetch/body awaits, without resolving the image decode.
   await Promise.resolve();await Promise.resolve();await Promise.resolve();
@@ -1111,4 +1111,87 @@ test('Duo aperture follows the rotated asymmetric bezel in all four directions',
     assert.ok(Math.abs(parseFloat(p.elements.screen.style.left)/scale-expected[0])<1e-7,rotation);
     assert.ok(Math.abs(parseFloat(p.elements.screen.style.top)/scale-expected[1])<1e-7,rotation);
   }
+});
+
+test('503 immediately synchronizes the binding and schedules a ready frame without health timer', async () => {
+  const p=decodingFixture();
+  p.run(`let calls=[],delays=[];setTimeout=(fn,delay)=>{if(fn===frames)delays.push(delay);};
+    fetch=async url=>{calls.push(url);return url==='state'
+      ?{ok:true,json:async()=>({generation:'owner:2',state:'streaming',mediaHealthy:true,frameAgeSeconds:0})}
+      :{ok:false,status:503};};`);
+  await p.run('frames()');
+  assert.equal(p.run('calls.length'),2);
+  assert.equal(p.run('calls[1]'),'state');
+  assert.equal(p.run('streamGeneration'),'owner:2');
+  assert.equal(p.run('delays.join()'),'0');
+  assert.equal(p.elements.notice.hidden,false);
+  const fresh=p.run("displayFrame({},'rot0')");p.run('candidates[0].resolve()');await fresh;
+  assert.equal(p.elements.notice.hidden,true);
+});
+
+test('unready recovery uses bounded retries and shares same-epoch state requests', async () => {
+  const p=fixture();
+  p.run(`let reads=0,finishState,delays=[];setTimeout=(fn,delay)=>{if(fn===frames)delays.push(delay);};
+    clearStream();fetch=()=>{reads++;return new Promise(resolve=>finishState=resolve);};
+    let pendingFrames=frames(),pendingHealth=health();`);
+  assert.equal(p.run('reads'),1);
+  p.run("finishState({ok:true,json:async()=>({generation:'owner:2',state:'transitioning',mediaHealthy:false})})");
+  await p.run('Promise.all([pendingFrames,pendingHealth])');
+  assert.equal(p.run('delays.join()'),'250');
+  assert.equal(p.run('streamGeneration'),'owner:2');
+});
+
+test('recovery supersedes a delayed health response and ignores its late old binding', async () => {
+  const p=fixture();
+  p.run(`let requests=[];fetch=(url,options)=>new Promise(resolve=>requests.push({url,options,resolve}));
+    let oldHealth=health();clearStream();let recovery=refreshState();`);
+  assert.equal(p.run('requests.length'),2);
+  assert.equal(p.run('requests[0].options.signal.aborted'),true);
+  p.run("requests[1].resolve({ok:true,json:async()=>({generation:'owner:3',state:'streaming',mediaHealthy:true})})");
+  await p.run('recovery');
+  p.run("requests[0].resolve({ok:true,json:async()=>({generation:'owner:1',state:'disconnected'})})");
+  await p.run('oldHealth');
+  assert.equal(p.run('streamGeneration'),'owner:3');
+});
+
+test('state body completing after an epoch change cannot roll back the fresh binding', async () => {
+  const p=fixture();
+  p.run('let finishBody;fetch=async()=>({ok:true,json:()=>new Promise(resolve=>finishBody=resolve)});let pending=refreshState();');
+  await Promise.resolve();await Promise.resolve();
+  p.run("acceptState({generation:'fresh',state:'streaming',mediaHealthy:true});finishBody({generation:'old',state:'stopped'})");
+  await p.run('pending');
+  assert.equal(p.run('streamGeneration'),'fresh');
+});
+
+test('revoked state clears even a frame decoded while the request was in flight', async () => {
+  for(const status of [403,404]){
+    const p=decodingFixture();p.frame(100,1);
+    p.run('let finish;fetch=()=>new Promise(resolve=>finish=resolve);let pending=refreshState();');
+    const fresh=p.run("displayFrame({},'rot0')");p.run('candidates[0].resolve()');await fresh;
+    p.run(`finish({ok:false,status:${status}})`);await p.run('pending');
+    assert.equal(p.run('screen.src'),undefined);
+    assert.equal(p.elements.notice.hidden,false);
+  }
+});
+
+test('a stopped response during frame recovery never admits the pending old decode', async () => {
+  const p=decodingFixture();
+  const old=p.run("displayFrame({},'rot0')");
+  p.run(`fetch=async url=>url==='state'
+    ?{ok:true,json:async()=>({generation:'idle',state:'stopped',mediaHealthy:false})}
+    :{ok:false,status:503};`);
+  await p.run('frames()');p.run('candidates[0].resolve()');
+  assert.equal(await old,null);
+  assert.equal(p.run('objectURL'),null);
+  assert.equal(p.elements.notice.hidden,false);
+});
+
+test('a failed frame with unchanged healthy generation cannot spin immediate retries', async () => {
+  const p=fixture();
+  p.run(`let delays=[];setTimeout=(fn,delay)=>{if(fn===frames)delays.push(delay);};
+    fetch=async url=>url==='state'
+      ?{ok:true,json:async()=>({generation:'test-generation',state:'streaming',mediaHealthy:true})}
+      :{ok:false,status:503};`);
+  await p.run('frames()');
+  assert.equal(p.run('delays.join()'),'250');
 });

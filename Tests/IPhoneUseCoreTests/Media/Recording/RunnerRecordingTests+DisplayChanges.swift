@@ -87,7 +87,8 @@ extension RunnerRecordingTests {
                 XCTAssertEqual(connection.closed, 0)
             } else {
                 XCTAssertEqual(connection.closed, 1)
-                XCTAssertEqual(owner.status()["reconnectRequired"] as? Bool, true)
+                XCTAssertEqual(owner.status()["reconnectRequired"] as? Bool, withPreview ? nil : true)
+                if withPreview { XCTAssertNotNil(owner.previewStatus["url"]) }
                 XCTAssertThrowsError(try owner.start(duration: 30))
                 XCTAssertEqual(opens, 1)
             }
@@ -156,7 +157,7 @@ extension RunnerRecordingTests {
         }
     }
 
-    func testUnresolvedIndependentConflictStopsInsteadOfLoopingRefresh() throws {
+    func testUnresolvedGeometryKeepsPreviewWhileSchedulingASeparateSafeConnection() throws {
         let connection = RunnerRecordingConnectionStub()
         var clock = 0.0
         let owner = RunnerNativeRecording(
@@ -173,7 +174,7 @@ extension RunnerRecordingTests {
         XCTAssertTrue(owner.previewTick())
         XCTAssertEqual(connection.closed, 1)
         XCTAssertFalse(owner.previewTick())
-        XCTAssertThrowsError(try owner.startPreview(options: .init(port: 0)))
+        XCTAssertNotNil(try owner.startPreview(options: .init(port: 0))["url"])
         XCTAssertEqual(connection.previewRefreshes, 1)
     }
 

@@ -1,6 +1,6 @@
 extension NativePreviewPage {
     static let streamScript = """
-        let sequence = -1, streamGeneration=null, displayEpoch=0;
+        let sequence = -1, streamGeneration=null, displayEpoch=0, stateRequest=null;
         const resolutionViewer=crypto.randomUUID();
         let requestedEdge=0,pendingEdge=0,pendingEdgeAt=0;
         function resolutionRequest(){
@@ -67,7 +67,9 @@ extension NativePreviewPage {
         }
         async function frames(){
           const started=performance.now(),epoch=displayEpoch,expected=streamGeneration;let retry=0;
-          if(expected===null){setTimeout(frames,250);return;}
+          if(expected===null){
+            const ready=await refreshState();setTimeout(frames,ready?0:250);return;
+          }
           try{
             const r=await fetch('frame?after='+sequence+'&generation='+encodeURIComponent(expected)\
         +resolutionRequest(),{cache:'no-store',signal:AbortSignal.timeout(3000)});
@@ -81,7 +83,13 @@ extension NativePreviewPage {
             const timing=await displayFrame(blob,frameRotation,expected,epoch);
             if(timing)presented(sequence,age,started,{requestMs:received-started,bodyMs:received-headersAt,...timing\
         ,encodeMs});
-          }catch{failures++;if(epoch===displayEpoch)clearStream();retry=250;}
+          }catch{
+            failures++;
+            if(epoch===displayEpoch){
+              clearStream();const ready=await refreshState();
+              retry=ready&&streamGeneration!==expected?0:250;
+            }
+          }
           setTimeout(frames,retry);
         }
         function setScreenCovered(covered){
@@ -116,20 +124,41 @@ extension NativePreviewPage {
           else if(!recentFrame){showState(text.recovering,'waiting');}
           else{showState(text.live,'live');}
         }
-        async function health(){
+        // Share same-epoch reads; cancel superseded reads so a delayed status
+        // cannot roll back a newer binding or cover its newly decoded frame.
+        function refreshState(){
+          if(stateRequest?.epoch===displayEpoch)return stateRequest.promise;
+          stateRequest?.controller.abort();
+          const request={epoch:displayEpoch,controller:new AbortController()};
+          stateRequest=request;
           const frameBeforeRequest=lastFrameAt;
-          try{
-            const r=await fetch('state',{cache:'no-store',signal:AbortSignal.timeout(3000)});\
-        if(r.status===403||r.status===404)clearStream();if(!r.ok)throw Error();
-            const s=await r.json();
-            // A slow status response must not cover a frame decoded since this request began.
-            acceptState(s,lastFrameAt!==frameBeforeRequest);
-          }catch{
-            showState(text.disconnected,'error');
-            if(lastFrameAt===frameBeforeRequest)clearStream();
-          }
-          setTimeout(health,1000);
+          const timeout=setTimeout(()=>request.controller.abort(),3000);
+          request.promise=(async()=>{
+            try{
+              const r=await fetch('state',{cache:'no-store',signal:request.controller.signal});
+              if(stateRequest!==request||request.epoch!==displayEpoch)return false;
+              if(r.status===403||r.status===404){
+                clearStream();showState(text.disconnected,'error');return false;
+              }
+              if(!r.ok)throw Error();
+              const s=await r.json();
+              if(stateRequest!==request||request.epoch!==displayEpoch)return false;
+              acceptState(s,lastFrameAt!==frameBeforeRequest);
+              return s.state==='streaming'&&s.mediaHealthy===true;
+            }catch{
+              if(stateRequest===request&&request.epoch===displayEpoch){
+                showState(text.disconnected,'error');
+                if(lastFrameAt===frameBeforeRequest)clearStream();
+              }
+              return false;
+            }finally{
+              clearTimeout(timeout);
+              if(stateRequest===request)stateRequest=null;
+            }
+          })();
+          return request.promise;
         }
+        async function health(){await refreshState();setTimeout(health,1000);}
         frames();health();gestures();
         if(diagnostic)setInterval(()=>{const gaps=samples.slice(1).map((s,i)=>s.at-samples[i].at).sort((a\
         ,b)=>a-b), span=samples.length>1?samples.at(-1).at-samples[0].at:0;const\
