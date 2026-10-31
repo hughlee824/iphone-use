@@ -220,7 +220,7 @@ Apple 终止接口只接受 PID，进程列表没有进程出生令牌，因此�
 
 ## Runner Home
 
-`home oN --observe` 要求当前已知 App 或弹窗的截图观察，先检查 App/弹窗范围和整屏变化，再调用一次 XCTest Home 按下/释放。整屏和整屏保护区域均使用 1% 阈值。Home 成功回执只确认 `homePressCompleted=true`，保留 `homeScreenConfirmed=false`，不等待目的画面静止：主屏幕时钟等内容会持续更新。新截图仍由外部 Agent 核对，不把输入完成等同于主屏幕已确认。
+`home oN --observe` 要求当前已知 App 或弹窗的截图观察，先检查 App/弹窗范围和整屏变化，再通过 XCTest 激活一次 SpringBoard。整屏和整屏保护区域均使用 1% 阈值。Home 成功回执只确认 `homeNavigationCompleted=true`，保留 `homeScreenConfirmed=false`，不等待目的画面静止：主屏幕时钟等内容会持续更新。新截图仍由外部 Agent 核对，不把输入完成等同于主屏幕已确认。
 
 Home 后 Runner 清除当前 App 目标，观察可能为 `scope=unknown`、截图可用而 AX 不可用；用明确 bundle ID 的 open 恢复已知 App 目标。不会把主屏幕图标伪造成可操作引用。Home 的专用回执不改变其他 Runner 手势的动作后判稳。详见 [实现与验收](runner-app-lifecycle.md)。
 

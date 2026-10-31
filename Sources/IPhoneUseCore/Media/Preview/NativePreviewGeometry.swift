@@ -4,7 +4,7 @@ import Foundation
 // The physical display/crop still comes from CoreDevice; only the view rotates.
 enum NativePreviewGeometry {
     static func sameSurface(_ first: NativeDisplay, _ second: NativeDisplay) -> Bool {
-        first.id == second.id && first.scale == second.scale
+        first.id == second.id && first.uniqueID == second.uniqueID && first.scale == second.scale
             && first.nativeRotation == second.nativeRotation
             && nativeSize(first) == nativeSize(second)
     }
@@ -23,12 +23,32 @@ enum NativePreviewGeometry {
             "backlightState": bound.backlightOn ? "activeOn" : "inactive",
             "displays": [[
                 "primary": true, "displayId": bound.id, "bounds": [[0, 0], nativeSize(bound)],
+                "uniqueId": bound.uniqueID as Any? ?? NSNull(),
                 "pointScale": bound.scale, "nativeOrientation": bound.nativeRotation,
                 "currentOrientation": rotation
             ]]
         ])
-        _ = try NativeSnapshotImage.validateGeometry(frame, display: oriented, allowReducedResolution: true)
+        _ = try NativeSnapshotImage.validateGeometry(frame, display: oriented,
+            allowReducedResolution: true, allowScaledCanvas: true)
         return oriented
+    }
+
+    // Re-read direction after a successful bind: a fold and a rotation may
+    // settle on different polls. This never changes the media surface or input
+    // geometry; validate decoded pixels against the fresh CoreDevice candidate.
+    static func revalidatedDisplay(
+        frame: NativeVideoSnapshot.Frame?, bound: NativeDisplay, current: NativeDisplay
+    ) throws -> NativeDisplay {
+        guard sameSurface(bound, current) else {
+            throw IPhoneUseError("preview_geometry_conflict", "Preview surface changed during validation")
+        }
+        do {
+            _ = try NativeSnapshotImage.validateGeometry(
+                frame, display: current, allowReducedResolution: true, allowScaledCanvas: true)
+        } catch {
+            throw IPhoneUseError("preview_geometry_conflict", "Preview frame and display have not settled: \(error)")
+        }
+        return current
     }
 
     static func continuousDisplay(

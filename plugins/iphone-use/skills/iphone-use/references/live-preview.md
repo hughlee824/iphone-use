@@ -2,6 +2,12 @@
 
 The preview is for the person watching the task. It does not replace the agent's fresh `observe` / attached PNG, current references or screen guards. Use the same resolved CLI, execution permissions and configuration/state environment as connect for every command below. The client adapter chooses where to open it: **Codex uses its built-in browser**, while **Claude Code, DeepSeek Harness and the portable adapter use the Mac default browser**. No client needs to inspect browser content to operate the phone.
 
+## Independent capture in newer source builds
+
+If the selected executable's `preview --help` supports `--device`, preview may start directly with `preview --device HARDWARE_UDID --no-open` in Codex, without `connect`, Runner or UI Automation authentication. Use the same browser/tab rules below. The existing session command is a compatibility entry to this independent capture service. Keep one preview record per device and URL across control sessions.
+
+For these builds, control disconnect or idle expiry does **not** stop preview. Finish an owned preview explicitly with `preview --device HARDWARE_UDID --stop`, unless the user requested continued viewing or the preview was borrowed. Do not stop a borrowed preview. An active recording retains media after preview stops; disconnect ends only that control owner's recording. These lifecycle rules override the session-owned cleanup descriptions below, which remain applicable to older releases. Lock-screen display uses system-provided video; automation's unlock requirement remains separate. Never ask for a passcode in chat.
+
 ## Start once per owned session
 
 Default to preview after a successful connection in either standard or runner. Do not ask an extra preference question. Honor an explicit request such as “no preview”, “don't open a browser”, or “只操作手机，不要预览” for the entire task, including reconnects, until the user changes it. Skip starting the service as well as opening the page. If the user later opts out, stop only a preview created by this task with `preview --stop` and obtain fresh references before further input.

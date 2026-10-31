@@ -57,6 +57,9 @@ enum NativePreviewPage {
     static let html = [
         documentMarkup,
         setupScript,
+        duoScript,
+        foldSurfaceScript,
+        foldScript,
         motionScript,
         layoutScript,
         interactionScript,

@@ -8,6 +8,19 @@ struct NativePreviewGesture {
     let aspect: Double
     let paths: [[[Double]]]
 
+    init?(facts: [String: Any]) {
+        guard let kind = facts["kind"] as? String,
+            ["tap", "double-tap", "long-press", "swipe", "pinch", "drag"].contains(kind),
+            let rotation = facts["rotation"] as? String,
+            ["rot0", "rot90", "rot180", "rot270"].contains(rotation),
+            let aspect = facts["aspect"] as? Double, aspect.isFinite, aspect > 0,
+            let paths = facts["paths"] as? [[[Double]]], (1...2).contains(paths.count),
+            paths.allSatisfy({ $0.count == 2 && $0.allSatisfy {
+                $0.count == 2 && $0.allSatisfy { $0.isFinite && (0...1).contains($0) }
+            } }) else { return nil }
+        self.kind = kind; self.rotation = rotation; self.aspect = aspect; self.paths = paths
+    }
+
     init?(action: DeviceAction, target: ObservedTarget, previewRotation: String? = nil) {
         guard ["tap", "double-tap", "long-press", "swipe", "pinch"].contains(action.kind),
             let gesture = target.gesture

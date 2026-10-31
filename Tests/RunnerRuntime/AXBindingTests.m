@@ -76,6 +76,18 @@
 - (id)hasKeyboardFocus { abort(); }
 @end
 
+@interface DisplayObject : NSObject
+@property unsigned long long displayID;
+@end
+@implementation DisplayObject
+@end
+@interface WrongDisplaySignature : NSObject
+- (id)displayID;
+@end
+@implementation WrongDisplaySignature
+- (id)displayID { abort(); }
+@end
+
 static void Check(BOOL condition, NSString *message) {
     if (!condition) { NSLog(@"FAIL: %@", message); exit(1); }
 }
@@ -87,6 +99,16 @@ int main(void) {
         Query *query = [Query new];
         query.result = [XCUIElement new];
         NSError *error = nil;
+        DisplayObject *display = [DisplayObject new];
+        display.displayID = 2;
+        Check([[RunnerAXBinding displayIDOfObject:display error:&error] unsignedLongLongValue] == 2,
+              @"explicit display identity");
+        display.displayID = 0;
+        Check(![RunnerAXBinding displayIDOfObject:display error:&error] && error, @"zero display rejected");
+        error = nil;
+        Check(![RunnerAXBinding displayIDOfObject:[WrongDisplaySignature new] error:&error] && error,
+              @"wrong display signature rejected before invocation");
+        error = nil;
         FocusElement *focused = [FocusElement new];
         Check([[RunnerAXBinding keyboardFocusOfElement:focused error:&error] isEqual:@NO] && !error,
               @"false keyboard focus is a valid result");

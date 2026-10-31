@@ -13,7 +13,11 @@ final class NativePreview {
     let queue = DispatchQueue(label: "iphone-use.preview", qos: .userInitiated)
     let encoderQueue = DispatchQueue(
         label: "iphone-use.preview.encode", qos: .userInitiated, attributes: .concurrent)
-    let encodeFrame: (NativeVideoSnapshot.Frame, NativeDisplay, CIContext) throws -> EncodedJPEG
+    let encodeFrame: (NativeVideoSnapshot.Frame, NativeDisplay, CIContext, Int) throws -> EncodedJPEG
+    var demand = NativePreviewDemand()
+    var requestedLongEdge = 960
+    var resolutionRevision = 0
+    var jpegResolutionRevision = -1
     private let connectionStatus: () -> [String: Any]?
     var lastSubmittedFrameAt: Double?
     var discardedEncodes = 0
@@ -23,8 +27,8 @@ final class NativePreview {
     private let streamID = UUID().uuidString
     var generation: String { "\(streamID):\(bindingGeneration)" }
     private var publication: PreviewPublication?
-    // This is a small JPEG, not a full-size video encode. CPU rendering avoids
-    // queueing its resize/color conversion behind live video and file decoding.
+    // CPU rendering avoids queueing preview conversion behind live video and
+    // file decoding. Output size follows the active browser's pixel demand.
     var contexts = (0..<2).map { _ in
         CIContext(options: [.cacheIntermediates: false, .useSoftwareRenderer: true])
     }
@@ -50,6 +54,7 @@ final class NativePreview {
     var maxTickGapMs = 0.0
     var slowFrames: [[String: Double]] = []
     var error: String?
+    private var transitioning = false
     private var listenFailure: NWError?
     var closed = false
     var gestures = NativePreviewGestures()
@@ -59,8 +64,8 @@ final class NativePreview {
         port: UInt16 = UInt16(PreviewConfiguration.defaultPort), device: NativePreviewDevice = .unknown,
         connectionStatus: @escaping () -> [String: Any]? = { nil },
         owner: PreviewOwner? = nil,
-        encodeFrame: @escaping (NativeVideoSnapshot.Frame, NativeDisplay, CIContext) throws -> EncodedJPEG = {
-            try NativePreview.encodeJPEG($0, display: $1, context: $2)
+        encodeFrame: @escaping (NativeVideoSnapshot.Frame, NativeDisplay, CIContext, Int) throws -> EncodedJPEG = {
+            try NativePreview.encodeJPEG($0, display: $1, context: $2, longEdge: $3)
         }
     ) throws {
         self.device = device; self.bezel = NativePreviewBezel.load(device: device)
@@ -165,11 +170,13 @@ final class NativePreview {
                 checkedRotation = display.rotation
             }
             self.receiver = receiver; self.display = display
+            transitioning = false
         }
     }
 
-    func suspend(_ reason: String) {
+    func suspend(_ reason: String, transitioning: Bool = false) {
         queue.sync {
+            self.transitioning = transitioning
             gestures.clear(); bindingGeneration += 1; receiver = nil; display = nil; jpeg = nil; frameAt = nil
             firstFrameDeadline = nil; lastSubmittedFrameAt = nil; error = reason
         }
@@ -210,11 +217,13 @@ final class NativePreview {
         return [
             "state": closed
                 ? "stopped"
-                : (previewError != nil ? "unavailable" : (healthy && jpeg != nil ? "streaming" : "waiting")),
+                : (transitioning && publication?.failure == nil ? "transitioning"
+                    : (previewError != nil ? "unavailable" : (healthy && jpeg != nil ? "streaming" : "waiting"))),
             "generation": generation, "device": device.facts, "bezel": bezel?.profile.facts as Any? ?? NSNull(),
             "connection": connectionStatus() as Any? ?? NSNull(),
             "url": url, "port": listener.port.map { Int($0.rawValue) } as Any? ?? NSNull(),
             "readOnly": true, "source": "owned_native_rtp", "maxFPS": 30,
+            "requestedLongEdge": requestedLongEdge,
             "encodedFrames": encodedFrames, "encodingInFlight": contexts.count < 2,
             "inFlightEncodes": 2 - contexts.count, "discardedEncodes": discardedEncodes,
             "frameAgeSeconds": frameAt.map { ProcessInfo.processInfo.systemUptime - $0 } as Any? ?? NSNull(),

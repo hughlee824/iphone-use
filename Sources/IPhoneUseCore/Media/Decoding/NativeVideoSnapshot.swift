@@ -208,7 +208,8 @@ final class NativeVideoSnapshot {
                 || latestPreview?.image.activeHeight != image.activeHeight {
                 resolutionChanges.append([
                     "wallTime": Date().timeIntervalSince1970, "timestamp": Double(frame.timestamp),
-                    "activeWidth": Double(image.activeWidth), "activeHeight": Double(image.activeHeight)
+                    "activeWidth": Double(image.activeWidth), "activeHeight": Double(image.activeHeight),
+                    "nativeWidth": Double(image.nativeWidth), "nativeHeight": Double(image.nativeHeight)
                 ])
                 if resolutionChanges.count > 120 { resolutionChanges.removeFirst() }
             }
@@ -261,11 +262,11 @@ final class NativeVideoSnapshot {
 
     // Negative evidence only: an old frame may reveal conflicting axes, but
     // can never become a screenshot or establish that the screen is current.
-    func rejectConflictingGeometry(_ display: NativeDisplay) throws {
+    func rejectConflictingGeometry(_ display: NativeDisplay, allowScaledCanvas: Bool = false) throws {
         condition.lock(); let candidate = latestPreview; condition.unlock()
         if let candidate {
             _ = try NativeSnapshotImage.validateGeometry(
-                candidate, display: display, allowReducedResolution: true)
+                candidate, display: display, allowReducedResolution: true, allowScaledCanvas: allowScaledCanvas)
         }
     }
     static func isFresh(_ frame: Frame, after notBefore: Double, now: Double) -> Bool {

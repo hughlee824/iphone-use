@@ -7,9 +7,18 @@ extension LiveSessionTests {
 
     @MainActor
     func screenContext(app: XCUIApplication, root: XCUIElement) -> ScreenContext {
-        ScreenContext(
-            screen: ScreenRect(app.frame), scope: ScreenRect(root.frame),
-            orientation: XCUIDevice.shared.orientation.rawValue, keyboardCount: app.keyboards.count)
+        let screen = commandDisplayContext?.screen ?? ScreenRect(.zero)
+        var scope = ScreenRect(root.frame)
+        // On a rotated multi-display device XCTest's application root can keep
+        // native axes while its windows and controls use the displayed axes.
+        if root.elementType == .application,
+            scope.originX == 0, scope.originY == 0,
+            abs(scope.width - screen.height) <= 0.5, abs(scope.height - screen.width) <= 0.5 {
+            scope = screen
+        }
+        return ScreenContext(
+            screen: screen, scope: scope,
+            orientation: commandDisplayContext?.orientation ?? 0, keyboardCount: app.keyboards.count)
     }
 
     @MainActor
@@ -23,9 +32,11 @@ extension LiveSessionTests {
         else {
             throw CommandError("gesture_orientation_unavailable", requiresObservation: true)
         }
+        let window = try gestureWindow(app: app, gesture: gesture)
+        let origin = window.frame.origin
         func coordinate(_ point: CGPoint) -> XCUICoordinate {
-            app.coordinate(withNormalizedOffset: .zero).withOffset(
-                CGVector(dx: point.x - context.screen.originX, dy: point.y - context.screen.originY))
+            window.coordinate(withNormalizedOffset: .zero).withOffset(
+                CGVector(dx: point.x - origin.x, dy: point.y - origin.y))
         }
         let start = coordinate(gesture.start)
         if kind == "long-press" {
@@ -64,6 +75,21 @@ extension LiveSessionTests {
         return ["kind": kind, "coordinateSpace": "screen_points", "x": gesture.start.x, "y": gesture.start.y]
     }
     @MainActor
+    private func gestureWindow(app: XCUIApplication, gesture: CoordinateGesture) throws -> XCUIElement {
+        guard let displayID = commandDisplayID,
+            let window = try app.windows.allElementsBoundByIndex.first(where: {
+                let snapshot = try freshSnapshot($0)
+                return try RunnerAXBinding.displayID(of: snapshot).uint64Value == displayID
+                    && snapshot.frame.contains(gesture.start)
+                    && (gesture.end.map(snapshot.frame.contains) ?? true)
+            })
+        else { throw CommandError("gesture_display_unavailable", requiresObservation: true) }
+        // Application snapshots may name display zero even when their windows
+        // are on another screen. Bind coordinates to the verified window.
+        return window
+    }
+
+    @MainActor
     private func validateGesture(
         _ command: [String: Any], kind: String, app: XCUIApplication,
         root: XCUIElement
@@ -81,10 +107,10 @@ extension LiveSessionTests {
             guard gesture.screenGuard.context.matches(context), context.scope.cgRect.contains(gesture.start),
                 gesture.end.map({ context.scope.cgRect.contains($0) }) ?? true
             else { throw ScreenGuard.Failure.contextChanged }
-            let screenshot = XCUIScreen.main.screenshot()
+            let screenshot = try captureScreen()
             let capturedAt = Date().timeIntervalSince1970
             try checkIssues()
-            let check = try gesture.screenGuard.check(png: screenshot.pngRepresentation, context: context)
+            let check = try gesture.screenGuard.check(png: screenshot.png, context: context)
             screenGuardResult = check.result
             screenGuardResult?["capturedAt"] = capturedAt
             screenGuardResult?["regions"] = try gesture.screenGuard.regions.map {
@@ -125,7 +151,7 @@ extension LiveSessionTests {
         do {
             let prepared = try RunnerPinchEvent.prepare(
                 left: from[0], right: from[1], endLeft: destination[0], endRight: destination[1],
-                duration: pinch.duration, orientation: orientation)
+                duration: pinch.duration, orientation: orientation, displayID: UInt(commandDisplayID ?? 0))
             eventRecord = prepared
         } catch { throw CommandError("unsupported_pinch_runtime", message: String(describing: error)) }
         try checkIssues()

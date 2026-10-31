@@ -4,6 +4,7 @@ extension NativePreviewPage {
         const rotationTiming={duration:250,easing:'cubic-bezier(0.77,0,0.175,1)'};
         let previousGeometry=null,deviceMotion=null,captionMotion=null;
         function cancelPreviewMotion(){
+          cancelFoldMotion();
           deviceMotion?.cancel();captionMotion?.cancel();
           deviceMotion=null;captionMotion=null;
         }
@@ -30,8 +31,21 @@ extension NativePreviewPage {
           return previous;
         }
         function movePreview(previous,next){
+          // Adaptive encoding changes pixel dimensions without changing the
+          // displayed device. Keep the active hinge and update only its texture.
+          const settled=previousGeometry;
+          if(foldAnimations.length&&settled?.live&&next.live&&settled.product===next.product\
+        &&settled.duoKind===next.duoKind&&settled.angle===next.angle\
+        &&['width','height','translateX','translateY','captionTop'].every(key=>\
+        Math.abs(settled[key]-next[key])<.001)){
+            previousGeometry=next;foldBaseline=next;return;
+          }
           cancelPreviewMotion();
           previousGeometry=next;
+          if(next.live&&next.product==='iPhone19,4'){
+            const from=foldBaseline;foldBaseline=next;
+            if(from?.duoKind&&next.duoKind&&from.duoKind!==next.duoKind){foldPreview(from,next);return;}
+          }
           if(!previous||!previous.live||!next.live||previous.surface!==next.surface\
         ||reducedMotion.matches||document.visibilityState!=='visible'\
         ||(!previous.active&&previous.angle===next.angle))return;

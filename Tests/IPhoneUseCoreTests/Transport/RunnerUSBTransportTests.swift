@@ -66,6 +66,19 @@ final class RunnerUSBTransportTests: XCTestCase {
         try exchangeScenario(failure: nil)
     }
 
+    func testTransportPreservesTimeoutCodeWithoutRetryingSocketOpen() {
+        var attempts = 0
+        let transport = RunnerUSBTransport(device: "phone", openSocket: { _ in
+            attempts += 1
+            throw IPhoneUseError("runner_socket_timeout", "Fixture timeout")
+        })
+        XCTAssertThrowsError(try transport.exchange(["id": "probe", "op": "preview-geometry"], timeout: 1)) {
+            XCTAssertEqual(($0 as? TransportError)?.code, "runner_socket_timeout")
+            XCTAssertEqual(($0 as? TransportError)?.possiblySent, false)
+        }
+        XCTAssertEqual(attempts, 1)
+    }
+
     func testConnectRejectionIsNotDispatchedAndLostOrMismatchedReplyMayHaveExecuted() throws {
         for failure in ["connect", "closed", "mismatch"] { try exchangeScenario(failure: failure) }
     }

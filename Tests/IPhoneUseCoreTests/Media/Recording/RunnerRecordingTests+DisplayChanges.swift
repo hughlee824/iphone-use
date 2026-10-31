@@ -60,14 +60,15 @@ extension RunnerRecordingTests {
     }
 
     func testUnconfirmedRecordingClockPreservesOnlyHealthyExistingPreview() throws {
-        for (withPreview, healthy) in [(true, true), (true, false), (false, true)] {
+        // Recording-only cleanup/retry is covered by PreviewCaptureHostTests.
+        for healthy in [true, false] {
             let connection = RunnerRecordingConnectionStub()
             var opens = 0
             let owner = RunnerNativeRecording(root: try root(), cancellation: NativeCancellation()) {
                 opens += 1; return connection
             }
             defer { _ = owner.close() }
-            let preview = withPreview ? try owner.startPreview(options: .init(port: 0)) : nil
+            let preview = try owner.startPreview(options: .init(port: 0))
             connection.receiver.clockConfirmed = false
             connection.receiver.healthy = healthy
             XCTAssertThrowsError(try owner.start(duration: 30)) {
@@ -75,9 +76,9 @@ extension RunnerRecordingTests {
             }
             XCTAssertFalse(connection.receiver.attached, "No writer or packet subscription was started")
             XCTAssertEqual(opens, 1, "Rejected starts never reconnect automatically")
-            if withPreview && healthy {
+            if healthy {
                 XCTAssertEqual(connection.closed, 0)
-                XCTAssertEqual(owner.previewStatus["url"] as? String, preview?["url"] as? String)
+                XCTAssertEqual(owner.previewStatus["url"] as? String, preview["url"] as? String)
                 XCTAssertNil(owner.status()["reconnectRequired"])
                 XCTAssertEqual(owner.status()["state"] as? String, "idle")
                 connection.receiver.clockConfirmed = true
@@ -87,7 +88,8 @@ extension RunnerRecordingTests {
                 XCTAssertEqual(connection.closed, 0)
             } else {
                 XCTAssertEqual(connection.closed, 1)
-                XCTAssertEqual(owner.status()["reconnectRequired"] as? Bool, true)
+                XCTAssertNil(owner.status()["reconnectRequired"])
+                XCTAssertNotNil(owner.previewStatus["url"])
                 XCTAssertThrowsError(try owner.start(duration: 30))
                 XCTAssertEqual(opens, 1)
             }
@@ -134,7 +136,7 @@ extension RunnerRecordingTests {
                 width: 32, height: 48, orientation: ["rot0": 1, "rot90": 6, "rot270": 8][initial]!)
             let owner = RunnerNativeRecording(
                 root: try root(), cancellation: NativeCancellation(),
-                previewGeometry: { geometry }, connect: { connection })
+                previewGeometry: { _ in geometry }, connect: { connection })
             defer { _ = owner.close() }
             let preview = try owner.startPreview(options: .init(port: 0))
             _ = try owner.start(duration: 30)
@@ -156,19 +158,24 @@ extension RunnerRecordingTests {
         }
     }
 
-    func testUnresolvedIndependentConflictStopsInsteadOfLoopingRefresh() throws {
+    func testUnresolvedGeometryKeepsPreviewWhileSchedulingASeparateSafeConnection() throws {
         let connection = RunnerRecordingConnectionStub()
+        var clock = 0.0
         let owner = RunnerNativeRecording(
             root: try root(), cancellation: NativeCancellation(),
-            previewGeometry: { RunnerPreviewGeometry(width: 32, height: 48, orientation: 8) },
-            connect: { connection })
+            previewGeometry: { _ in RunnerPreviewGeometry(width: 32, height: 48, orientation: 8) },
+            now: { clock }, connect: { connection })
         defer { _ = owner.close() }
         _ = try owner.startPreview(options: .init(port: 0))
         XCTAssertTrue(owner.previewTick())
         XCTAssertEqual(connection.previewRefreshes, 1)
+        XCTAssertEqual(connection.closed, 0)
+        XCTAssertEqual(owner.previewStatus["state"] as? String, "transitioning")
+        clock = 7
+        XCTAssertTrue(owner.previewTick())
         XCTAssertEqual(connection.closed, 1)
         XCTAssertFalse(owner.previewTick())
-        XCTAssertThrowsError(try owner.startPreview(options: .init(port: 0)))
+        XCTAssertNotNil(try owner.startPreview(options: .init(port: 0))["url"])
         XCTAssertEqual(connection.previewRefreshes, 1)
     }
 
@@ -196,4 +203,28 @@ extension RunnerRecordingTests {
         XCTAssertFalse(RunnerPreviewGeometry(width: 32, height: 48, orientation: 8).conflicts(with: display))
         XCTAssertTrue(RunnerPreviewGeometry(width: 32, height: 48, orientation: 6).conflicts(with: display))
     }
+    func testUprightEXIFCannotDisproveUpsideDownDevicePosture() throws {
+        let connection = RunnerRecordingConnectionStub()
+        connection.rotation = "rot180"
+        let display = try XCTUnwrap(connection.previewDisplay)
+        XCTAssertFalse(RunnerPreviewGeometry(width: 32, height: 48, orientation: 1).conflicts(with: display))
+        XCTAssertFalse(RunnerPreviewGeometry(width: 32, height: 48, orientation: 3).conflicts(with: display))
+        XCTAssertTrue(RunnerPreviewGeometry(width: 48, height: 32, orientation: 1).conflicts(with: display))
+        connection.rotation = "rot0"
+        XCTAssertTrue(RunnerPreviewGeometry(width: 32, height: 48, orientation: 3)
+            .conflicts(with: try XCTUnwrap(connection.previewDisplay)))
+    }
+
+    func testIndependentGeometryAllowsOnlyEvenRoundingOfOddPixels() throws {
+        let display = try NativeDisplay([
+            "backlightState": "activeOn", "displays": [[
+                "primary": true, "displayId": 2, "bounds": [[0, 0], [2007, 2853]],
+                "pointScale": 3, "currentOrientation": "rot90", "nativeOrientation": "rot0"
+            ]]
+        ])
+        XCTAssertFalse(RunnerPreviewGeometry(width: 2852, height: 2006, orientation: 1).conflicts(with: display))
+        XCTAssertTrue(RunnerPreviewGeometry(width: 2850, height: 2006, orientation: 1).conflicts(with: display))
+        XCTAssertTrue(RunnerPreviewGeometry(width: 2006, height: 2852, orientation: 1).conflicts(with: display))
+    }
+
 }

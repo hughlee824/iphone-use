@@ -14,6 +14,25 @@ static BOOL ObjectMethod(NSObject *object, SEL selector, NSUInteger arguments) {
 }
 
 @implementation RunnerAXBinding
++ (NSNumber *)displayIDOfObject:(id)object error:(NSError **)error {
+    @try {
+        SEL selector = NSSelectorFromString(@"displayID");
+        NSMethodSignature *signature = [object methodSignatureForSelector:selector];
+        if ([object respondsToSelector:selector] && signature.numberOfArguments == 2) {
+            if (strcmp(signature.methodReturnType, @encode(unsigned long long)) == 0) {
+                unsigned long long value = ((unsigned long long (*)(id, SEL))objc_msgSend)(object, selector);
+                if (value > 0) return @(value);
+            }
+            if (strcmp(signature.methodReturnType, @encode(long long)) == 0) {
+                long long value = ((long long (*)(id, SEL))objc_msgSend)(object, selector);
+                if (value > 0) return @(value);
+            }
+        }
+    } @catch (NSException *exception) {}
+    Fail(error, @"XCTest display identity is unavailable on this runtime");
+    return nil;
+}
+
 + (NSNumber *)keyboardFocusOfElement:(NSObject *)element error:(NSError **)error {
     @try {
         SEL selector = NSSelectorFromString(@"hasKeyboardFocus");

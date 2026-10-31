@@ -15,6 +15,8 @@ struct CommandError: Error, CustomStringConvertible {
 }
 
 final class LiveSessionTests: XCTestCase {
+    var commandDisplayID: UInt64?
+    var commandDisplayContext: ScreenContext?
     var currentApp: XCUIApplication?
     var currentBundleID: String?
     private var commandIssues: [String] = []

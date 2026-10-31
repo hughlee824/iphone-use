@@ -121,7 +121,9 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 CLI 0.4.0 已提供 standard 和 runner 两种模式下共享原生视频流的只读浏览器预览，无需 Device Hub。安装正式包后即可使用 `preview`，无需从源码构建。真机验收覆盖文档记录的 Apple Silicon / macOS 27 / Xcode 27 / iPhone 12 Pro 环境，不代表所有设备或系统组合；实际验收范围见[发布说明](https://github.com/hughlee824/iphone-use/releases/tag/v0.4.0)。
 
-预览按 `productType` 精确匹配外观：保留 iPhone 11–16 系列 23 个机型的官方素材；已覆盖的 17 / Air、18 Pro / Pro Max 等机型使用独立绘制的参数化外框。缺失素材和未知机型使用自绘外框，已删除纯画面切换；保留横竖屏，已删除全屏按钮。Debug 构建在有官方素材时提供外观对比按钮，Release 构建隐藏该按钮；页面跟随系统明暗模式，切换外观时保持视频尺寸与中心不变。已支持的 32 个精确标识均有自绘开孔参数，按对应官方 PNG 或公开尺寸图校准，详见[逐机型校准清单](docs/preview-hardware-calibration.md)。新版受限 Apple 素材不随包分发。素材来源与独立许可见 [Product Bezels](assets/preview/README.md)。
+预览按 `productType` 精确匹配外观：保留 iPhone 11–16 系列 23 个机型的官方素材；已覆盖的 17 / Air、18 Pro / Pro Max 等机型使用独立绘制的参数化外框。缺失素材和未知机型使用自绘外框，已删除纯画面切换；保留横竖屏，已删除全屏按钮。Debug 构建在有官方素材时提供外观对比按钮，Release 构建隐藏该按钮；页面跟随系统明暗模式，切换外观时保持视频尺寸与中心不变。已支持的 33 个精确标识均有自绘开孔参数，按对应官方 PNG 或公开尺寸图校准，详见[逐机型校准清单](docs/preview-hardware-calibration.md)。Duo 使用独立绘制的内外屏外框及中轴开合过渡。新版受限 Apple 素材不随包分发。素材来源与独立许可见 [Product Bezels](assets/preview/README.md)。
+
+当前源码支持独立 `iphone-use preview --device "$IOS_UDID" --no-open`，无需 Runner 或自动化会话。使用 `preview --device "$IOS_UDID" --stop` 显式停止；控制断开不会关闭预览。这与已发布包的会话持有媒体生命周期不同。
 
 ```sh
 iphone-use --session "$SESSION" preview            # 打开浏览器
@@ -139,7 +141,7 @@ Runner 可用 `connect --device "$IOS_UDID" --mode runner --progress --preview` 
 
 预览默认使用固定端口 **8765**。用 `iphone-use config get preview-port` 查看默认值，`iphone-use config set preview-port 9876` 保存下次启动使用的端口。单次指定 `iphone-use --session "$SESSION" preview --port 9877 --no-open` 优先级最高。端口占用会返回 `preview_port_in_use`，可在同一会话换端口重试；已运行的预览需先停止才能更换端口。
 
-目标上限为 30 fps、最长边 960 像素；稳定 30 fps 尚未通过验收，资源紧张时可能卡顿。旋转会结束录屏片段，方向恢复可能延迟；无音频和网页触控。关闭标签页不等于停止预览，浏览器请求也不续期会话。避免与 Device Hub 同时连接/预览同一手机。完整使用步骤、实现与限制见[本地浏览器预览](docs/local-preview.md)，验证方法见[测试指南](docs/testing.md)。
+目标上限为 30 fps，分辨率按浏览器画面区域 × DPR 自适应，上限为实际收到的媒体源尺寸；稳定 30 fps 尚未通过验收，资源紧张时可能卡顿。旋转会结束录屏片段，方向恢复可能延迟；无音频和网页触控。关闭标签页不等于停止预览，浏览器请求也不续期会话。避免与 Device Hub 同时连接/预览同一手机。完整使用步骤、实现与限制见[本地浏览器预览](docs/local-preview.md)，验证方法见[测试指南](docs/testing.md)。
 
 ## Agent 接入约定
 
@@ -195,11 +197,11 @@ Runner 输入动作约每 200 ms 采样一次画面，通过允许小范围光�
   <img src="assets/architecture/architecture-en-light.svg" alt="iPhone-use 运行时架构：Agent、CLI、会话宿主、standard 与 runner 控制路线、观察缓存、只读预览和录屏。">
 </picture>
 
-宿主通过所选后端管理预览和录屏；浏览器预览只读。组件职责、共享模块和会话生命周期见[架构与仓库布局](docs/architecture.md)。
+当前源码由独立捕获进程管理预览和录屏；自动化宿主仅委托显式媒体请求，浏览器预览只读。组件职责、共享模块和会话生命周期见[架构与仓库布局](docs/architecture.md)。
 
-标准模式的观察和动作前图片校验统一使用 Apple CoreDevice PNG；自有媒体在显式录屏或预览请求时启动，并保留媒体使用期间的几何校验。截图失败不会回退到媒体像素。
+标准模式的观察和动作前图片校验统一使用 Apple CoreDevice PNG；自有媒体在显式录屏或预览请求时启动，由独立进程管理。截图失败不会回退到媒体像素。
 
-`connect` 启动宿主并固定所选模式。标准模式连接 Apple 原生服务、持有 HID 连接及显式请求的自有录屏/预览流；Runner 模式在后台启动已安装的 XCTest App，通过 USB 回环发送带认证的命令，部署由显式 `setup` 完成。宿主跨 CLI 调用保持连接、串行请求、缓存观察并管理清理，不自动切换控制路线。
+`connect` 启动宿主并固定所选模式。标准模式连接 Apple 原生服务、持有 HID 连接；Runner 模式在后台启动已安装的 XCTest App，通过 USB 回环发送带认证的命令，部署由显式 `setup` 完成。宿主跨 CLI 调用保持连接、串行请求、缓存观察并管理清理，不自动切换控制路线。
 
 会话文件默认位于 `/private/tmp/iphone-use-<uid>`，目录权限为 `0700`，可通过 `IPHONE_USE_STATE_DIR` 更换路径。发布包 Runner 的准备状态位于 `~/Library/Application Support/iphone-use`。签名私钥留在 Keychain，设备 token 仅保存在宿主内存和 XCTest 子进程环境中。
 

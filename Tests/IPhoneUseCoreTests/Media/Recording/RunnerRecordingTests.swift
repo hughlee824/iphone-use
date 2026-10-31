@@ -24,12 +24,24 @@ final class RunnerRecordingConnectionStub: RunnerRecordingConnection {
     var closed = 0
     var changed = false
     var acknowledged = true
+    var tunnelAcknowledged = true
+    var displayError: Error?
     var previewDevice = NativePreviewDevice(productType: "iPhone13,3", name: "iPhone 12 Pro")
     var previewRefreshes = 0
     var failRefresh = false
     var pollError: Error?
     var refreshError: Error?
     var onPoll: (() -> Void)?
+    var onValidation: (() throws -> Void)?
+    var canResume = false
+    var resumeError: Error?
+    var unlockChecks = 0
+    func previewCanResumeAfterUnlock() throws -> Bool {
+        unlockChecks += 1
+        if let resumeError { throw resumeError }
+        return canResume
+    }
+    func preparePreviewValidation() throws { try onValidation?() }
     func previewNeedsRefresh() throws -> Bool {
         onPoll?()
         if let pollError { throw pollError }
@@ -58,11 +70,14 @@ final class RunnerRecordingConnectionStub: RunnerRecordingConnection {
             ]
         ])
     }
-    func verifyDisplay() throws { if changed { throw IPhoneUseError("display_changed", "Fixture rotated") } }
+    func verifyDisplay() throws {
+        if let displayError { throw displayError }
+        if changed { throw IPhoneUseError("display_changed", "Fixture rotated") }
+    }
     func close() -> [String: Any] {
         closed += 1
         return [
-            "mediaStopAcknowledged": acknowledged, "tunnelReleaseAcknowledged": true,
+            "mediaStopAcknowledged": acknowledged, "tunnelReleaseAcknowledged": tunnelAcknowledged,
             "mediaSessionID": sessionID
         ]
     }

@@ -1,7 +1,19 @@
 extension NativePreviewPage {
     static let streamScript = """
-        let sequence = -1, streamGeneration=null, displayEpoch=0;
+        let sequence = -1, streamGeneration=null, displayEpoch=0, stateRequest=null;
+        const resolutionViewer=crypto.randomUUID();
+        let requestedEdge=0,pendingEdge=0,pendingEdgeAt=0;
+        function resolutionRequest(){
+          const dpr=globalThis.devicePixelRatio||1;
+          const size=Math.max(parseFloat(screen.style.width)||0,parseFloat(screen.style.height)||0);
+          const edge=document.visibilityState==='visible'?Math.min(16384,Math.max(1,Math.ceil(size*dpr))):0;
+          const now=performance.now();
+          if(edge!==pendingEdge){pendingEdge=edge;pendingEdgeAt=now;}
+          if(!requestedEdge||!edge||now-pendingEdgeAt>=150)requestedEdge=edge;
+          return '&viewer='+resolutionViewer+'&longEdge='+requestedEdge;
+        }
         function clearStream(generation=null){
+          if(generation&&foldOwner&&generation.split(':')[0]!==foldOwner)foldBaseline=null;
           resetPreviewMotion();
           device.dataset.ready='false';layoutKey='';
           streamGeneration=generation;displayEpoch++;sequence=-1;lastSequence=null;lastFrameAt=0;
@@ -13,6 +25,7 @@ extension NativePreviewPage {
           if(typeof s.generation!=='string')throw Error('Missing preview generation');
           if(s.generation!==streamGeneration)clearStream(s.generation);
           if(s.state==='disconnected'||s.state==='stopped'){
+            foldBaseline=null;
             clearStream(s.generation);showState(text.disconnected,'waiting');return;
           }
           renderHealth(s,newerFrame);
@@ -29,6 +42,10 @@ extension NativePreviewPage {
             if(frameGeneration!==streamGeneration||epoch!==displayEpoch){
               URL.revokeObjectURL(nextURL);return null;
             }
+            if(connectedDevice.productType==='iPhone19,4'\
+        &&!duoFrame(connectedDevice.productType,next.naturalWidth,next.naturalHeight)){
+              throw Error('Display is settling');
+            }
             const decodeWaitMs=performance.now()-decodeStarted,layoutStarted=performance.now();
             const nextRotation=frameRotation||rotation;
             const geometryChanged=device.dataset.ready!=='true'||next.naturalWidth!==screen.naturalWidth\
@@ -38,20 +55,24 @@ extension NativePreviewPage {
             // decoding. Do not carry handlers or replace the gesture overlay.
             next.style.cssText=screen.style.cssText;next.style.opacity=1;
             screen.replaceWith(next);screen=next;rotation=nextRotation;
+            foldOwner=frameGeneration?.split(':')[0]||null;
             if(device.dataset.ready!=='true')device.dataset.ready='true';
             lastFrameAt=Date.now();
             setScreenCovered(false);
             if(geometryChanged)layout();
+            updateFoldFrame(nextURL);
             if(objectURL)URL.revokeObjectURL(objectURL);objectURL=nextURL;
             return {decodeWaitMs,layoutMs:performance.now()-layoutStarted};
           }catch(error){URL.revokeObjectURL(nextURL);throw error;}
         }
         async function frames(){
           const started=performance.now(),epoch=displayEpoch,expected=streamGeneration;let retry=0;
-          if(expected===null){setTimeout(frames,250);return;}
+          if(expected===null){
+            const ready=await refreshState();setTimeout(frames,ready?0:250);return;
+          }
           try{
             const r=await fetch('frame?after='+sequence+'&generation='+encodeURIComponent(expected)\
-        ,{cache:'no-store',signal:AbortSignal.timeout(3000)});
+        +resolutionRequest(),{cache:'no-store',signal:AbortSignal.timeout(3000)});
             if(!r.ok)throw Error();
             if(r.headers.get('X-Preview-Generation')!==expected||epoch!==displayEpoch)throw Error();
             sequence=Number(r.headers.get('X-Preview-Sequence'));
@@ -62,7 +83,13 @@ extension NativePreviewPage {
             const timing=await displayFrame(blob,frameRotation,expected,epoch);
             if(timing)presented(sequence,age,started,{requestMs:received-started,bodyMs:received-headersAt,...timing\
         ,encodeMs});
-          }catch{failures++;if(epoch===displayEpoch)clearStream();retry=250;}
+          }catch{
+            failures++;
+            if(epoch===displayEpoch){
+              clearStream();const ready=await refreshState();
+              retry=ready&&streamGeneration!==expected?0:250;
+            }
+          }
           setTimeout(frames,retry);
         }
         function setScreenCovered(covered){
@@ -78,6 +105,7 @@ extension NativePreviewPage {
           const visibleMedia=(newerFrame&&recentFrame)||(!s.error&&s.mediaHealthy===true&&s.frameAgeSecond\
         s!=null&&displayedFrame);
           setScreenCovered(!visibleMedia);
+          if(s.state==='transitioning'){showState(text.switching,'waiting');return;}
           if(c?.reason==='ui_automation_authorization_required'&&c.requiresUserAction===true&&c.authorizatio\
         n==='required'&&c.monitorAvailable===true&&c.evidence==='device_log_exact_runner_pid'&&c.phase!=='failed'){
             showState(text.authorization,'waiting');return;
@@ -96,24 +124,47 @@ extension NativePreviewPage {
           else if(!recentFrame){showState(text.recovering,'waiting');}
           else{showState(text.live,'live');}
         }
-        async function health(){
+        // Share same-epoch reads; cancel superseded reads so a delayed status
+        // cannot roll back a newer binding or cover its newly decoded frame.
+        function refreshState(){
+          if(stateRequest?.epoch===displayEpoch)return stateRequest.promise;
+          stateRequest?.controller.abort();
+          const request={epoch:displayEpoch,controller:new AbortController()};
+          stateRequest=request;
           const frameBeforeRequest=lastFrameAt;
-          try{
-            const r=await fetch('state',{cache:'no-store',signal:AbortSignal.timeout(3000)});\
-        if(r.status===403||r.status===404)clearStream();if(!r.ok)throw Error();
-            const s=await r.json();
-            // A slow status response must not cover a frame decoded since this request began.
-            acceptState(s,lastFrameAt!==frameBeforeRequest);
-          }catch{
-            showState(text.disconnected,'error');
-            if(lastFrameAt===frameBeforeRequest)clearStream();
-          }
-          setTimeout(health,1000);
+          const timeout=setTimeout(()=>request.controller.abort(),3000);
+          request.promise=(async()=>{
+            try{
+              const r=await fetch('state',{cache:'no-store',signal:request.controller.signal});
+              if(stateRequest!==request||request.epoch!==displayEpoch)return false;
+              if(r.status===403||r.status===404){
+                clearStream();showState(text.disconnected,'error');return false;
+              }
+              if(!r.ok)throw Error();
+              const s=await r.json();
+              if(stateRequest!==request||request.epoch!==displayEpoch)return false;
+              acceptState(s,lastFrameAt!==frameBeforeRequest);
+              return s.state==='streaming'&&s.mediaHealthy===true;
+            }catch{
+              if(stateRequest===request&&request.epoch===displayEpoch){
+                showState(text.disconnected,'error');
+                if(lastFrameAt===frameBeforeRequest)clearStream();
+              }
+              return false;
+            }finally{
+              clearTimeout(timeout);
+              if(stateRequest===request)stateRequest=null;
+            }
+          })();
+          return request.promise;
         }
+        async function health(){await refreshState();setTimeout(health,1000);}
         frames();health();gestures();
         if(diagnostic)setInterval(()=>{const gaps=samples.slice(1).map((s,i)=>s.at-samples[i].at).sort((a\
         ,b)=>a-b), span=samples.length>1?samples.at(-1).at-samples[0].at:0;const\
-         m=document.getElementById('metrics');m.textContent=JSON.stringify({longTasks,total:{...totals\
+         m=document.getElementById('metrics');m.textContent=JSON.stringify({motion:{visibility:document.visibilityState\
+        ,reduce:reducedMotion.matches,lastFold}\
+        ,longTasks,total:{...totals\
         ,fps:totals.last>totals.first?(totals.frames-1)*1000/(totals.last-totals.first):0}\
         ,visibleNewFrames:samples.length,fps:span?(samples.length-1)*1000/span:0\
         ,lastNewFrameAgeMs:samples.length?Date.now()-samples.at(-1).at:null\

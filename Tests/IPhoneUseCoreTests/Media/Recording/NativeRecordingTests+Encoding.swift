@@ -58,11 +58,6 @@ extension NativeRecordingTests {
     }
 
     func testCapabilityAndDurationFailClosed() throws {
-        XCTAssertFalse(NativeRecordingOptions.supported(by: [:]))
-        XCTAssertTrue(
-            NativeRecordingOptions.supported(by: [
-                "capabilities": [["featureIdentifier": "com.apple.coredevice.feature.screenrecording"]]
-            ]))
         for value: Any in [true, 0, -1, 301, Double.infinity, "5"] {
             XCTAssertThrowsError(try NativeRecordingOptions.duration(["duration": value]))
         }

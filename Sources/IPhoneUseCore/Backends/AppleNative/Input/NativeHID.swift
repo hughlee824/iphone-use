@@ -98,6 +98,7 @@ final class NativeHIDAdapter {
     let wait: (TimeInterval) -> Void
     let uptime: () -> TimeInterval
     var surface: UInt64?
+    var surfaceDisplayUniqueID: String?
     var contact: (UInt16, UInt16)?
     var pinchContacts: [(UInt16, UInt16)]?
     var releaseUncertain = false
@@ -135,7 +136,13 @@ final class NativeHIDAdapter {
         self.transport = transport; self.cancellation = cancellation; self.clock = clock; self.wait = wait
         self.uptime = uptime
     }
-    func prepare() throws {
+    func prepare(displayUniqueID: String? = nil) throws {
+        try cancellation.check()
+        guard state == .ready || state == .unprepared else {
+            throw IPhoneUseError("native_hid_unavailable", "Cannot change touchscreen during active or uncertain input")
+        }
+        surface = nil
+        surfaceDisplayUniqueID = nil
         let response = try transport.request(
             [
                 "featureIdentifier": Self.feature, "messageType": "Request",
@@ -144,17 +151,9 @@ final class NativeHIDAdapter {
         guard let services = response["connectedServices"] as? [[String: Any]] else {
             throw IPhoneUseError("native_hid_unsupported", "HID surface inventory missing")
         }
-        let matches = services.filter {
-            ($0["PrimaryUsagePage"] as? NSNumber)?.intValue == 13
-                && ($0["PrimaryUsage"] as? NSNumber)?.intValue == 4
-                && $0["UniversalControlBuiltIn"] as? Bool == true
-        }
-        guard matches.count == 1, let identifier = matches[0]["_ServiceID"] as? NSNumber,
-            identifier.uint64Value > 0
-        else {
-            throw IPhoneUseError("native_hid_unsupported", "No unique built-in touchscreen surface")
-        }
-        surface = identifier.uint64Value
+        let selected = try NativeTouchSurface.select(services, displayUniqueID: displayUniqueID)
+        surface = selected.id
+        surfaceDisplayUniqueID = selected.displayUniqueID
     }
     func report(contact: Bool, point: (UInt16, UInt16), timeout: TimeInterval = 3) throws {
         guard let surface else {

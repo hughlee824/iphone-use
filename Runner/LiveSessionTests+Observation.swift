@@ -1,9 +1,38 @@
 import IPhoneUseRunnerSupport
+import ImageIO
 import Network
 import XCTest
 import Darwin
 
 extension LiveSessionTests {
+
+    @MainActor
+    func selectedScreen() throws -> XCUIScreen {
+        guard let displayID = commandDisplayID else { throw CommandError("display_unavailable") }
+        let matches = try XCUIScreen.screens.filter { try RunnerAXBinding.displayID(of: $0).uint64Value == displayID }
+        guard matches.count == 1 else { throw CommandError("display_unavailable") }
+        return matches[0]
+    }
+
+    struct CapturedScreen {
+        let png: Data
+        let width: Int
+        let height: Int
+    }
+
+    @MainActor
+    func captureScreen() throws -> CapturedScreen {
+        let screenshot = try selectedScreen().screenshot()
+        let image = try RunnerScreenshot.image(
+            png: screenshot.pngRepresentation, interfaceOrientation: commandDisplayContext?.orientation ?? 0)
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else {
+            throw CommandError("screenshot_unavailable")
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw CommandError("screenshot_unavailable") }
+        return CapturedScreen(png: data as Data, width: image.width, height: image.height)
+    }
 
     func freshSnapshot(_ element: XCUIElement) throws -> XCUIElementSnapshot {
         guard let snapshot = try RunnerAXBinding.snapshot(of: element) as? XCUIElementSnapshot else {
@@ -21,10 +50,10 @@ extension LiveSessionTests {
         while stability.remaining(at: ProcessInfo.processInfo.systemUptime) > 0 {
             try Task.checkCancellation()
             let began = ProcessInfo.processInfo.systemUptime
-            let screenshot = XCUIScreen.main.screenshot()
+            let screenshot = try captureScreen()
             let captureFinished = ProcessInfo.processInfo.systemUptime
             let capturedAt = Date().timeIntervalSince1970
-            let png = screenshot.pngRepresentation
+            let png = screenshot.png
             let fingerprint = try FrameFingerprint(png: png)
             stability.record(
                 frame: fingerprint, png: png, capturedAt: captureFinished,
@@ -82,7 +111,7 @@ extension LiveSessionTests {
     @MainActor
     func observe(
         _ app: XCUIApplication?, root: XCUIElement?, scope: String, error: String? = nil
-    ) -> [String: Any] {
+    ) throws -> [String: Any] {
         let snapshotTime = Date().timeIntervalSince1970
         var nodes: [[String: Any]] = []
         observedReferences = RunnerAXReferences()
@@ -93,14 +122,14 @@ extension LiveSessionTests {
             } catch { axError = String(describing: error) }
         }
         let snapshotFinished = Date().timeIntervalSince1970
-        let frame = app?.frame
+        let frame = commandDisplayContext?.screen.cgRect
         var context: Any = NSNull()
         if let app, let root,
             let encoded = try? JSONEncoder().encode(screenContext(app: app, root: root)),
             let object = try? JSONSerialization.jsonObject(with: encoded) {
             context = object
         }
-        let screenshot = XCUIScreen.main.screenshot()
+        let screenshot = try captureScreen()
         return [
             "bundleId": scope == "systemAlert"
                 ? "com.apple.springboard" : (app != nil ? currentBundleID as Any? ?? NSNull() : NSNull()),
@@ -112,15 +141,16 @@ extension LiveSessionTests {
                 ["x": $0.minX, "y": $0.minY, "width": $0.width, "height": $0.height] as Any
             }
                 ?? NSNull(),
+            "displayID": commandDisplayID as Any? ?? NSNull(),
             "coordinateSpace": "screen_points", "nodes": nodes, "truncated": false,
             "snapshotSource": "explicit_nonmodal_standard_attributes_v1",
             "screenContext": context,
             "axStatus": nodes.isEmpty ? "unavailable" : "available", "axError": axError as Any? ?? NSNull(),
             "snapshotStartedAt": snapshotTime, "snapshotFinishedAt": snapshotFinished,
             "screenshotCapturedAt": Date().timeIntervalSince1970,
-            "screenshotWidth": screenshot.image.size.width * screenshot.image.scale,
-            "screenshotHeight": screenshot.image.size.height * screenshot.image.scale,
-            "screenshotBase64": screenshot.pngRepresentation.base64EncodedString()
+            "screenshotWidth": screenshot.width,
+            "screenshotHeight": screenshot.height,
+            "screenshotBase64": screenshot.png.base64EncodedString()
         ]
     }
 }

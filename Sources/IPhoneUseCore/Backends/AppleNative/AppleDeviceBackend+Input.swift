@@ -6,7 +6,6 @@ import AppleNativeBridge
 extension AppleDeviceBackend {
     func perform(_ action: DeviceAction, target: ObservedTarget, onInputStarted: @escaping () -> Void) throws
         -> [String: Any] {
-        releaseRecordingMediaIfFinished()
         let typing = action.kind == "type" && action.reference.node == nil
         let pressing = action.kind == "press" && action.reference.node == nil
         let keyboardAction = typing || pressing
@@ -36,8 +35,7 @@ extension AppleDeviceBackend {
     }
     func prepareText() throws -> [String: Any] {
         try cancellation.check()
-        releaseRecordingMediaIfFinished()
-        let control = controlStatus(mediaHealth: mediaStatus)
+        let control = controlStatus()
         guard control.available, let hid else {
             throw ActionFailure(
                 code: "native_control_unavailable",

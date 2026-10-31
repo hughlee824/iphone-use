@@ -23,10 +23,10 @@ struct NativeRTPPacket {
             guard offset + 4 <= bytes.count else { throw Self.invalid() }
             let profile = word(offset), words = word(offset + 2)
             // macOS/iOS 27 DisplayService one-word AVC extension, verified with
-            // portrait/left/right captures (0/3/2), with/without the IDR flag.
-            // Unknown profiles and the unverified value 1 supply no evidence.
+            // portrait/upside-down/left/right (0/1/3/2), with/without the IDR flag.
+            // Unknown profiles supply no direction evidence.
             if words == 1, [0x9001, 0x9011].contains(profile & 0xfcff) {
-                rotation = [0: "rot0", 2: "rot270", 3: "rot90"][(profile >> 8) & 3]
+                rotation = [0: "rot0", 1: "rot180", 2: "rot270", 3: "rot90"][(profile >> 8) & 3]
             }
             offset += 4 + word(offset + 2) * 4
         }

@@ -3,6 +3,8 @@
 
 static NSInteger AppState;
 static NSUInteger HomeCount;
+static NSUInteger OriginalHomeCount;
+static BOOL ActivationRaises;
 static NSInteger StateAtHome = -1;
 static BOOL InterruptedActivation;
 static NSUInteger ActivationPhase;
@@ -43,10 +45,25 @@ typedef NSInteger TestButton;
 @implementation XCUIDevice
 - (void)_silentPressButton:(TestButton)button {
     if (button == 1) {
-        HomeCount++;
+        HomeCount++; OriginalHomeCount++;
         StateAtHome = AppState;
         HomeTime = NSProcessInfo.processInfo.systemUptime;
     }
+}
+@end
+
+@interface XCUIApplication : NSObject
+- (id)initWithBundleIdentifier:(NSString *)bundle;
+- (void)activate;
+@end
+@implementation XCUIApplication
+- (id)initWithBundleIdentifier:(NSString *)bundle {
+    NSCAssert([bundle isEqualToString:@"com.apple.springboard"], @"Only SpringBoard may be activated");
+    return [super init];
+}
+- (void)activate {
+    HomeCount++; StateAtHome = AppState; HomeTime = NSProcessInfo.processInfo.systemUptime;
+    if (ActivationRaises) [NSException raise:@"ActivationFailure" format:@"private UI details"];
 }
 @end
 
@@ -107,6 +124,8 @@ int main(int argc, const char *argv[]) {
                   @"non-main-thread Home forwards without consuming startup guard");
             HomeCount = 0;
         }
+        OriginalHomeCount = 0;
+        ActivationRaises = [scenario isEqualToString:@"activation_exception"];
         NSTimeInterval start = NSProcessInfo.processInfo.systemUptime;
         [device _silentPressButton:1];
         NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - start;
@@ -116,7 +135,10 @@ int main(int argc, const char *argv[]) {
             Check([[RunnerStartupGuard facts][@"state"] isEqual:AppState == 2 ? @"already_background" : @"activation_timeout"], @"report why no input was sent");
             Check(elapsed < 5.2, @"activation wait bounded");
         } else {
-            Check(HomeCount == 1 && StateAtHome == 0, @"exactly one original Home, only while active");
+            Check(HomeCount == 1 && StateAtHome == 0 && OriginalHomeCount == 0,
+                  @"exactly one SpringBoard activation while active; never replay via Home");
+            if (ActivationRaises) Check([[RunnerStartupGuard facts][@"state"] isEqual:@"springboard_activation_failed"],
+                                        @"activation failure remains explicit without a fallback input");
             Check(elapsed >= 0.35, @"active interval must settle before Home");
             if (InterruptedActivation) {
                 Check(ActivationPhase == 3 && HomeTime - PhaseStarted >= 0.35,

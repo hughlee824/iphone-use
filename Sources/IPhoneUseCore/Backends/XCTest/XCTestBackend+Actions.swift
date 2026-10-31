@@ -6,14 +6,12 @@ import Darwin
 extension XCTestBackend {
 
     func open(bundle: String) throws -> [String: Any] {
-        defer { recording?.checkDisplay() }
         try apps().requireInstalled(bundle)
         let response = try request("launch", fields: ["bundleId": bundle])
         return try ActionReply.decode(response)
     }
 
     func appLifecycle(bundle: String, relaunch: Bool) throws -> [String: Any] {
-        defer { recording?.checkDisplay() }
         try apps().requireInstalled(bundle)
         let response = try request("app-lifecycle", fields: ["bundleId": bundle, "relaunch": relaunch])
         return try Self.lifecycleResponse(response, bundle: bundle, relaunch: relaunch)
@@ -60,8 +58,6 @@ extension XCTestBackend {
 
     func perform(_ action: DeviceAction, target: ObservedTarget, onInputStarted: @escaping () -> Void) throws
         -> [String: Any] {
-        recording?.checkDisplay()
-        defer { recording?.checkDisplay() }
         let response = try request(
             "act", fields: Self.actionFields(action, target: target),
             onInputStarted: target.gesture == nil ? nil : onInputStarted)
@@ -80,7 +76,8 @@ extension XCTestBackend {
     static func validateCapabilities(_ result: [String: Any]) throws {
         let expected = [
             "observationVersion": 4, "actionVersion": 13, "launchVersion": 2, "frameStabilityVersion": 2,
-            "screenGuardVersion": 1, "previewGeometryVersion": 2, "inputProgressVersion": 1
+            "screenGuardVersion": 1, "previewGeometryVersion": 2, "inputProgressVersion": 1,
+            "displaySelectionVersion": 1
         ]
         var differences = expected.keys.sorted().compactMap { key -> String? in
             let actual = result[key] as? Int
@@ -103,15 +100,26 @@ extension XCTestBackend {
     }
 
     static func decodePreviewGeometry(_ response: [String: Any]) throws -> RunnerPreviewGeometry {
+        if response["ok"] as? Bool == false, let error = response["error"] as? [String: Any],
+            let code = error["code"] as? String,
+            ["display_unavailable", "preview_geometry_unavailable"].contains(code) {
+            throw IPhoneUseError(code, "Runner preview geometry is temporarily unavailable: \(code)")
+        }
         guard response["ok"] as? Bool == true, let result = response["result"] as? [String: Any],
             let width = result["width"] as? Int, let height = result["height"] as? Int,
             let orientation = result["orientation"] as? Int, [1, 3, 6, 8].contains(orientation),
             (1...16384).contains(width), (1...16384).contains(height)
         else {
             throw IPhoneUseError(
-                "preview_geometry_unavailable", "Runner did not return valid screenshot dimensions")
+                "preview_geometry_invalid", "Runner did not return valid screenshot dimensions")
         }
         return RunnerPreviewGeometry(width: width, height: height, orientation: orientation)
+    }
+
+    static func validatePreviewDisplay(_ display: NativeDisplay, expected: NativeDisplay?) throws {
+        if let expected, display.geometry != expected.geometry {
+            throw IPhoneUseError("preview_geometry_conflict", "Active display changed during preview validation")
+        }
     }
 
     static func actionFields(_ action: DeviceAction, target: ObservedTarget) throws -> [String: Any] {
@@ -134,7 +142,8 @@ extension XCTestBackend {
         }
         var expected: [String: Any] = [
             "scope": target.context["scope"] ?? NSNull(),
-            "bundleId": target.context["targetBundleId"] ?? NSNull()
+            "bundleId": target.context["targetBundleId"] ?? NSNull(),
+            "displayID": target.context["displayID"] ?? NSNull()
         ]
         if target.gesture == nil && action.kind != "home" {
             expected["path"] = target.path
@@ -148,8 +157,6 @@ extension XCTestBackend {
     }
 
     func observe() throws -> CapturedObservation {
-        recording?.checkDisplay()
-        defer { recording?.checkDisplay() }
         let response = try request("observe")
         guard let result = response["result"] as? [String: Any],
             response["ok"] as? Bool == true || result["axStatus"] as? String == "unavailable"
@@ -177,7 +184,7 @@ extension XCTestBackend {
         return try recording.startPreview(options: options)
     }
     func stopPreview() throws -> [String: Any] { try recording?.stopPreview() ?? ["state": "stopped"] }
-    func previewTick() -> Bool { recording?.previewTick() ?? false }
+    func previewTick() -> Bool { false }
     func showPreviewGesture(_ gesture: NativePreviewGesture) { recording?.showPreviewGesture(gesture) }
-    var previewGestureRotation: String? { recording?.previewGestureRotation }
+    var previewGestureRotation: String? { nil }
 }

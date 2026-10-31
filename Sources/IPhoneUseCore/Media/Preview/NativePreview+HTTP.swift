@@ -152,6 +152,10 @@ extension NativePreview {
     }
     private func respondWithFrame(to target: String, on connection: NWConnection) {
         let query = URLComponents(string: "http://localhost" + target)?.queryItems
+        guard demand.update(query: query ?? [], now: ProcessInfo.processInfo.systemUptime) else {
+            send(connection, code: "400 Bad Request", type: "text/plain", data: Data()); return
+        }
+        refreshResolution()
         if let after = query?.first(where: { $0.name == "after" })?.value.flatMap(Int.init),
             after == self.encodedFrames, self.error == nil {
             self.waiting[ObjectIdentifier(connection)] = (after, ProcessInfo.processInfo.systemUptime + 1)

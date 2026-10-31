@@ -8,7 +8,7 @@ final class RunnerLifecycleTests: XCTestCase {
         let response: [String: Any] = [
             "ok": true,
             "execution": ["started": true, "inputCompleted": true, "completed": true],
-            "result": ["kind": "home", "homePressCompleted": true, "homeScreenConfirmed": false]
+            "result": ["kind": "home", "homeNavigationCompleted": true, "homeScreenConfirmed": false]
         ]
         let result = try ActionReply.decode(
             XCTestCapture.actionResponse(response, directory: directory, expectedHome: true))
