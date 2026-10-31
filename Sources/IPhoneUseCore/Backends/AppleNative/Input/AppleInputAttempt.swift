@@ -30,7 +30,7 @@ final class AppleInputAttempt {
         self.backend = backend; self.action = action; self.target = target; self.textInput = textInput
         let keyboardAction = (action.kind == "type" || action.kind == "press") && action.reference.node == nil
         let homeAction = action.kind == "home"
-        let control = backend.controlStatus(mediaHealth: backend.mediaStatus)
+        let control = backend.controlStatus()
         guard control.available, let hid = backend.hid else {
             throw ActionFailure(
                 code: "native_control_unavailable",
@@ -50,12 +50,12 @@ final class AppleInputAttempt {
             captured: captured, now: ProcessInfo.processInfo.systemUptime,
             policy: keyboardAction ? .keyboard : (homeAction ? .system : .coordinateGesture))
         guard let rotation = target.context["displayRotation"] as? String,
-            ["rot0", "rot90", "rot270"].contains(rotation),
+            ["rot0", "rot90", "rot180", "rot270"].contains(rotation),
             target.context["nativeRotation"] as? String == "rot0"
         else {
             throw IPhoneUseError(
                 "native_orientation_unsupported",
-                "Native HID requires portrait or landscape on a native-portrait display")
+                "Native HID requires a known orientation on a native-portrait display")
         }
         if let gesture = target.gesture { try gesture.validate(kind: action.kind) }
         let swipe =
@@ -74,6 +74,10 @@ final class AppleInputAttempt {
         result["inputTiming"] = timing.result
         result["displayRotation"] = rotation
         result["nativeRotation"] = target.context["nativeRotation"]
+        if !keyboardAction && !homeAction {
+            result["hidSurfaceID"] = hid.surface
+            result["hidDisplayUniqueID"] = hid.surfaceDisplayUniqueID
+        }
         result["screenGuard"] = check.result
         result["preInputCaptures"] = captures
         result["preInputChecks"] = preInputChecks
@@ -87,6 +91,11 @@ final class AppleInputAttempt {
     }
 
     private func prepareControls() throws {
+        if !keyboardAction && !homeAction {
+            // Bind to the observed screen, then let the fresh screenshot preflight
+            // reject a fold/rotation before dispatch. Never select by inventory order.
+            try hid.prepare(displayUniqueID: target.context["displayUniqueID"] as? String)
+        }
         if keyboardAction {
             try screenGuard.validate()
             guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
@@ -124,6 +133,7 @@ final class AppleInputAttempt {
         let (value, count) = try NativeInputPreflight.check(
             guard: screenGuard,
             displayID: target.context["displayID"] as? UInt64, displayRotation: rotation,
+            displayUniqueID: target.context["displayUniqueID"] as? String,
             captureSource: target.context["captureSource"] as? String,
             deadline: deadline,
             maximumCaptures: 1, fieldGuard: keyboardAction ? target.textFieldGuard : nil,

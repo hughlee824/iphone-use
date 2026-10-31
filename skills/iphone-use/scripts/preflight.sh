@@ -60,7 +60,7 @@ fi
 if setup_help=$("$cli" setup --help 2>/dev/null) &&
    printf '%s\n' "$setup_help" | grep -q -- '--preview' &&
    printf '%s\n' "$setup_help" | grep -q -- '--progress'; then
-  echo 'Setup preview: available. For an authorized packaged Runner setup, use setup --progress --preview (or --no-preview when opted out); relay progress and reuse the original tab before authorization completes. Setup closes its verification session and video source.'
+  echo 'Setup preview: available. For an authorized packaged Runner setup, use setup --progress --preview (or --no-preview when opted out); relay progress and reuse the original tab before authorization completes. Follow the selected executable preview finish rules after verification.'
 fi
 connect_help=$("$cli" connect --help)
 if printf '%s\n' "$connect_help" | grep -q -- '--reuse'; then
@@ -76,6 +76,9 @@ if preview_help=$("$cli" preview --help 2>/dev/null) &&
    printf '%s\n' "$preview_help" | grep -q -- '--no-open' &&
    printf '%s\n' "$preview_help" | grep -q -- '--stop'; then
   echo 'Live preview: available. After connect, follow the shared live-preview lifecycle once per owned session unless the user opted out.'
+  if printf '%s\n' "$preview_help" | grep -q -- '--device'; then
+    echo 'Independent preview: available. preview --device UDID needs no control session or Runner. Control disconnect does not stop it; use explicit preview --device UDID --stop for an owned preview unless continued viewing was requested.'
+  fi
   if printf '%s\n' "$preview_help" | grep -q -- '--port'; then
     echo 'Preview port: configurable. Default 8765; preview --port PORT overrides one start; config set preview-port PORT saves a default. On preview_port_in_use, follow the bounded same-session port recovery in live-preview.md.'
   fi

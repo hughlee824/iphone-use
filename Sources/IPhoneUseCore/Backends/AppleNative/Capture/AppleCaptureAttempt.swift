@@ -49,7 +49,7 @@ final class AppleCaptureAttempt {
             let geometry = try timed("displayGeometry") { try validateDisplay(before, requestedAt) }
             try budget?.beginValidation()
             _ = try timed("screenshot") {
-                try read(["device", "capture", "screenshot", "--destination", destination.path], phase: "screenshot")
+                try read(before.screenshotArguments(destination: destination), phase: "screenshot")
             }
             let png = try timed("readPNG") { try Data(contentsOf: destination) }
             let fingerprint = try timed("appleImageValidation") { try validate(png, display: before) }
@@ -108,6 +108,7 @@ final class AppleCaptureAttempt {
                 "captureCompletedAt": Date().timeIntervalSince1970, "captureStartedUptime": monotonic,
                 "screenshotCapturedAt": Date().timeIntervalSince1970, "screenshotWidth": fingerprint.width,
                 "screenshotHeight": fingerprint.height, "frameHash": fingerprint.hash, "displayID": after.id,
+                "displayUniqueID": after.uniqueID as Any? ?? NSNull(),
                 "displayRotation": after.rotation, "nativeRotation": after.nativeRotation,
                 "coordinateSpace": "screen_points", "pointScale": after.scale,
                 "imageTransform": ["cropOriginPixels": [0, 0], "resizeScale": 1, "pixelsPerPoint": after.scale],

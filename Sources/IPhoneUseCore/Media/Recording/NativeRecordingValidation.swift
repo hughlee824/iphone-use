@@ -3,12 +3,6 @@ import AVFoundation
 import CoreVideo
 
 enum NativeRecordingOptions {
-    static func supported(by details: [String: Any]) -> Bool {
-        (details["capabilities"] as? [[String: Any]])?.contains {
-            $0["featureIdentifier"] as? String == "com.apple.coredevice.feature.screenrecording"
-        } == true
-    }
-
     static func duration(_ request: [String: Any]) throws -> Double {
         guard let value = request["duration"] as? NSNumber,
             CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite,

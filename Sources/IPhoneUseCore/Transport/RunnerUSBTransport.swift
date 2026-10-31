@@ -122,7 +122,9 @@ struct RunnerUSBTransport {
                 try onProgress(response)
             }
         } catch {
-            throw TransportError(description: String(describing: error), possiblySent: possiblySent)
+            throw TransportError(
+                description: String(describing: error), possiblySent: possiblySent,
+                code: (error as? IPhoneUseError)?.code)
         }
     }
 }

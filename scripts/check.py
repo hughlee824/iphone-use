@@ -48,7 +48,7 @@ def runtime_checks():
             run([binary, "disabled"], environment=environment)
             run([binary, "disabled"], environment={**authorized, "IPHONE_USE_SESSION_TOKEN": "short"})
             for scenario in ("active", "inactive", "flapping", "background", "enter_background",
-                             "timeout", "nonhome", "offmain", "finish"):
+                             "timeout", "nonhome", "offmain", "finish", "activation_exception"):
                 run([binary, scenario], environment=authorized)
         elif name == "startup-unsupported":
             run([binary, "unsupported"], environment=authorized)

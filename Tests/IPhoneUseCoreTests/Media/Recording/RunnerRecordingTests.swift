@@ -30,6 +30,16 @@ final class RunnerRecordingConnectionStub: RunnerRecordingConnection {
     var pollError: Error?
     var refreshError: Error?
     var onPoll: (() -> Void)?
+    var onValidation: (() throws -> Void)?
+    var canResume = false
+    var resumeError: Error?
+    var unlockChecks = 0
+    func previewCanResumeAfterUnlock() throws -> Bool {
+        unlockChecks += 1
+        if let resumeError { throw resumeError }
+        return canResume
+    }
+    func preparePreviewValidation() throws { try onValidation?() }
     func previewNeedsRefresh() throws -> Bool {
         onPoll?()
         if let pollError { throw pollError }

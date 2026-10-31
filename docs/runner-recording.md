@@ -1,6 +1,6 @@
 # 两种模式的原生媒体录屏
 
-录屏传输与控制模式分开：Runner 的截图、元素、点击和输入仍由 XCTest 执行；显式 `record-start` 或 `preview` 按需创建自有 CoreDevice displayservice 媒体连接，使用与标准模式相同的 HEVC/RTP 接收、MP4 写入和完整解码验证。不会建立 HID 或剪贴板服务。
+录屏传输与控制模式分开：Runner 的截图、元素、点击和输入仍由 XCTest 执行；显式 `record-start` 或 `preview` 委托独立捕获进程按需创建自有 CoreDevice displayservice 媒体连接，使用与标准模式相同的 HEVC/RTP 接收、MP4 写入和完整解码验证。不会建立 HID 或剪贴板服务。
 
 ```sh
 iphone-use connect --mode runner --device "$DEVICE" --xctestrun "$XCTESTRUN"
@@ -13,8 +13,8 @@ iphone-use --session "$SESSION" record-stop "$RECORDING_ID"
 - 连接 Runner 时不创建原生媒体会话；`recordingSupport.availability=not_checked` 不是可录制的证明。显式开始时再检查 macOS/iOS 27、配对、解锁、方向、媒体互斥、协议及 RTP 时钟。
 - 未开启预览时，每个新录制使用独立的自有媒体流；预览已开启时，新录制订阅已有解码器，不重启共享流。停止只作用于自有资源；旧 ID 重复停止不会影响后续录制，未知 ID 被拒绝。未知开始/清理结果不重放，按返回的恢复要求显式处理。
 - `record-stop` 在同一 Runner 会话内完成文件写入与完整解码；预览仍开启时保留媒体，报告 `mediaRetainedForPreview`，否则清理媒体。不等待 XCTest 结束，也不重建 Runner。清理未确认时保留文件事实并返回 unknown。
-- 时长到达由现有录制队列自动结束文件；若无预览消费者，随后的 status、观察、动作或 disconnect 回收媒体。会话 idle/signal 清理也先结束文件，再关闭媒体和 Runner。
-- status、观察和动作边界检查显示状态；预览开启时还有串行后台检查。发现方向/锁屏变化时结束本段；已识别的逐帧方向变化会在写入新方向画面前结束本段，保留共享预览。预览可连续旋转不代表录屏可跨方向连续写入。每个视频帧都不是 observation，录制或预览开始/停止后需要重新 observe。
+- 时长到达由现有录制队列自动结束文件；若无预览消费者，独立捕获进程的定时检查回收媒体。会话 idle/signal 清理只结束该会话拥有的录屏，预览继续运行。
+- 独立捕获进程串行检查录屏显示状态，与观察/动作队列分开。发现方向/锁屏变化时结束本段；已识别的逐帧方向变化会在写入新方向画面前结束本段，保留共享预览。预览可连续旋转不代表录屏可跨方向连续写入。每个视频帧都不是 observation，录制或预览开始/停止后需要重新 observe。
 - 当前源码独立后台启动已安装 Runner，经 USB 本地通信控制，不再创建 IDE 驱动测试会话或改写 `.xctestrun` 副本。原始签名产物及调用者清单不改动。已有预览帧时，先准备录屏编码器再订阅共享像素，录屏时长从准备完成后开始。
 
 启动返回成功不代表整段录制成功。务必检查该 recording ID 的最终 `error`、`stopReason`、`writtenFrames`、`fileValidated` 和文件内容；资源受限时可能提前出现 `recording_backpressure`，即使浏览器画面仍正常刷新。

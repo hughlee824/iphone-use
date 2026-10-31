@@ -18,19 +18,12 @@ extension RunnerRecordingTests {
                 return RunnerRecordingConnectionStub()
             }
             defer { _ = owner.close() }
-            backend.recording = owner
-            if optional {
-                XCTAssertNoThrow(try backend.startConfiguredPreview())
+            XCTAssertNoThrow(try backend.startConfiguredPreview(start: { try owner.startPreview(options: $0) }))
                 let progress = try jsonObject(
                     Data(contentsOf: directory.appendingPathComponent("connection-progress.json")))
                 XCTAssertNotNil(progress["previewError"] as? String)
                 XCTAssertEqual(progress["requiresUserAction"] as? Bool, false)
                 XCTAssertTrue(progress["previewURL"] is NSNull)
-            } else {
-                XCTAssertThrowsError(try backend.startConfiguredPreview()) {
-                    XCTAssertEqual(($0 as? IPhoneUseError)?.code, "preview_port_in_use")
-                }
-            }
             XCTAssertEqual(starts, 0)
         }
     }

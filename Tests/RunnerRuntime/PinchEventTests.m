@@ -18,12 +18,13 @@
 @interface XCSynthesizedEventRecord : NSObject
 @property NSMutableArray *paths;
 @property NSInteger orientation;
-- (id)initWithName:(NSString *)name interfaceOrientation:(NSInteger)orientation;
+@property NSUInteger displayID;
+- (id)initWithName:(NSString *)name displayID:(NSUInteger)displayID interfaceOrientation:(NSInteger)orientation;
 - (void)addPointerEventPath:(id)path;
 @end
 @implementation XCSynthesizedEventRecord
-- (id)initWithName:(NSString *)name interfaceOrientation:(NSInteger)orientation {
-    self = [super init]; if (self) { self.paths = [NSMutableArray new]; self.orientation = orientation; } return self;
+- (id)initWithName:(NSString *)name displayID:(NSUInteger)displayID interfaceOrientation:(NSInteger)orientation {
+    self = [super init]; if (self) { self.paths = [NSMutableArray new]; self.orientation = orientation; self.displayID = displayID; } return self;
 }
 - (void)addPointerEventPath:(id)path { [self.paths addObject:path]; }
 @end
@@ -52,7 +53,7 @@ static NSInteger behavior;
 static RunnerPinchEvent *Prepare(NSInteger orientation) {
     NSError *error;
     RunnerPinchEvent *event = [RunnerPinchEvent prepareFrom:CGPointMake(130, 240) right:CGPointMake(210, 240)
-        to:CGPointMake(70, 240) rightEnd:CGPointMake(270, 240) duration:0.5 orientation:orientation error:&error];
+        to:CGPointMake(70, 240) rightEnd:CGPointMake(270, 240) duration:0.5 orientation:orientation displayID:2 error:&error];
     NSCAssert(event && !error, @"preparation failed: %@", error); return event;
 }
 int main(void) {
@@ -60,7 +61,7 @@ int main(void) {
         for (NSInteger orientation = 1; orientation <= 4; orientation++) {
             RunnerPinchEvent *event = Prepare(orientation); NSError *error;
             NSCAssert([event sendWithTimeout:0.1 error:&error] && !error, @"success callback rejected");
-            NSCAssert(lastRecord.orientation == orientation && lastRecord.paths.count == 2, @"orientation/contact count");
+            NSCAssert(lastRecord.displayID == 2 && lastRecord.orientation == orientation && lastRecord.paths.count == 2, @"orientation/contact count");
             for (NSUInteger i = 0; i < 2; i++) {
                 NSArray *events = [lastRecord.paths[i] events];
                 NSCAssert([events.firstObject[0] isEqual:@"down"] && [events.firstObject[3] doubleValue] == 0, @"synchronized down");
@@ -84,7 +85,7 @@ int main(void) {
         }
         NSError *error;
         NSCAssert(![RunnerPinchEvent prepareFrom:CGPointZero right:CGPointZero to:CGPointZero rightEnd:CGPointZero
-            duration:0.5 orientation:5 error:&error] && error, @"physical face-up is not interface orientation");
+            duration:0.5 orientation:5 displayID:2 error:&error] && error, @"physical face-up is not interface orientation");
         puts("Runner pinch runtime host tests passed: paths, orientations, releases, failure, timeout, late completion, no replay");
     }
 }

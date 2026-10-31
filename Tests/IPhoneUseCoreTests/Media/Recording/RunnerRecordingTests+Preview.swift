@@ -34,7 +34,7 @@ extension RunnerRecordingTests {
     func testTimeoutDoesNotHideUnhealthyMediaOrCancellationAndOtherErrorsRemainTerminal() throws {
         for (code, healthy, cancelled) in [
             ("coredevice_timeout", false, false), ("coredevice_timeout", true, true),
-            ("device_locked", true, false), ("capture_unavailable", true, false),
+            ("capture_unavailable", true, false),
             ("coredevice_failed", true, false), ("coredevice_cancelled", true, false)
         ] {
             let connection = RunnerRecordingConnectionStub(), cancellation = NativeCancellation()
@@ -52,7 +52,10 @@ extension RunnerRecordingTests {
 
     func testTimeoutAfterRefreshBeginsCannotBeDeferredOrReplayed() throws {
         let connection = RunnerRecordingConnectionStub()
-        let owner = RunnerNativeRecording(root: try root(), cancellation: NativeCancellation()) { connection }
+        let directory = try root()
+        let owner = RunnerNativeRecording(
+            root: directory.appendingPathComponent("recordings"), cancellation: NativeCancellation()
+        ) { connection }
         defer { _ = owner.close() }
         _ = try owner.startPreview(options: .init(port: 0))
         connection.changed = true
@@ -62,6 +65,11 @@ extension RunnerRecordingTests {
         XCTAssertEqual(connection.previewRefreshes, 1)
         XCTAssertFalse(owner.previewTick())
         XCTAssertThrowsError(try owner.startPreview(options: .init(port: 0)))
+        let events = try String(
+            contentsOf: directory.appendingPathComponent("preview-events.jsonl"), encoding: .utf8)
+            .split(separator: "\n").map { try jsonObject(Data($0.utf8)) }
+        XCTAssertEqual(events.compactMap { $0["event"] as? String }, ["refresh_started", "preview_failed"])
+        XCTAssertTrue((events.last?["reason"] as? String)?.contains("Read after media stop timed out") == true)
     }
 
     func testEarlyPreviewStartsMediaBeforeAuthorizationAndReusesItAfterward() throws {

@@ -4,6 +4,7 @@ import Network
 struct TransportError: Error, CustomStringConvertible {
     let description: String
     let possiblySent: Bool
+    var code: String?
 }
 
 // One bounded JSON line per connection. Never retry a transmitted request.

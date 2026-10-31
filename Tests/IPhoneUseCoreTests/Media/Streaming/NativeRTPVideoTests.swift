@@ -22,14 +22,14 @@ final class NativeRTPVideoTests: XCTestCase {
     }
 
     func testDisplayServiceOrientationProfilesAndUnknownExtensions() throws {
-        for (bits, rotation) in [(0, "rot0"), (2, "rot270"), (3, "rot90")] {
+        for (bits, rotation) in [(0, "rot0"), (1, "rot180"), (2, "rot270"), (3, "rot90")] {
             for flags: UInt16 in [0x9001, 0x9011] {
                 let packet = try orientationPacket(flags | UInt16(bits << 8))
                 XCTAssertEqual(packet.displayRotation, rotation)
                 XCTAssertEqual(packet.payload, Data([0x28, 1, 1]))
             }
         }
-        for profile: UInt16? in [nil, 0xbede, 0x9401, 0x9021, 0x9000, 0x9101] {
+        for profile: UInt16? in [nil, 0xbede, 0x9401, 0x9021, 0x9000, 0x9121] {
             XCTAssertNil(try orientationPacket(profile).displayRotation)
         }
     }

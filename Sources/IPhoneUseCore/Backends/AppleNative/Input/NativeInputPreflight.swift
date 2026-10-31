@@ -5,6 +5,7 @@ import Foundation
 struct NativeInputPreflight {
     let screenGuard: ScreenGuard
     let displayID: UInt64?
+    let displayUniqueID: String?
     let displayRotation: String?
     let captureSource: String?
     let deadline: TimeInterval
@@ -14,13 +15,15 @@ struct NativeInputPreflight {
     let budget: NativeCaptureBudget?
     static func check(
         guard screenGuard: ScreenGuard, displayID: UInt64?, displayRotation: String? = nil,
+        displayUniqueID: String? = nil,
         captureSource: String? = nil, deadline: TimeInterval, maximumCaptures: Int,
         fieldGuard: NativeTextFieldGuard? = nil, caretGuard: NativeBoundCaretGuard? = nil,
         budget: NativeCaptureBudget? = nil, now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         record: ([String: Any]) -> Void = { _ in }, capture: () throws -> CapturedObservation
     ) throws -> (ScreenGuard.Check, Int) {
         try Self(
-            screenGuard: screenGuard, displayID: displayID, displayRotation: displayRotation,
+            screenGuard: screenGuard, displayID: displayID, displayUniqueID: displayUniqueID,
+            displayRotation: displayRotation,
             captureSource: captureSource, deadline: deadline, maximumCaptures: maximumCaptures, fieldGuard: fieldGuard,
             caretGuard: caretGuard, budget: budget
         ).run(now: now, record: record, capture: capture)
@@ -151,6 +154,7 @@ struct NativeInputPreflight {
         var check: ScreenGuard.Check
         var fieldRejection: String?
         guard frame.metadata["displayID"] as? UInt64 == displayID,
+            displayUniqueID == nil || frame.metadata["displayUniqueID"] as? String == displayUniqueID,
             let raw = frame.metadata["screenContext"] as? [String: Any]
         else { throw ScreenGuard.Failure.contextChanged }
         if let displayRotation {

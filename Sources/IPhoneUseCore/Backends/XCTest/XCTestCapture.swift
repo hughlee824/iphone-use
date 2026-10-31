@@ -68,6 +68,7 @@ enum XCTestCapture {
         var metadata: [String: Any] = [
             "screenshotWidth": width, "screenshotHeight": height,
             "scope": result["scope"] as? String ?? "unknown",
+            "displayID": result["displayID"] as? UInt64 ?? 0,
             "targetBundleId": result["targetBundleId"] as? String ?? NSNull(),
             "foregroundBundleId": result["foregroundBundleId"] as? String ?? NSNull(),
             "sourceBundleId": result["bundleId"] as? String ?? NSNull(),
@@ -261,7 +262,7 @@ extension XCTestCapture {
         let stability = response["stability"] as? [String: Any]
         if expectedHome {
             guard execution?["inputCompleted"] as? Bool == true, result["kind"] as? String == "home",
-                result["homePressCompleted"] as? Bool == true, result["homeScreenConfirmed"] as? Bool == false
+                result["homeNavigationCompleted"] as? Bool == true, result["homeScreenConfirmed"] as? Bool == false
             else {
                 throw IPhoneUseError("missing_home_facts", "Runner did not confirm Home input completion")
             }

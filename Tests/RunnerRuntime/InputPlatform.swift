@@ -71,6 +71,7 @@ final class XCUIApplication: XCUIElement {
     let alerts = TestAlerts()
     var state: State { .runningForeground }
     init(bundleIdentifier: String) {}
+    func activate() { preconditionFailure("Unexpected activation") }
 }
 final class XCUIDevice {
     enum Button { case home }

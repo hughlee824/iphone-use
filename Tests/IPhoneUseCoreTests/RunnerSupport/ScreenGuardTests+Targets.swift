@@ -77,13 +77,13 @@ extension ScreenGuardTests {
             "lifecycleOwner": "host", "observationVersion": 4, "actionVersion": 13,
             "launchVersion": 2, "frameStabilityVersion": 2, "screenGuardVersion": 1,
             "previewGeometryVersion": 2,
-            "inputProgressVersion": 1
+            "inputProgressVersion": 1, "displaySelectionVersion": 1
         ]
         XCTAssertNoThrow(try XCTestBackend.validateCapabilities(supported))
         for key in [
             "observationVersion", "actionVersion", "launchVersion", "screenGuardVersion",
             "frameStabilityVersion",
-            "previewGeometryVersion", "inputProgressVersion"
+            "previewGeometryVersion", "inputProgressVersion", "displaySelectionVersion"
         ] {
             var older = supported
             older[key] = 0

@@ -9,9 +9,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSInteger)interfaceOrientationForApplication:(NSObject *)application NS_SWIFT_NAME(interfaceOrientation(for:));
 + (nullable instancetype)prepareFrom:(CGPoint)left right:(CGPoint)right
                                 to:(CGPoint)endLeft rightEnd:(CGPoint)endRight
-                          duration:(NSTimeInterval)duration orientation:(NSInteger)orientation
+                          duration:(NSTimeInterval)duration orientation:(NSInteger)orientation displayID:(NSUInteger)displayID
                              error:(NSError **)error
-    NS_SWIFT_NAME(prepare(left:right:endLeft:endRight:duration:orientation:));
+    NS_SWIFT_NAME(prepare(left:right:endLeft:endRight:duration:orientation:displayID:));
 - (BOOL)sendWithTimeout:(NSTimeInterval)timeout error:(NSError **)error NS_SWIFT_NAME(send(timeout:));
 @end
 NS_ASSUME_NONNULL_END

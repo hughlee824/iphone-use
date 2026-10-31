@@ -4,14 +4,17 @@ import CoreImage
 
 enum NativeSnapshotImage {
     static func validateGeometry(
-        _ frame: NativeVideoSnapshot.Frame?, display: NativeDisplay, allowReducedResolution: Bool = false
+        _ frame: NativeVideoSnapshot.Frame?, display: NativeDisplay, allowReducedResolution: Bool = false,
+        allowScaledCanvas: Bool = false
     ) throws -> (width: Int, height: Int) {
         guard let frame else {
             throw IPhoneUseError(
                 "native_snapshot_freshness_unavailable",
                 "No fresh complete media frame to verify display geometry")
         }
-        guard display.nativeRotation == "rot0", NativeVideoOrientation(rawValue: display.rotation) != nil
+        guard display.nativeRotation == "rot0",
+            NativeVideoOrientation(rawValue: display.rotation) != nil
+                || (allowScaledCanvas && display.rotation == "rot180")
         else {
             throw IPhoneUseError("native_snapshot_geometry_unavailable", "Unverified media orientation")
         }
@@ -23,8 +26,22 @@ enum NativeSnapshotImage {
                 "native_snapshot_geometry_unavailable",
                 "RTP frame orientation conflicts with the bound display")
         }
-        let width = Int(display.rotation == "rot0" ? display.pixelWidth : display.pixelHeight)
-        let height = Int(display.rotation == "rot0" ? display.pixelHeight : display.pixelWidth)
+        let sideways = ["rot90", "rot270"].contains(display.rotation)
+        let width = Int(sideways ? display.pixelHeight : display.pixelWidth)
+        let height = Int(sideways ? display.pixelWidth : display.pixelHeight)
+        if allowScaledCanvas, frame.image.nativeWidth < width, frame.image.nativeHeight < height {
+            // Some displays negotiate a smaller HEVC canvas, independently of
+            // VRA's active rectangle. Preview may use its proportional pixels;
+            // native observation validation retains exact display geometry.
+            let image = frame.image
+            let expectedHeight = Double(height) * Double(image.nativeWidth) / Double(width)
+            guard abs(Double(image.nativeHeight) - expectedHeight) <= 1 else {
+                throw IPhoneUseError("native_snapshot_geometry_unavailable", "Preview aspect ratio changed")
+            }
+            try validateNativeRectangle(
+                image, width: image.nativeWidth, height: image.nativeHeight, allowReducedResolution: true)
+            return (image.nativeWidth, image.nativeHeight)
+        }
         try validateNativeRectangle(
             frame.image, width: width, height: height, allowReducedResolution: allowReducedResolution)
         return (width, height)

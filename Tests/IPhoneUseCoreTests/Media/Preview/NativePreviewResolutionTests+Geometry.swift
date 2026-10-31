@@ -4,6 +4,55 @@ import CoreImage
 
 extension NativePreviewResolutionTests {
 
+    func testPostBindValidationAcceptsOnlySameSurfaceAndMatchingFrame() throws {
+        var frame = NativeVideoSnapshot.Frame(
+            image: .init(pixels: try pixels(activeWidth: 64, activeHeight: 128), nativeWidth: 48, nativeHeight: 96),
+            firstPacketAt: 1, completedAt: 2, timestamp: 1)
+        for rotation in ["rot0", "rot90", "rot180", "rot270"] {
+            let current = try display(rotation)
+            XCTAssertEqual(try NativePreviewGeometry.revalidatedDisplay(
+                frame: frame, bound: display("rot90"), current: current), current)
+        }
+        frame.displayRotation = "rot90"
+        XCTAssertThrowsError(try NativePreviewGeometry.revalidatedDisplay(
+            frame: frame, bound: display("rot90"), current: display("rot180")))
+        XCTAssertThrowsError(try NativePreviewGeometry.revalidatedDisplay(
+            frame: nil, bound: display(), current: display()))
+        let other = try NativeDisplay(["displays": [[
+            "primary": true, "displayId": 2, "bounds": [[0, 0], [48, 96]],
+            "pointScale": 1, "nativeOrientation": "rot0", "currentOrientation": "rot90"
+        ]]])
+        XCTAssertThrowsError(try NativePreviewGeometry.revalidatedDisplay(
+            frame: frame, bound: display(), current: other))
+        frame.displayRotation = nil
+        XCTAssertThrowsError(try NativeSnapshotImage.validateGeometry(frame, display: display("rot180")),
+                             "Preview support must not change the native input/recording contract")
+    }
+
+    func testNegotiatedSmallerCanvasIsPreviewOnly() throws {
+        let buffer = try pixels(activeWidth: 48, activeHeight: 96)
+        let frame = NativeVideoSnapshot.Frame(
+            image: .init(pixels: buffer, nativeWidth: 48, nativeHeight: 96),
+            firstPacketAt: 1, completedAt: 2, timestamp: 1)
+        func screen(_ width: Int, _ height: Int) throws -> NativeDisplay {
+            try NativeDisplay([
+                "backlightState": "activeOn", "displays": [[
+                    "primary": true, "displayId": 2, "bounds": [[0, 0], [width, height]],
+                    "pointScale": 1, "currentOrientation": "rot0", "nativeOrientation": "rot0"
+                ]]
+            ])
+        }
+        let size = try NativeSnapshotImage.validateGeometry(
+            frame, display: screen(96, 192), allowReducedResolution: true, allowScaledCanvas: true)
+        XCTAssertEqual(size.width, 48)
+        XCTAssertEqual(size.height, 96)
+        XCTAssertThrowsError(try NativeSnapshotImage.validateGeometry(frame, display: screen(96, 192)))
+        XCTAssertThrowsError(try NativeSnapshotImage.validateGeometry(
+            frame, display: screen(96, 160), allowReducedResolution: true, allowScaledCanvas: true))
+        XCTAssertThrowsError(try NativeSnapshotImage.validateGeometry(
+            frame, display: screen(24, 48), allowReducedResolution: true, allowScaledCanvas: true))
+    }
+
     func testReducedGeometryPreservesFreshnessBarrierAndRejectsConflicts() throws {
         let buffer = try pixels(activeWidth: 32, activeHeight: 48)
         let reduced = NativeDecodedVideoFrame(

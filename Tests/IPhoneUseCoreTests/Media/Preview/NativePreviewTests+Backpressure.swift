@@ -10,7 +10,7 @@ extension NativePreviewTests {
                 release = DispatchSemaphore(value: 0)
             let preview = try NativePreview(
                 port: 0,
-                encodeFrame: { frame, _, _ in
+                encodeFrame: { frame, _, _, _ in
                     if frame.timestamp == 1 { entered.fulfill(); _ = release.wait(timeout: .now() + 5) }
                     return .init(data: Data([0xff, 0xd8, UInt8(frame.timestamp), 0xff, 0xd9]))
                 })

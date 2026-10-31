@@ -1,6 +1,7 @@
 #import "RunnerStartupGuard.h"
 #import <objc/runtime.h>
 #import <os/log.h>
+#import <objc/message.h>
 
 // UIKit's public application-state API, resolved dynamically so this small
 // bootstrap adapter can also be tested with host runtime doubles.
@@ -19,6 +20,30 @@ static void Restore(void) {
     if (Armed) {
         method_setImplementation(HomeMethod, OriginalHome);
         Armed = NO;
+    }
+}
+
+// Use XCTest application activation rather than a device-wide Home event. On
+// multi-display devices Home can be acknowledged without backgrounding Runner.
+// XCTest still waits for its real UIKit background notification afterwards.
+static NSString *ActivateSpringboard(void) {
+    @try {
+        Class application = NSClassFromString(@"XCUIApplication");
+        SEL initialize = NSSelectorFromString(@"initWithBundleIdentifier:");
+        SEL activate = NSSelectorFromString(@"activate");
+        Method initializer = class_getInstanceMethod(application, initialize);
+        Method activation = class_getInstanceMethod(application, activate);
+        if (initializer && activation &&
+            strcmp(method_getTypeEncoding(initializer), "@24@0:8@16") == 0 &&
+            strcmp(method_getTypeEncoding(activation), "v16@0:8") == 0) {
+            id springboard = ((id (*)(id, SEL, id))objc_msgSend)([application alloc], initialize, @"com.apple.springboard");
+            ((void (*)(id, SEL))objc_msgSend)(springboard, activate);
+            return @"springboard_activation_requested";
+        } else {
+            return @"springboard_activation_unavailable";
+        }
+    } @catch (NSException *exception) {
+        return @"springboard_activation_failed";
     }
 }
 
@@ -46,12 +71,11 @@ static void StartupHome(id device, SEL selector, NSInteger button) {
         }
         // UIApplicationStateActive. Authentication returns before its remote
         // overlay disappears. Let UIKit finish activation and drain the dismissal
-        // transition before sending the *one original* Home event.
+        // transition before the one SpringBoard activation request.
         if (state == 0) {
             if (activeSince < 0) activeSince = now;
             if (now - activeSince >= 0.35) {
-                Outcome = @"home_dispatched";
-                ((void (*)(id, SEL, NSInteger))OriginalHome)(device, selector, button);
+                Outcome = ActivateSpringboard();
                 break;
             }
         } else {

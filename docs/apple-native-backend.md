@@ -8,7 +8,7 @@ The default transport asks Apple's CoreDevice broker for named service sockets a
 
 The optional `--native-endpoint-inventory` is an explicit diagnostic route, not normal setup. It requires a recent Apple socket inventory and independently checks the service's device identity. Broker failure does not automatically select this route.
 
-Device requests run serially in the session host. Connections, touch/key releases, clipboard transactions and media stops are scoped to resources owned by that session. Unconfirmed input or release remains uncertain; cleanup cannot retrospectively prove delivery.
+Device requests run serially in the session host. Connections, touch/key releases, and clipboard transactions are scoped to resources owned by that session. Preview media belongs to a separate capture process. Unconfirmed input or release remains uncertain; cleanup cannot retrospectively prove delivery.
 
 ## Screenshots and input
 
@@ -17,6 +17,8 @@ Standard observations and input preflight use fresh CoreDevice PNGs plus display
 Native `open` acknowledges launch separately from foreground readiness. `connect` can establish an observation-only session: require `result.controlAvailable=true` before input and inspect capabilities and recovery. No AX tree, OCR, focus traversal or built-in planning model is involved.
 
 Touch gestures use current observation/context checks and the [screen guard](screen-guard.md). HID send completion is a host fact, not a device effect acknowledgement, so a normally queued native input can return `unknown`. Inspect the attached image before deciding what to do next; never automatically replay.
+
+On devices advertising multiple built-in touchscreens, standard mode matches the HID service's `displayUUID` to the observed CoreDevice display identity. It rediscovers the matching surface before each coordinate gesture, then checks a fresh screenshot, display identity, orientation and geometry before dispatch. Folding does not require reconnecting the control session. Ambiguous or missing matches reject input; inventory order and product names are not selection rules. Older inventories without display UUIDs retain the single-built-in-touchscreen requirement. Active or uncertain contacts must be released on their original surface before rebinding.
 
 ## Keyboard and clipboard
 
@@ -45,6 +47,6 @@ Recovery includes `automaticReplayAllowed=false`. Local IPC response loss does n
 
 ## Media and runtime limits
 
-Explicit preview/recording starts an owned media connection in either control mode. Both share streaming, decoding, recording and cleanup code; Runner input still uses XCTest. Ownership conflicts fail rather than stopping another client's stream. See [preview](local-preview.md) and [recording](runner-recording.md) for freshness recovery, orientation changes, validation and resource limits.
+Explicit preview/recording starts an independently owned media connection, without depending on either control mode. HID admission no longer depends on media inventory or health; fresh Apple screenshots, lock/display checks and input guards remain required. Both share streaming, decoding, recording and cleanup code; Runner input still uses XCTest. Ownership conflicts fail rather than stopping another client's stream. See [preview](local-preview.md) and [recording](runner-recording.md) for freshness recovery, orientation changes, validation and resource limits.
 
 Apple runtime/service interfaces are checked at their adapter boundaries but are not a stable public SDK contract. Unsupported shapes or signatures fail explicitly. Last-check-to-event races, app-defined shortcut behavior and transport uncertainty remain limitations. Test affected device paths after toolchain changes; host fakes alone cannot establish compatibility.

@@ -2,12 +2,12 @@ import IPhoneUseRunnerSupport
 import Foundation
 import CoreImage
 
-// Only read-only preview probes may defer a timeout. Never use this policy for
+// Only read-only preview probes may defer a timeout or an in-probe display change. Never use this policy for
 // input validation, stream startup, or a refresh that has already stopped media.
 enum NativePreviewPoll {
     static func canDefer(_ error: Error, health: [String: Any]) -> Bool {
         guard let code = (error as? IPhoneUseError)?.code,
-            ["coredevice_timeout", "coredevice_initialization_timeout"].contains(code),
+            ["coredevice_timeout", "coredevice_initialization_timeout", "preview_geometry_conflict"].contains(code),
             health["healthy"] as? Bool == true
         else { return false }
         let snapshots = health["snapshots"] as? [String: Any] ?? [:]
@@ -53,7 +53,7 @@ final class NativePreviewOrientation {
         try SessionPaths.secureDirectory(directory)
         defer { try? FileManager.default.removeItem(at: directory) }
         let destination = directory.appendingPathComponent("screen.png")
-        _ = try cli.read(["device", "capture", "screenshot", "--destination", destination.path], timeout: 3)
+        _ = try cli.read(display.screenshotArguments(destination: destination), timeout: 3)
         let image = try ScreenImage(png: Data(contentsOf: destination))
         if image.image.width != Int(display.pixelWidth) || image.image.height != Int(display.pixelHeight) {
             halfTurnConflicts = 0

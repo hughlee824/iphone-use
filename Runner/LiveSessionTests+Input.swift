@@ -178,11 +178,14 @@ extension LiveSessionTests {
         guard screenGuard.context.matches(context) else {
             throw CommandError("screen_context_changed", requiresObservation: true)
         }
-        try event { XCUIDevice.shared.press(.home) }
+        try event { XCUIApplication(bundleIdentifier: "com.apple.springboard").activate() }
         // The next observation can be screenshot-only; never invent an App
-        // or SpringBoard element target from a Home press acknowledgement.
+        // or SpringBoard element target from a navigation acknowledgement.
         currentApp = nil; currentBundleID = nil
-        return ["kind": "home", "homePressCompleted": true, "homeScreenConfirmed": false]
+        return [
+            "kind": "home", "homeNavigationCompleted": true,
+            "navigationMethod": "activate_springboard", "homeScreenConfirmed": false
+        ]
     }
 
     @MainActor

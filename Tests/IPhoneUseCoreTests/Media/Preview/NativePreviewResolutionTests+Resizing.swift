@@ -13,13 +13,16 @@ extension NativePreviewResolutionTests {
                     pixels: buffer, nativeWidth: 48, nativeHeight: 96,
                     activeWidth: width, activeHeight: height), firstPacketAt: 1, completedAt: 2, timestamp: 1)
             for (rotation, quadrants) in [
-                ("rot0", [0, 1, 2, 3]), ("rot90", [2, 0, 3, 1]), ("rot270", [1, 3, 0, 2])
+                ("rot0", [0, 1, 2, 3]), ("rot90", [2, 0, 3, 1]),
+                ("rot180", [3, 2, 1, 0]), ("rot270", [1, 3, 0, 2])
             ] {
                 let data = try NativePreview.encode(frame, display: display(rotation), context: context)
                 let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
                 let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
-                XCTAssertEqual(image.width, rotation == "rot0" ? 48 : 96)
-                XCTAssertEqual(image.height, rotation == "rot0" ? 96 : 48)
+                let scale = min(Double(width) / 64, Double(height) / 128)
+                let short = Int(ceil(48 * scale)), long = Int(ceil(96 * scale))
+                XCTAssertEqual(image.width, ["rot0", "rot180"].contains(rotation) ? short : long)
+                XCTAssertEqual(image.height, ["rot0", "rot180"].contains(rotation) ? long : short)
                 var rgb = [UInt8](repeating: 0, count: image.width * image.height * 4)
                 try rgb.withUnsafeMutableBytes { bytes in
                     let output = try XCTUnwrap(

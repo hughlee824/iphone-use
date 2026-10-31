@@ -170,7 +170,7 @@ extension NativePreviewTests {
             let entered = expectation(description: "encoder started"), release = DispatchSemaphore(value: 0)
             let preview = try NativePreview(
                 port: 0,
-                encodeFrame: { _, _, _ in
+                encodeFrame: { _, _, _, _ in
                     entered.fulfill(); _ = release.wait(timeout: .now() + 5)
                     return .init(data: Data([0xff, 0xd8, 0xff, 0xd9]))
                 })

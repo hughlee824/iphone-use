@@ -1,11 +1,12 @@
 import Foundation
 import AppleNativeBridge
 
-// A display-only connection inside the existing device-lock owner. No
-// AppleDeviceBackend, second control session, HID preparation or XCTest input.
+// Display-only transport. The independent capture process owns it; it opens
+// neither HID nor XCTest and does not borrow a control session's cancellation.
 final class RunnerMediaConnection: RunnerRecordingConnection {
     private let previewOrientation = NativePreviewOrientation()
     private let cli: AppleDeviceCLI
+    private let previewOnly: Bool
     private let cancellation: NativeCancellation
     private var tunnel: ASPairedTunnel?
     private var transport: NativeTransport?
@@ -21,13 +22,15 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
     var previewReceiver: NativeRTPReceiver? { media?.recordingReceiver }
     var previewDisplay: NativeDisplay? { display }
 
-    private init(device: String, cancellation: NativeCancellation) {
+    private init(device: String, cancellation: NativeCancellation, previewOnly: Bool) {
+        self.previewOnly = previewOnly
         self.cancellation = cancellation
         cli = AppleDeviceCLI(device: device, cancellation: cancellation)
     }
 
-    static func open(device: String, cancellation: NativeCancellation) throws -> RunnerRecordingConnection {
-        let connection = RunnerMediaConnection(device: device, cancellation: cancellation)
+    static func open(device: String, cancellation: NativeCancellation, previewOnly: Bool = false) throws
+        -> RunnerRecordingConnection {
+        let connection = RunnerMediaConnection(device: device, cancellation: cancellation, previewOnly: previewOnly)
         do {
             try connection.prepare()
             return connection
@@ -54,7 +57,7 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
         guard let hardware = details["hardwareProperties"] as? [String: Any],
             hardware["reality"] as? String == "physical", let udid = hardware["udid"] as? String, udid == cli.device,
             let properties = details["deviceProperties"] as? [String: Any],
-            properties["developerModeStatus"] as? String == "enabled",
+            previewOnly || properties["developerModeStatus"] as? String == "enabled",
             ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 27,
             (properties["osVersionNumber"] as? String)?.hasPrefix("27.") == true,
             let connection = details["connectionProperties"] as? [String: Any],
@@ -65,11 +68,14 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
                 "native_recording_unavailable",
                 "Recording requires a paired physical iPhone with Developer Mode on macOS/iOS 27")
         }
-        guard try cli.read(["device", "info", "lockState"])["passcodeRequired"] as? Bool == false else {
-            throw IPhoneUseError("device_locked", "Unlock the iPhone before recording")
+        if !previewOnly {
+            guard try cli.read(["device", "info", "lockState"])["passcodeRequired"] as? Bool == false else {
+                throw IPhoneUseError("device_locked", "Unlock the iPhone before recording")
+            }
         }
         let display = try cli.display()
-        guard display.nativeRotation == "rot0", NativeVideoOrientation(rawValue: display.rotation) != nil else {
+        guard display.nativeRotation == "rot0",
+            ["rot0", "rot90", "rot180", "rot270"].contains(display.rotation) else {
             throw IPhoneUseError(
                 "native_recording_orientation_unsupported", "Need a verified native portrait display axis")
         }
@@ -93,10 +99,17 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
         }
         self.receiver = receiver
         try awaitClockRate(receiver)
-        let current = try NativeCaptureChecks.read(requireBacklight: false) { try self.cli.read($0) }.display
+        let current = try readPreviewDisplay()
         guard current.geometry == display.geometry else {
             throw IPhoneUseError("display_changed", "Display geometry changed while preparing video")
         }
+    }
+
+    private func readPreviewDisplay() throws -> NativeDisplay {
+        if previewOnly {
+            return try NativePreviewDisplay.read { try self.cli.read($0, timeout: 3) }
+        }
+        return try NativeCaptureChecks.read(requireBacklight: false) { try self.cli.read($0, timeout: 3) }.display
     }
 
     func verifyDisplay() throws {
@@ -112,8 +125,7 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
     }
 
     func previewNeedsRefresh() throws -> Bool {
-        let current = try NativeCaptureChecks.read(requireBacklight: false) { try self.cli.read($0, timeout: 3) }
-            .display
+        let current = try readPreviewDisplay()
         guard media?.health()["healthy"] as? Bool == true else {
             throw IPhoneUseError("native_media_unhealthy", "Preview media connection lost")
         }
@@ -130,10 +142,12 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
             previewRefreshReason = "display_metadata_changed"
             return true
         }
-        do { try media?.recordingReceiver?.snapshots?.rejectConflictingGeometry(current) } catch {
+        do { try media?.recordingReceiver?.snapshots?.rejectConflictingGeometry(
+            current, allowScaledCanvas: true) } catch {
             previewRefreshReason = "frame_geometry_conflict: \(error)"
             return true
         }
+        if previewOnly { return false } // Frame tags and CoreDevice; no screenshot or automation probe.
         let changed = try previewOrientation.needsRefresh(
             cli: cli, snapshots: media?.recordingReceiver?.snapshots, display: current)
         previewRefreshReason = changed ? "frame_rotation_conflict" : "none"
@@ -144,10 +158,31 @@ final class RunnerMediaConnection: RunnerRecordingConnection {
         try media.resynchronizeOrientation(
             mayReplace: true, check: { try self.cancellation.check() },
             readDisplay: {
-                try NativeCaptureChecks.read(requireBacklight: false) { try self.cli.read($0, timeout: 3) }.display
+                try self.readPreviewDisplay()
             })
         display = media.boundDisplay
         receiver = media.recordingReceiver
+    }
+
+    func preparePreviewValidation() throws {
+        let current = try readPreviewDisplay()
+        guard let display else { throw IPhoneUseError("preview_unavailable", "No bound display") }
+        self.display = try NativePreviewGeometry.revalidatedDisplay(
+            frame: previewReceiver?.snapshots?.previewFrame(includeReducedResolution: true),
+            bound: display, current: current)
+    }
+
+    // This read remains valid after close(): it uses CoreDevice, never the old
+    // stream or cached pixels. A failed read cannot authorize a new media start.
+    func previewCanResumeAfterUnlock() throws -> Bool {
+        do {
+            _ = try NativeCaptureChecks.read { try self.cli.read($0, timeout: 3) }
+            return true
+        } catch let error as IPhoneUseError where [
+            "device_locked", "capture_unavailable", "coredevice_timeout", "coredevice_initialization_timeout"
+        ].contains(error.code) {
+            return false
+        }
     }
 
     func close() -> [String: Any] {

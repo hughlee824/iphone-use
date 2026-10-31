@@ -3,6 +3,8 @@
 NS_ASSUME_NONNULL_BEGIN
 // Isolated XCTest runtime adapter. Missing capabilities fail closed.
 @interface RunnerAXBinding : NSObject
++ (nullable NSNumber *)displayIDOfObject:(id)object error:(NSError **)error
+    NS_SWIFT_NAME(displayID(of:));
 + (nullable NSNumber *)keyboardFocusOfElement:(NSObject *)element error:(NSError **)error
     NS_SWIFT_NAME(keyboardFocus(of:));
 + (nullable NSObject *)snapshotOfElement:(NSObject *)element error:(NSError **)error

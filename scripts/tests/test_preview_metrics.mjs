@@ -16,8 +16,19 @@ const catalog=JSON.parse(readFileSync(new URL('../../assets/preview/catalog.json
 
 function fixture(productType='iPhone13,3', navigator={language:'zh-CN'}, appearanceComparisonEnabled=true) {
   let clock = 0;
-  const elements = Object.fromEntries(['notice', 'placeholder', 'gestures', 'screen', 'state', 'diagnostics', 'metrics', 'device', 'stage', 'bezel', 'shell', 'hardware', 'cutout', 'speaker', 'device-name', 'connection', 'appearance-toggle', 'viewer', 'placeholder-label', 'diagnostics-label', 'identity'].map(id => [id, { dataset: {}, style: { setProperty(name,value) { this[name]=value; } }, clientWidth: 1000, clientHeight: id==='identity'?32:700, getBoundingClientRect() { return {left:0,right:0,top:0,bottom:0}; }, events: {}, addEventListener(name, fn) { this.events[name]=fn; }, setAttribute(name,value) { this[name]=value; }, removeAttribute(name) { delete this[name]; } }]));
-  const document = { documentElement:{}, events:{}, visibilityState: 'visible', getElementById: id => elements[id], addEventListener: (name, fn) => { document.events[name]=fn;if(name==='visibilitychange'){const previous=document.visibilityChanged;document.visibilityChanged=()=>{previous?.();fn();};} } };
+  const elements = Object.fromEntries(['fold-ambient-left','fold-ambient-right','fold-buttons','fold-skin-left','fold-skin-right','fold-skin-outer','fold-image-left','fold-image-right','fold-image-outer','fold-inside-left','fold-inside-right','fold-outer','fold-shade-left','fold-shade-right','fold-camera','fold-edge','fold', 'fold-left', 'fold-right', 'notice', 'placeholder', 'gestures', 'screen', 'state', 'diagnostics', 'metrics', 'device', 'stage', 'bezel', 'shell', 'hardware', 'cutout', 'speaker', 'device-name', 'connection', 'appearance-toggle', 'viewer', 'placeholder-label', 'diagnostics-label', 'identity'].map(id => [id, { dataset: {}, style: { setProperty(name,value) { this[name]=value; } }, clientWidth: 1000, clientHeight: id==='identity'?32:700, getBoundingClientRect() { return {left:0,right:0,top:0,bottom:0}; }, events: {}, addEventListener(name, fn) { this.events[name]=fn; }, setAttribute(name,value) { this[name]=value; }, removeAttribute(name) { delete this[name]; } }]));
+  function decorateNode(element) {
+    element.children=[];
+    element.append=(...nodes)=>element.children.push(...nodes);
+    element.replaceChildren=(...nodes)=>{element.children=[...nodes];};
+    element.querySelectorAll=()=>[];
+    element.cloneNode=()=>decorateNode({...element,style:{...element.style},dataset:{...element.dataset}});
+    return element;
+  }
+  for(const element of Object.values(elements))decorateNode(element);
+  elements.fold.hidden=true;
+  elements.fold.querySelectorAll=selector=>selector==='.body-shadow'?[elements['fold-ambient-left'],elements['fold-ambient-right']]:[];
+  const document = { createElement:()=>decorateNode({style:{},removeAttribute(){}}), documentElement:{}, events:{}, visibilityState: 'visible', getElementById: id => elements[id], addEventListener: (name, fn) => { document.events[name]=fn;if(name==='visibilitychange'){const previous=document.visibilityChanged;document.visibilityChanged=()=>{previous?.();fn();};} } };
   const motionPreference={matches:false,addEventListener(_,fn){this.change=fn;}};
   for(const element of Object.values(elements)){
     element.animations=[];
@@ -28,6 +39,7 @@ function fixture(productType='iPhone13,3', navigator={language:'zh-CN'}, appeara
   }
   let report;
   const context = vm.createContext({ document, navigator, URLSearchParams, location: { search: '?diagnostics=1' },
+    crypto:{randomUUID:()=> 'bd061b0b-ff64-4a3b-aac0-99294aa9ceee'},
     matchMedia:()=>motionPreference,DOMMatrixReadOnly:class {constructor(matrix){Object.assign(this,matrix);}},
     getComputedStyle:element=>({transform:element.renderedTransform||{a:1,b:0,f:0}}),
     ResizeObserver: class { observe() {} }, performance: { now: () => clock }, Date: { now: () => clock },
@@ -60,6 +72,26 @@ test('duplicate JPEGs do not inflate FPS and a terminal freeze remains visible',
   assert.equal(report.maxGapMs, 400);
   assert.equal(report.lastNewFrameAgeMs, 1000);
   assert.equal(report.fps, 2 * 1000 / 600);
+});
+
+test('resolution follows screen aperture and DPR with resize debounce and hidden release', () => {
+  const p=fixture();p.elements.screen.style.width='300px';p.elements.screen.style.height='600px';
+  p.run('performance.now=()=>0;globalThis.devicePixelRatio=1');
+  assert.match(p.run('resolutionRequest()'),/longEdge=600$/);
+  p.run('globalThis.devicePixelRatio=2;performance.now=()=>10');
+  assert.match(p.run('resolutionRequest()'),/longEdge=600$/);
+  p.run('performance.now=()=>170');
+  assert.match(p.run('resolutionRequest()'),/longEdge=1200$/);
+  p.visibility('hidden');assert.match(p.run('resolutionRequest()'),/longEdge=0$/);
+  p.visibility('visible');assert.match(p.run('resolutionRequest()'),/longEdge=1200$/);
+});
+
+test('small adaptive Duo frames retain their verified display classification', () => {
+  const p=fixture('iPhone19,4');
+  for(const edge of [200,300,500,1000]){
+    assert.equal(p.run(`duoFrame('iPhone19,4',Math.ceil(${edge}*1398/2034),${edge}).kind`),'outer');
+    assert.equal(p.run(`duoFrame('iPhone19,4',${edge},Math.ceil(${edge}*2006/2852)).kind`),'inner');
+  }
 });
 
 test('background visibility resets the window instead of reporting browser throttling as a stall', () => {
@@ -808,5 +840,275 @@ test('rotation keyframes fit the diagonal envelope in narrow and wide viewers', 
         assert.ok((geometry.fitWidth*sin+geometry.fitHeight*cos)*scale<=height-88+1e-7);
       }
     }
+  }
+});
+
+test('Duo handoff keeps its last measured aperture while clearing all old pixels', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+  p.layout(960,675,'rot90');
+  const before=[p.elements.device.style.width,p.elements.device.style.height];
+  p.run('clearStream("same-source:2")');
+  // Real HTMLImageElement loses its natural dimensions when src is removed.
+  p.elements.screen.naturalWidth=0;p.elements.screen.naturalHeight=0;
+  p.run('layout()');
+  assert.deepEqual([p.elements.device.style.width,p.elements.device.style.height],before);
+  assert.equal(p.elements.device.dataset.ready,'false');
+  assert.equal(p.elements.screen.src,undefined);
+  assert.equal(p.elements.screen.style.opacity,0);
+  assert.equal(p.elements.notice.hidden,false);
+  p.run('renderHealth({state:"transitioning",generation:"same-source:2",device:{productType:"iPhone19,4"}})');
+  assert.equal(p.elements.state.textContent,'正在切换屏幕…');
+  assert.equal(p.elements.connection.dataset.kind,'waiting');
+  assert.deepEqual([p.elements.device.style.width,p.elements.device.style.height],before);
+});
+
+for(const opening of [true,false])test(`Duo ${opening?'unfold':'fold'} waits for a decoded new aspect and uses a hinge, not a quarter-turn`, () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+  p.layout(opening?660:960,opening?960:675,opening?'rot0':'rot90');
+  p.run('foldOwner="owner";clearStream("owner:2")');
+  p.elements.screen.naturalWidth=0;p.elements.screen.naturalHeight=0;p.run('layout()');
+  assert.equal(p.elements.fold.hidden,true);
+  p.elements.device.dataset.ready='true';
+  p.layout(opening?960:660,opening?675:960,opening?'rot90':'rot0');
+  const turn=p.elements['fold-left'].animations.at(-1);
+  assert.equal(turn.options.duration,600);
+  assert.match(turn.frames[0].transform,new RegExp(`rotateY\\(${opening?'180':'0'}deg\\)`));
+  assert.match(turn.frames.at(-1).transform,new RegExp(`rotateY\\(${opening?'0':'180'}deg\\)`));
+  assert.ok(p.elements.device.animations.at(-1).frames.every(frame=>!('transform' in frame)));
+  assert.equal(p.elements.fold.hidden,false);
+  // Presentation faces use the current frame; the live video keeps its correct aperture.
+  const ratio=parseFloat(p.elements.screen.style.width)/parseFloat(p.elements.screen.style.height);
+  assert.ok(Math.abs(ratio-(opening?960/675:660/960))<.002);
+  p.elements.fold.animations.at(-1).onfinish();
+  assert.equal(p.elements.fold.hidden,true);
+});
+
+test('fold motion cancels on generation loss, reverses without stale completion and honors reduced motion', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';p.layout(660,960);
+  p.layout(960,675,'rot90');
+  const first=p.elements.fold.animations.at(-1);
+  p.layout(660,960);
+  assert.equal(first.playState,'idle');assert.equal(first.onfinish,null);
+  assert.equal(p.elements.fold.hidden,false);
+  p.run('clearStream()');
+  assert.equal(p.elements.fold.hidden,true);
+  p.motionPreference.matches=true;p.elements.device.dataset.ready='true';
+  p.layout(960,675,'rot90');
+  assert.equal(p.elements.fold.hidden,true);
+  assert.ok(p.elements.device.animations.at(-1).frames.every(frame=>!('transform' in frame)));
+});
+
+test('adaptive resolution updates keep the active hinge and its completion callback', () => {
+  for(const opening of [true,false]){
+    const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+    p.layout(opening?660:960,opening?960:676,opening?'rot0':'rot90');
+    p.layout(opening?960:660,opening?676:960,opening?'rot90':'rot0');
+    const hinge=p.elements['fold-left'].animations.at(-1),completion=p.elements.fold.animations.at(-1);
+    p.layout(opening?1154:794,opening?812:1154,opening?'rot90':'rot0');
+    assert.equal(hinge.playState,'running');
+    assert.equal(p.elements.fold.hidden,false);
+    assert.equal(p.report(1).motion.lastFold.count,1);
+    assert.equal(p.elements['fold-left'].animations.at(-1),hinge);
+    completion.onfinish();
+    assert.equal(p.report(2).motion.lastFold.state,'finished');
+    assert.equal(p.elements.fold.hidden,true);
+  }
+});
+
+test('a replacement owner cannot animate the old owner surface into a fresh connection', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';p.layout(660,960);
+  p.run('foldOwner="old";clearStream("new:1")');
+  p.elements.device.dataset.ready='true';p.layout(960,675,'rot90');
+  assert.equal(p.elements.fold.animations.length,0);
+});
+
+test('Duo frame matches both measured surfaces and rotates its asymmetric outer corners', () => {
+  const p=fixture('iPhone19,4');
+  assert.equal(p.elements.device.hidden,true,'unknown initial surface has no guessed phone outline');
+  for(const [w,h,rotation,kind] of [[1398,2034,'rot0','outer'],[2034,1398,'rot90','outer'],[2852,2006,'rot90','inner'],[2006,2852,'rot0','inner']]){
+    p.elements.device.dataset.ready='true';p.layout(w,h,rotation);
+    assert.equal(p.elements.device.hidden,false);
+    assert.equal(p.elements.device.dataset.appearance,'drawn');
+    assert.equal(p.elements.shell.dataset.duo,kind);
+    assert.equal(p.elements.hardware.dataset.duo,kind);
+    assert.equal(p.elements.cutout.hidden,kind==='inner');
+    assert.equal(p.elements.speaker.hidden,true);
+    assert.equal(p.elements.bezel.src,undefined,'restricted PNGs are never requested');
+    assert.equal(p.elements['device-name'].textContent,'iPhone Duo');
+    const corners=p.elements.screen.style.borderRadius.split(' ').map(parseFloat);
+    if(kind==='inner')assert.ok(corners.every(x=>x===corners[0]));
+    else if(rotation==='rot0')assert.ok(corners[0]<corners[1]&&corners[3]<corners[2]);
+    else assert.ok(corners[0]===corners[1]&&corners[1]<corners[2]);
+  }
+  assert.equal(p.run('duoFrame("iPhone99,4",1398,2034)'),null);
+});
+
+test('a transient non-Duo aspect cannot replace its validated frame or layout', async () => {
+  const p=decodingFixture();
+  p.run('connectedDevice={productType:"iPhone19,4"};objectURL="blob:old";');
+  p.run('let pendingDisplay=displayFrame({},"rot0");candidates[0].resolve();');
+  await assert.rejects(p.run('pendingDisplay'),/Display is settling/);
+  assert.equal(p.run('screen===originalScreen'),true);
+  assert.equal(p.run('objectURL'),'blob:old');
+  assert.equal(p.run('layoutCalls'),0);
+  assert.equal(p.run('revoked.join(",")'),'blob:1');
+  p.run('pendingDisplay=displayFrame({},"rot0");candidates[1].naturalWidth=660;candidates[1].naturalHeight=960;candidates[1].resolve();');
+  await p.run('pendingDisplay');
+  assert.equal(p.run('screen===candidates[1]'),true);
+});
+
+
+test('fold diagnostics distinguish hidden skips, reduced motion and completed transitions', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';p.layout(660,960);
+  p.visibility('hidden');p.layout(960,675,'rot90');
+  assert.equal(p.report(10).motion.lastFold.state,'skipped-hidden');
+  assert.equal(p.elements.fold.animations.length,0);
+  p.visibility('visible');p.motionPreference.matches=true;p.layout(660,960);
+  assert.equal(p.report(20).motion.lastFold.mode,'reduced-fade');
+  p.elements.device.animations.at(-1).onfinish();
+  assert.equal(p.report(30).motion.lastFold.state,'finished');
+  p.motionPreference.matches=false;p.layout(960,675,'rot90');
+  assert.equal(p.report(40).motion.lastFold.mode,'hinge');
+  p.run('clearStream()');
+  assert.equal(p.report(50).motion.lastFold.state,'cancelled');
+});
+
+
+test('fold faces use only the newly committed frame and clear it on generation loss', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+  p.elements.screen.src='blob:old-outer';p.layout(660,960);
+  p.run('foldOwner="owner";clearStream("owner:2")');
+  p.elements.screen.src='blob:new-inner';p.elements.device.dataset.ready='true';p.layout(960,675,'rot90');
+  assert.equal(p.elements['fold-image-left'].src,'blob:new-inner');
+  assert.equal(p.elements['fold-image-right'].src,'blob:new-inner');
+  assert.equal(p.elements['fold-image-outer'].src,undefined);
+  p.run('updateFoldFrame("blob:next-inner")');
+  assert.equal(p.elements['fold-image-left'].src,'blob:next-inner');
+  assert.equal(p.elements['fold-image-right'].src,'blob:next-inner');
+  assert.equal(p.elements['fold-image-outer'].src,undefined);
+  p.run('clearStream("owner:3")');
+  p.run('updateFoldFrame("blob:late-inner")');
+  for(const side of ['left','right','outer'])assert.equal(p.elements['fold-image-'+side].src,undefined);
+  p.elements.screen.src='blob:new-outer';p.elements.device.dataset.ready='true';p.layout(660,960);
+  assert.equal(p.elements['fold-image-outer'].src,'blob:new-outer');
+  assert.equal(p.elements['fold-image-left'].src,undefined);
+  assert.equal(p.elements['fold-image-right'].src,undefined);
+  p.visibility('hidden');
+  assert.equal(p.elements['fold-image-outer'].src,undefined);
+});
+
+test('fold textures advance only after successful same-generation decode', async () => {
+  const p=decodingFixture();
+  p.elements.fold.hidden=false;
+  p.elements['fold-image-left'].hidden=p.elements['fold-image-right'].hidden=false;
+  p.elements['fold-image-outer'].hidden=true;
+  p.run('updateFoldFrame("blob:shown");let pendingDisplay=displayFrame({},"rot0");');
+  assert.equal(p.elements['fold-image-left'].src,'blob:shown');
+  p.run('candidates[0].reject(Error("invalid"))');
+  await assert.rejects(p.run('pendingDisplay'),/invalid/);
+  assert.equal(p.elements['fold-image-left'].src,'blob:shown');
+  p.run('pendingDisplay=displayFrame({},"rot0");candidates[1].resolve()');
+  await p.run('pendingDisplay');
+  assert.equal(p.elements['fold-image-left'].src,'blob:2');
+  assert.equal(p.elements['fold-image-right'].src,'blob:2');
+  assert.equal(p.elements['fold-image-outer'].src,undefined);
+  p.run('pendingDisplay=displayFrame({},"rot0");clearStream("other:1");candidates[2].resolve()');
+  await p.run('pendingDisplay');
+  for(const side of ['left','right','outer'])assert.equal(p.elements['fold-image-'+side].src,undefined);
+});
+
+test('rounded sidewall stays within the closed front rim at the hinge and top', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';p.layout(660,960);
+  p.run('let closedBezel=foldBaseline');p.layout(960,676,'rot90');
+  const bounds=p.run(`(() => {
+    const half=foldBaseline.width/2,factor=foldBaseline.height/closedBezel.height;
+    const dx=(half-closedBezel.width*factor)/2,unit=closedBezel.width/436*factor;
+    return {right:half-(dx+10.3*unit),top:2.9*unit};
+  })()`);
+  for(const closing of [false,true]){
+    if(closing)p.layout(660,960);
+    const layers=p.elements['fold-edge'].children;
+    assert.ok(layers.length>2,'the rounded thickness is retained');
+    for(const layer of layers){
+      const right=parseFloat(layer.style.left)+parseFloat(layer.style.width);
+      assert.ok(right<=bounds.right+.001,'sidewall must not project past the closed hinge rim');
+      assert.ok(parseFloat(layer.style.top)>=bounds.top-.001,'sidewall must not expose a square top tab');
+      assert.ok(parseFloat(layer.style.borderRadius.split(' ')[1])>0,'hinge end is rounded');
+    }
+  }
+});
+
+test('clipped inner shadows do not leak behind a nearly closed exterior', () => {
+  const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';p.layout(660,960);
+  for(const opening of [true,false]){
+    p.layout(opening?960:660,opening?676:960,opening?'rot90':'rot0');
+    for(const side of ['left','right']){
+      const animation=p.elements['fold-ambient-'+side].animations.at(-1);
+      for(const frame of animation.frames){
+        const open=opening?frame.offset:1-frame.offset;
+        if(open<=.5)assert.equal(frame.opacity,0,'covered inside cannot cast a clipped rectangular shadow');
+      }
+      assert.equal(animation.frames[opening?animation.frames.length-1:0].opacity,1,
+        'fully open shadow must match the static bezel');
+    }
+  }
+});
+
+
+test('every supported Duo orientation pair keeps the hinge with correctly oriented faces', () => {
+  const rotations=['rot0','rot90','rot180','rot270'];
+  for(const outer of [0,1,3])for(const inner of [0,1,2,3])for(const opening of [true,false]){
+    const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+    function show(isInner){
+      const orientation=isInner?inner:outer,w=isInner?676:660,h=960;
+      p.layout(orientation%2?h:w,orientation%2?w:h,rotations[orientation]);
+    }
+    show(!opening);show(opening);
+    assert.equal(p.report(1).motion.lastFold.mode,'hinge');
+    assert.equal(p.elements.fold.hidden,false);
+    const turn=p.elements['fold-left'].animations.at(-1);
+    assert.match(turn.frames[0].transform,new RegExp(`rotateY\\(${opening?'180':'0'}deg\\)`));
+    assert.match(turn.frames.at(-1).transform,new RegExp(`rotateY\\(${opening?'0':'180'}deg\\)`));
+    const canonical=p.run('canonicalFoldGeometry(foldBaseline)');
+    assert.equal(canonical.width>canonical.height,opening);
+    assert.ok(canonical.aperture.x>=0&&canonical.aperture.y>=0);
+    const image=p.elements['fold-image-'+(opening?'left':'outer')];
+    assert.equal(image.style.transform,`rotate(${-canonical.turn}deg)`);
+    assert.equal(parseFloat(image.style.width),p.run('foldBaseline.aperture.width'));
+    // A pure rotation on one surface must never start a second fold.
+    const count=p.report(1).motion.lastFold.count;
+    show(opening);
+    assert.equal(p.report(2).motion.lastFold.count,count);
+  }
+});
+
+test('a real layout resize or rotation still cancels the obsolete hinge geometry', () => {
+  for(const resize of [true,false]){
+    const p=fixture('iPhone19,4');p.elements.device.dataset.ready='true';
+    p.layout(660,960);p.layout(960,676,'rot90');
+    const hinge=p.elements['fold-left'].animations.at(-1);
+    if(resize){p.elements.stage.clientWidth=420;p.run('layout()');}
+    else p.layout(676,960,'rot0');
+    assert.equal(hinge.playState,'idle');
+    assert.equal(p.elements.fold.hidden,true);
+    assert.equal(p.report(1).motion.lastFold.count,1);
+  }
+});
+
+
+test('Duo aperture follows the rotated asymmetric bezel in all four directions', () => {
+  for(const [width,height] of [[1398,2034],[2006,2852]])for(const rotation of ['rot0','rot90','rot180','rot270']){
+    const p=fixture('iPhone19,4'),sideways=['rot90','rot270'].includes(rotation);
+    p.elements.device.dataset.ready='true';p.layout(sideways?height:width,sideways?width:height,rotation);
+    const f=p.run(`duoFrame('iPhone19,4',${width},${height}).frame`);
+    const scale=parseFloat(p.elements.shell.style.fontSize);
+    const expected={
+      rot0:[f.screenX,f.screenY],
+      rot90:[f.canvasHeight-f.screenY-f.screenHeight,f.screenX],
+      rot180:[f.canvasWidth-f.screenX-f.screenWidth,f.canvasHeight-f.screenY-f.screenHeight],
+      rot270:[f.screenY,f.canvasWidth-f.screenX-f.screenWidth]
+    }[rotation];
+    assert.ok(Math.abs(parseFloat(p.elements.screen.style.left)/scale-expected[0])<1e-7,rotation);
+    assert.ok(Math.abs(parseFloat(p.elements.screen.style.top)/scale-expected[1])<1e-7,rotation);
   }
 });

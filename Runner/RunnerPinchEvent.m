@@ -8,7 +8,7 @@
 - (id)initForTouchAtPoint:(CGPoint)point offset:(double)offset;
 - (void)moveToPoint:(CGPoint)point atOffset:(double)offset;
 - (void)liftUpAtOffset:(double)offset;
-- (id)initWithName:(NSString *)name interfaceOrientation:(NSInteger)orientation;
+- (id)initWithName:(NSString *)name displayID:(NSUInteger)displayID interfaceOrientation:(NSInteger)orientation;
 - (void)addPointerEventPath:(id)path;
 + (id)sharedSession;
 - (id)synthesizeEvent:(id)record completion:(void (^)(BOOL, NSError *))completion;
@@ -36,28 +36,28 @@ static BOOL MethodMatches(Class cls, SEL selector, const char *encoding) {
     @catch (NSException *exception) { return 0; }
 }
 + (instancetype)prepareFrom:(CGPoint)left right:(CGPoint)right to:(CGPoint)endLeft rightEnd:(CGPoint)endRight
-                  duration:(NSTimeInterval)duration orientation:(NSInteger)orientation error:(NSError **)error {
+                  duration:(NSTimeInterval)duration orientation:(NSInteger)orientation displayID:(NSUInteger)displayID error:(NSError **)error {
     Class pathClass = NSClassFromString(@"XCPointerEventPath");
     Class recordClass = NSClassFromString(@"XCSynthesizedEventRecord");
     Class sessionClass = NSClassFromString(@"XCTRunnerDaemonSession");
     if (!MethodMatches(pathClass, @selector(initForTouchAtPoint:offset:), "@40@0:8{CGPoint=dd}16d32") ||
         !MethodMatches(pathClass, @selector(moveToPoint:atOffset:), "v40@0:8{CGPoint=dd}16d32") ||
         !MethodMatches(pathClass, @selector(liftUpAtOffset:), "v24@0:8d16") ||
-        !MethodMatches(recordClass, @selector(initWithName:interfaceOrientation:), "@32@0:8@16q24") ||
+        !MethodMatches(recordClass, @selector(initWithName:displayID:interfaceOrientation:), "@40@0:8@16Q24q32") ||
         !MethodMatches(recordClass, @selector(addPointerEventPath:), "v24@0:8@16") ||
         !MethodMatches(object_getClass(sessionClass), @selector(sharedSession), "@16@0:8") ||
         !MethodMatches(sessionClass, @selector(synthesizeEvent:completion:), "@32@0:8@16@?24")) {
         if (error) *error = Failure(@"Installed XCTest event synthesis runtime is incompatible");
         return nil;
     }
-    if (!isfinite(duration) || duration < 0.1 || duration > 5 || orientation < 1 || orientation > 4) {
+    if (!isfinite(duration) || duration < 0.1 || duration > 5 || orientation < 1 || orientation > 4 || displayID == 0) {
         if (error) *error = Failure(@"Invalid pinch duration or interface orientation");
         return nil;
     }
     @try {
         RunnerPinchEvent *event = [RunnerPinchEvent new];
         event.session = [sessionClass sharedSession];
-        event.record = [[recordClass alloc] initWithName:@"iphone-use.pinch" interfaceOrientation:orientation];
+        event.record = [[recordClass alloc] initWithName:@"iphone-use.pinch" displayID:displayID interfaceOrientation:orientation];
         if (!event.session || !event.record) {
             if (error) *error = Failure(@"XCTest session or event record unavailable");
             return nil;

@@ -36,8 +36,9 @@ struct RecordStop: ParsableCommand {
 struct Preview: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract:
-            "Open an experimental, read-only local browser preview using the session's owned video stream.")
+            "Start or stop independent read-only preview; no automation session or Runner is required.")
     @OptionGroup var options: SessionOptions
+    @Option(help: "Exact hardware UDID; use without --session for independent preview.") var device: String?
     @Flag(help: "Stop preview without stopping control or an active recording.") var stop = false
     @Flag(help: "Return the URL without opening a browser.") var noOpen = false
     @Option(
@@ -48,12 +49,19 @@ struct Preview: ParsableCommand {
             """
     ) var port: Int?
     mutating func run() throws {
-        let session = try options.requiredSession()
         try output {
+            guard device == nil || options.session == nil else {
+                throw ValidationError("Use --device or --session, not both")
+            }
             guard !stop || port == nil else { throw ValidationError("--port cannot be combined with --stop") }
             let fields = stop ? [:] : try PreviewConfiguration().startFields(port: port)
-            let response = try SessionClient.call(
-                session: session, operation: stop ? "preview-stop" : "preview-start", fields: fields)
+            let response: [String: Any]
+            if let device {
+                response = try independentPreview(device: device, stop: stop, port: port)
+            } else {
+                response = try SessionClient.call(session: options.requiredSession(),
+                    operation: stop ? "preview-stop" : "preview-start", fields: fields)
+            }
             if !stop, !noOpen, response["ok"] as? Bool == true,
                 let result = response["result"] as? [String: Any], let url = result["url"] as? String {
                 let open = Process(); open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -87,4 +95,10 @@ struct PreviewServiceStop: ParsableCommand {
         abstract: "Request viewer shutdown and confirm exit within a bounded wait; device sessions remain connected.")
     @Option(help: "Preview service port; defaults to config preview-port.") var port: Int?
     mutating func run() throws { try output { try stopPreviewService(port: port) } }
+}
+
+struct PreviewCaptureHostCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "_preview-capture", shouldDisplay: false)
+    @Option var device: String
+    mutating func run() throws { try runPreviewCapture(device: device) }
 }

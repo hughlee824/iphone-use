@@ -13,7 +13,7 @@ final class XCTestBackend: SessionBackend {
     private var runnerPID: Int?
     var deviceUDID: String?
     private let recordingCancellation = NativeCancellation()
-    var recording: RunnerNativeRecording?
+    var recording: PreviewCaptureClient?
     private var recordingPlatformSupported = false
     private let authorization: RunnerAuthorization
 
@@ -45,14 +45,7 @@ final class XCTestBackend: SessionBackend {
             && ((details["deviceProperties"] as? [String: Any])?["osVersionNumber"] as? String)?.hasPrefix(
                 "27.")
                 == true
-        recording = RunnerNativeRecording(
-            device: udid, root: paths.directory.appendingPathComponent("recordings"),
-            cancellation: recordingCancellation, previewDevice: NativePreviewDevice(details: details),
-            previewGeometry: { [weak self] in
-                guard let self else { throw IPhoneUseError("backend_unavailable", "Runner is not connected") }
-                return try Self.decodePreviewGeometry(self.request("preview-geometry", timeout: 3))
-            })
-        recording?.previewOwner = PreviewOwner(device: udid)
+        recording = try PreviewCaptureClient(device: udid)
         let transport = RunnerUSBTransport(device: udid)
         _ = try transport.requireUSB(deadline: ProcessInfo.processInfo.systemUptime + 5)
         self.transport = transport
@@ -63,7 +56,6 @@ final class XCTestBackend: SessionBackend {
                 launchEnvironment: environment)
         }
         self.runner = runner
-        recording?.connectionStatus = { [authorization] in authorization.snapshot() }
         try startConfiguredPreview()
         authorization.start(device: udid)
         try recordingCancellation.check()
@@ -79,26 +71,18 @@ final class XCTestBackend: SessionBackend {
         return try awaitRunner(runner, launched: launched)
     }
 
-    func startConfiguredPreview() throws {
-        do { try startPreviewBeforeRunner() } catch {
-            // Setup can still be verified using the physical screen. Never
-            // retry video, launch Runner twice, or swallow cancellation.
-            try recordingCancellation.check()
-            guard config.startupPreviewOptional == true else { throw error }
-            authorization.setPreviewError(String(describing: error))
-        }
-    }
-
-    private func startPreviewBeforeRunner() throws {
-        if let port = config.startupPreviewPort {
+    func startConfiguredPreview(start: ((NativePreviewOptions) throws -> [String: Any])? = nil) throws {
+        do {
+            guard let port = config.startupPreviewPort else { return }
             let options = NativePreviewOptions(
                 port: try PreviewConfiguration.validate(port: port), explicitPort: true)
-            let preview = try recording?.reservePreview(options: options)
+            let preview = try start?(options) ?? recording?.startPreview(options: options)
             if let url = preview?["url"] as? String { authorization.setPreviewURL(url) }
-            // CoreDevice video does not need XCTest authorization. Start it
-            // before launching Runner and keep this stream throughout startup.
-            let status = try recording?.startPreview(options: options, duringStartup: true)
-            if let error = status?["error"] as? String { authorization.setPreviewError(error) }
+        } catch {
+            // Optional viewer failure never prevents control startup. Do not
+            // replay media startup or hide control cancellation.
+            try recordingCancellation.check()
+            authorization.setPreviewError(String(describing: error))
         }
     }
 
@@ -139,10 +123,10 @@ final class XCTestBackend: SessionBackend {
         throw RunnerStartupDiagnostics.failure(processExited: false, authorization: authorization.snapshot())
     }
 
-    private func deviceInfo(_ kind: String) throws -> [String: Any] {
+    private func deviceInfo(_ kind: String, timeout: Int = 20) throws -> [String: Any] {
         try CoreDevice.read(
             ["device", "info", kind, "--device", config.device],
-            savingTo: paths.directory.appendingPathComponent("device-\(kind).json"))
+            savingTo: paths.directory.appendingPathComponent("device-\(kind).json"), timeout: timeout)
     }
 
     private func metadata() -> [String: Any] {
@@ -154,10 +138,21 @@ final class XCTestBackend: SessionBackend {
 
     func request(
         _ operation: String, fields: [String: Any] = [:], timeout: TimeInterval = 45,
+        expectedDisplay: NativeDisplay? = nil,
         onInputStarted: (() -> Void)? = nil
     ) throws -> [String: Any] {
         guard let transport else { throw IPhoneUseError("backend_unavailable", "Runner is not connected") }
         var request = fields
+        if !["ping", "shutdown"].contains(operation) {
+            let display = try NativeDisplay(deviceInfo("displays", timeout: expectedDisplay == nil ? 20 : 3))
+            try Self.validatePreviewDisplay(display, expected: expectedDisplay)
+            request["displayID"] = display.id
+            request["displayContext"] = try jsonObject(JSONEncoder().encode(display.context))
+            if operation == "act",
+                (fields["target"] as? [String: Any])?["displayID"] as? UInt64 != display.id {
+                throw IPhoneUseError("screen_context_changed", "Active display changed; observe before choosing input")
+            }
+        }
         request["id"] = UUID().uuidString
         request["token"] = token
         request["op"] = operation
@@ -176,6 +171,10 @@ final class XCTestBackend: SessionBackend {
         if let identity, response["sessionId"] as? String != identity {
             throw TransportError(
                 description: "Runner session changed; reconnect and observe", possiblySent: true)
+        }
+        if let expectedDisplay {
+            try Self.validatePreviewDisplay(
+                NativeDisplay(deviceInfo("displays", timeout: 3)), expected: expectedDisplay)
         }
         return response
     }

@@ -16,11 +16,11 @@ iphone-use --session "$SESSION" relaunch com.example.probe --observe
 
 | 操作 | Runner 执行及确认 | 不代表什么 |
 | --- | --- | --- |
-| Home | 检查已知 App/弹窗、当前观察和整屏守卫；调用一次 XCTest Home 按下/释放 | 不自动确认主屏幕，也不承诺目的画面静止 |
+| Home | 检查已知 App/弹窗、当前观察和整屏守卫；通过 XCTest 激活一次 SpringBoard | 不自动确认主屏幕，也不承诺目的画面静止 |
 | terminate | XCTest terminate 后等待 `.notRunning`；最多等待 5 秒状态确认 | 不清除磁盘数据，不证明 App 的扩展进程全部退出 |
 | relaunch | 先确认 `.notRunning`，再调用一次 launch 并等待 `.runningForeground` | 前台状态不代表网络加载、界面动画或业务页面已就绪 |
 
-Home 的 `homePressCompleted=true` 只确认输入调用完成，`homeScreenConfirmed=false` 始终保留。主屏幕时钟等内容可能持续变化；Home 使用专用回执，不等待主屏幕静止，也没有扩大像素差异阈值。其他动作保留各自的后置校验与稳定性事实。`--observe` 截图可能仍在转场中，需要时另行 observe，不重发 Home。
+Home 的 `homeNavigationCompleted=true` 只确认 SpringBoard 激活调用完成，`homeScreenConfirmed=false` 始终保留。主屏幕时钟等内容可能持续变化；Home 使用专用回执，不等待主屏幕静止，也没有扩大像素差异阈值。其他动作保留各自的后置校验与稳定性事实。`--observe` 截图可能仍在转场中，需要时另行 observe，不重发 Home。
 
 Home 后清除当前 App 目标，观察可为截图可用、`scope=unknown`、AX 不可用；这不是失去截图能力，也不会生成主屏幕元素引用。用明确 bundle 的 open 建立新的已知 App 上下文。当前 Home 首次输入仍要求一个已知 App 或弹窗，未扩展未知前台/主屏幕上的任意操作。
 

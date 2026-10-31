@@ -22,7 +22,7 @@ extension NativePreviewPage {
         ,diagnostics:'浏览器显示统计（最近 1800 帧）',
           unavailable:'连接不可用',firstFrame:'等待首帧',waiting:'已连接 · 等待新画面'\
         ,recovering:'正在恢复画面…',
-          live:'实时画面',disconnected:'预览已停止或连接断开',
+          live:'实时画面',switching:'正在切换屏幕…',disconnected:'预览已停止或连接断开',
           authorization:'在 iPhone 上授权',
           runnerStarting:'正在等待 iPhone 就绪',
           authorized:'授权已完成，正在连接',
@@ -36,7 +36,7 @@ extension NativePreviewPage {
          metrics (last 1,800 frames)',
           unavailable:'Connection unavailable',firstFrame:'Waiting for first frame',waiting:'Connected ·\
          Waiting for a new frame',recovering:'Recovering preview…',
-          live:'Live preview',disconnected:'Preview stopped or disconnected',
+          live:'Live preview',switching:'Switching screens…',disconnected:'Preview stopped or disconnected',
           authorization:'Authorize on your iPhone',
           runnerStarting:'Waiting for your iPhone',
           authorized:'Authorized · Connecting',
@@ -52,6 +52,7 @@ extension NativePreviewPage {
         let forceDrawing=false;
         let artworkAvailable=true, rotation='rot0', layoutKey='', lastFrameAt=0;
         let connectedDevice={}, profile=null, identityKey='';
+        let lastScreenSize=null;
         // Exact Apple model identifiers and display dimensions, checked against Xcode device profiles.
         // Opening geometry is calibrated per model; see docs/preview-hardware-calibration.md.
         // Materials, lens highlights and side keys remain independently authored approximations.

@@ -1,3 +1,4 @@
+import IPhoneUseRunnerSupport
 import Network
 import XCTest
 import Darwin
@@ -14,11 +15,19 @@ extension LiveSessionTests {
                 "lifetimeLimitSeconds": hostManaged ? NSNull() : 900, "observationVersion": 4,
                 "actionVersion": 13, "launchVersion": 2, "startupGuard": RunnerStartupGuard.facts(),
                 "frameStabilityVersion": 2, "screenGuardVersion": 1, "previewGeometryVersion": 2,
-                "inputProgressVersion": 1,
+                "inputProgressVersion": 1, "displaySelectionVersion": 1,
                 "applicationStateTimeoutSupported": stateTimeout != nil
             ]
         }
         if operation == "shutdown" { return ["stopped": true] }
+        guard let displayID = command["displayID"] as? UInt64, displayID > 0,
+            let rawContext = command["displayContext"] as? [String: Any],
+            let context = try? JSONDecoder().decode(
+                ScreenContext.self, from: JSONSerialization.data(withJSONObject: rawContext)), context.valid else {
+            throw CommandError("display_unavailable")
+        }
+        commandDisplayID = displayID
+        commandDisplayContext = context
         if operation == "preview-geometry" { return try previewGeometryCommand() }
         if operation == "launch" { return try launchCommand(command) }
         if operation == "app-lifecycle" { return try appLifecycle(command) }
@@ -41,7 +50,7 @@ extension LiveSessionTests {
 
         // Independent of CoreDevice's display/screenshot cache. No AX walk,
         // PNG encoding, input, or change to the selected application.
-        let image = XCUIScreen.main.screenshot().image
+        let image = try selectedScreen().screenshot().image
         guard let pixels = image.cgImage else { throw CommandError("preview_geometry_unavailable") }
         let orientation: Int
         switch image.imageOrientation {
@@ -78,15 +87,15 @@ extension LiveSessionTests {
         let alerts = springboard.alerts
         let count = alerts.count
         if count == 1 {
-            return observe(springboard, root: alerts.firstMatch, scope: "systemAlert")
+            return try observe(springboard, root: alerts.firstMatch, scope: "systemAlert")
         }
         if count == 0, let app = currentApp, app.state == .runningForeground {
             let localAlerts = app.alerts
-            if localAlerts.count == 1 { return observe(app, root: localAlerts.firstMatch, scope: "appAlert") }
-            if localAlerts.count == 0 { return observe(app, root: app, scope: "app") }
-            return observe(nil, root: nil, scope: "unknown", error: "multiple_app_alerts")
+            if localAlerts.count == 1 { return try observe(app, root: localAlerts.firstMatch, scope: "appAlert") }
+            if localAlerts.count == 0 { return try observe(app, root: app, scope: "app") }
+            return try observe(nil, root: nil, scope: "unknown", error: "multiple_app_alerts")
         }
-        return observe(
+        return try observe(
             nil, root: nil, scope: "unknown",
             error: count > 1 ? "multiple_system_alerts" : "foreground_app_unknown")
     }
