@@ -84,6 +84,19 @@ struct NativeDisplay: Equatable {
     }
 
     private static func selectedDisplay(_ displays: [[String: Any]]) throws -> [String: Any] {
+        // Older phones add a dormant Wireless display when media capture starts,
+        // without activity flags. It is not a second physical touch screen.
+        if displays.count > 1, displays.allSatisfy({ $0["active"] == nil }) {
+            let integrated = displays.filter { ($0["type"] as? [String: Any])?["integrated"] != nil }
+            let dormantWireless = displays.filter {
+                ($0["type"] as? [String: Any])?["wireless"] != nil
+                    && $0["primary"] as? Bool == false && $0["backlightState"] as? String == "off"
+            }
+            if integrated.count == 1, integrated[0]["primary"] as? Bool == true,
+                integrated.count + dormantWireless.count == displays.count {
+                return integrated[0]
+            }
+        }
         // A foldable's primary display can remain the closed outer screen.
         // Never choose arbitrarily when multiple surfaces are active or changing.
         if displays.count > 1 || displays.contains(where: { $0["active"] != nil }) {

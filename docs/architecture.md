@@ -57,7 +57,7 @@ The CLI's optional action `--observe` composes two existing host requests and re
 
 ## Display identity
 
-CoreDevice's single active display is authoritative on multi-display devices; `primary` can name an inactive outer screen. Ambiguous or incomplete activity fails closed. Screenshot capture binds the display's unique identifier, while Runner screenshots and coordinate windows match its numeric display ID. Runner normalizes screenshot orientation before image comparison and uses the selected display's screen-point bounds. A display change invalidates prior input targets.
+CoreDevice's single active display is authoritative on multi-display devices; `primary` can name an inactive outer screen. Ambiguous or incomplete activity fails closed. Older single-screen inventories without activity flags may include dormant wireless displays created by media capture: only one explicitly integrated primary display plus explicitly non-primary wireless displays with backlight off is accepted. Screenshot capture binds the display's unique identifier, while Runner screenshots and coordinate windows match its numeric display ID. Runner normalizes screenshot orientation before image comparison and uses the selected display's screen-point bounds. A display change invalidates prior input targets.
 
 CLI and Runner require matching `displaySelectionVersion=1` support. Startup and explicit Home navigation activate SpringBoard through XCTest; bootstrap still requires XCTest's real background notification. Neither an acknowledged button event nor a successful navigation call proves the destination screen.
 
