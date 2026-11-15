@@ -53,8 +53,8 @@ iphone-use --session "$SESSION" inspect o2 --offset 20
 
 这些是可调整的工程默认值，沿用已确认的产品语义，不代表用户逐项指定了数值。
 
-- 默认观察先按当前呈现层级和视口精简，不再按 60 行截取树的前缀。Runner 维持显式非模态采集，宿主完整保存系统返回的节点。宿主按屏幕与窗口、滚动容器的交集省略视口外节点，并尊重来源明确返回的 `visible=false`。这些宿主展示过滤掉的已采集节点仍可 inspect，系统未返回的节点不能通过 inspect 补取。
-- `presentation=viewport` 标明这是展示投影；`hierarchy=modal_filtered` 表示来源明确采用模态过滤，当前非模态 Runner 或未知来源标记 `hierarchy=unknown`，不根据焦点、同名控件或兄弟顺序猜遮挡。`omitted_nodes` 是宿主展示过滤数量，不是源采集缺失。模态过滤和边界仍不能描述所有透明覆盖、自绘内容或像素遮挡，最终可见内容以截图为准。
+- 默认观察先按当前呈现层级和视口精简，不再按 60 行截取树的前缀。Runner 单次采集开启系统模态视图过滤，观察与动作前校验使用同一规则；完整保存系统返回的节点，不额外采集被模态排除的背景树。宿主按屏幕与窗口、滚动容器的交集省略视口外节点，并尊重来源明确返回的 `visible=false`。这些宿主展示过滤掉的已采集节点仍可 inspect，系统未返回的节点不能通过 inspect 补取。
+- `presentation=viewport` 标明这是展示投影；`hierarchy=modal_filtered` 表示来源明确采用模态过滤，旧 Runner 或未知来源标记 `hierarchy=unknown`，不根据焦点、同名控件或兄弟顺序猜遮挡。`omitted_nodes` 是宿主展示过滤数量，不是源采集缺失。模态过滤和边界仍不能描述所有透明覆盖、自绘内容或像素遮挡，最终可见内容以截图为准。
 - 默认观察完整返回精简后的内容，不再按 8 KiB 或单属性 160 字符截断。仅保留 128 KiB 编码响应保护预算（为宿主响应信封预留 4 KiB），超出后交付完整文本文件和缓存读取入口，不删除节点或属性；该预算不作为可见性的判据。
 - 省略无内容、无状态、无 identifier 的普通容器，折叠重复 WebView 包裹与可确认重复的普通容器表示。保留控件、文字、原始 `ax_value`、禁用状态、命名分组；同名控件不合并，有 identifier 时显示以便区分。
 - 精简正文省略未知状态，不逐行或在每次响应头部重复 `enabled=unknown` / `keyboard_focus=unknown`。缺失属性表示未知，不表示 true、false 或可操作；该约定写在 CLI `observe --help` 和 agent 工具说明中。已知 enabled 输出 `enabled=true` / `disabled`，已知焦点输出 `keyboard_focus=true/false`。

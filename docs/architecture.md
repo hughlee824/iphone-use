@@ -179,7 +179,7 @@ See [installation](install.md), [onboarding](onboarding.md), and [release toolin
 
 ## Runner 路径定位与完整 AX 采集
 
-`observationVersion=4` 通过 `snapshotWithParameters:error:` 显式请求 `snapshotKeyHonorModalViews=false` 的标准属性快照，不读取查询对象缓存的根快照。每次观察和动作校验都重新请求。导出不再固定截断为 200 个节点；宿主保存返回树的全部节点，展示按视口精简，不再设置 60 行上限；精简正文与属性完整返回，异常超大结果通过完整文件和同一缓存分段读取，`inspect` 使用相同交付机制并保留节点分页，详见[观察输出](observations.md#异常超大文本)。既有传输大小与时间限制继续生效，超限明确失败，不静默返回部分树。App 未向 XCTest 暴露的节点无法凭此补齐；非模态采集也不代表所有节点可见或可操作，执行前仍检查上下文、enabled，并按动作检查 hittable 或键盘焦点。
+`observationVersion=4` 通过 `snapshotWithParameters:error:` 显式请求 `snapshotKeyHonorModalViews=true` 的标准属性快照，不读取查询对象缓存的根快照。每次观察和动作校验都重新请求。导出不再固定截断为 200 个节点；宿主保存模态过滤后返回树的全部节点，展示按视口精简，不再设置 60 行上限；精简正文与属性完整返回，异常超大结果通过完整文件和同一缓存分段读取，`inspect` 使用相同交付机制并保留节点分页，详见[观察输出](observations.md#异常超大文本)。既有传输大小与时间限制继续生效，超限明确失败，不静默返回部分树。App 未向 XCTest 暴露的节点无法凭此补齐；模态过滤也不代表所有节点可见或可操作，执行前仍检查上下文、enabled，并按动作检查 hittable 或键盘焦点。
 
 `actionVersion=13` 的元素动作沿新快照的祖先身份链解析；同一父节点内允许唯一身份改变同级序号。绑定后重新读取元素及根快照验证，拒绝替换、跨父节点移动或歧义。祖先 label/value/frame 不再作为不变量。键盘输入检查真实 `hasKeyboardFocus`；只有需要触摸的动作检查 hittable。坐标动作仍走独立画面保护路径。
 
