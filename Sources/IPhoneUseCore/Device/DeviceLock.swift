@@ -1,7 +1,8 @@
 import Foundation
 import Darwin
 
-// One host owns one device. The kernel releases this lock even if the host crashes.
+// One session owns one device. An explicitly delegated AX helper can extend that ownership
+// beyond host death; the kernel releases the lock after the last duplicate closes.
 // Keep the inode: unlinking a lock file can let two hosts lock different inodes.
 final class DeviceLock {
     private let descriptor: Int32
@@ -19,6 +20,12 @@ final class DeviceLock {
         }
     }
 
+    func duplicate() throws -> FileHandle {
+        let copy = fcntl(descriptor, F_DUPFD_CLOEXEC, 3)
+        guard copy >= 0 else { throw IPhoneUseError("device_lock_failed", "Cannot delegate device ownership") }
+        return FileHandle(fileDescriptor: copy, closeOnDealloc: true)
+    }
+
     deinit { Darwin.close(descriptor) }
 }
 
@@ -26,8 +33,10 @@ final class DeviceLock {
 // overrides cannot let separate sessions control the same device.
 final class SessionDeviceLock {
     private let locks: [DeviceLock]
+    private let device: String
 
     init(root: URL, device: String) throws {
+        self.device = device
         let defaultRoot = SessionPaths.defaultRoot
         try SessionPaths.secureDirectory(defaultRoot)
         var held = [try DeviceLock(root: defaultRoot, device: device)]
@@ -36,4 +45,11 @@ final class SessionDeviceLock {
         }
         locks = held
     }
+    func inheritedLease(for device: String) throws -> FileHandle {
+        guard device == self.device else {
+            throw IPhoneUseError("ax_automation_owner_unavailable", "Cannot delegate another device's control lock")
+        }
+        return try locks[0].duplicate()
+    }
+
 }

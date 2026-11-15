@@ -33,7 +33,7 @@ Start with standard for screenshot-based operation without Runner setup. Choose 
 
 ## Why iPhone-use?
 
-- **See the screen and its structure.** Both modes return screenshots; Runner and standard AXP observations also provide available AX elements. Expand or search its cached snapshots with `inspect`.
+- **See the screen and its structure.** Both modes return screenshots; Runner and standard AXP observations also provide available AX elements. Expand or search its cached snapshots with `inspect`. Standard connect attempts to enable device-wide AX automation exposure; cleanup attempts an explicit disable and reports whether it was acknowledged. See [lifecycle and cleanup limits](docs/standard-ax.md#session-owned-automation-enhancement).
 - **Act on real apps.** Discover installed apps, bring them to the foreground, tap, swipe, drag, edit text, and send editing keys.
 - **Reuse the device session.** Independent CLI calls share one Mac host and the selected control connection. `connect` manages startup; `disconnect` or idle expiry releases the session.
 - **Know what happened.** Actions distinguish `completed`, `not_dispatched`, and `unknown`. Tap and swipe check the screen before dispatch; input actions check frame stability afterward.

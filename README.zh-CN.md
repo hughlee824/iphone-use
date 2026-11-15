@@ -33,7 +33,7 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 ## 为什么选择 iPhone-use？
 
-- **同时观察画面与界面结构。** 两种模式都返回截图；Runner 和 standard AXP 提供可用 AX 元素，可用 `inspect` 展开或搜索缓存快照。
+- **同时观察画面与界面结构。** 两种模式都返回截图；Runner 和 standard AXP 提供可用 AX 元素，可用 `inspect` 展开或搜索缓存快照。standard 连接时尝试启用设备级 AX 自动化暴露；清理时尝试显式关闭，并报告是否获确认。见[生命周期与清理边界](docs/standard-ax.md#session-owned-automation-enhancement)。
 - **操作真实 App。** 发现已安装 App、切换前台、点击、滑动、拖动、编辑文本，以及发送 Return。
 - **跨命令复用设备会话。** 独立 CLI 调用共享同一个 Mac 宿主及所选控制连接。`connect` 管理启动，`disconnect` 或空闲到期释放会话。
 - **明确动作执行状态。** 区分 `completed`、`not_dispatched` 和 `unknown`。点击与滑动在派发前校验画面，输入动作在执行后检测帧稳定。

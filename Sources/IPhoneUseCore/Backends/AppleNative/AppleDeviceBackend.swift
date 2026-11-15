@@ -11,6 +11,7 @@ final class AppleDeviceBackend: SessionBackend {
     var cli: AppleDeviceCLI?
     let axpReader: AXPReader?
     private var deviceLock: SessionDeviceLock?
+    var axAutomation: AXAutomation?
     var pasteboardTransport: NativeTransport?
     var pasteboard: NativeTextPasteboard?
     var pasteboardError: String?
@@ -78,6 +79,11 @@ final class AppleDeviceBackend: SessionBackend {
             try input.prepare(displayUniqueID: display.uniqueID)
             hid = input
         } catch { try recordStartupFailure(error) }
+        if axpReader != nil {
+            let automation = AXAutomation(device: udid, ownership: deviceLock)
+            axAutomation = automation
+            automation.start(cancelled: { self.cancellation.isCancelled })
+        }
         prepareObservations(hardware: hardware)
         return try status()
     }
@@ -126,6 +132,7 @@ final class AppleDeviceBackend: SessionBackend {
             "pressKeys": NativePressKey.allCases.map(\.rawValue),
             "pasteboard": pasteboard?.status ?? ["restorePending": false], "sessionClosing": closing,
             "hidState": hidState?.rawValue ?? "unprepared", "runnerStarted": false,
+            "axAutomation": axAutomation?.status ?? ["state": "not_started", "cleanupPending": false],
             "serviceTransport": config.nativeEndpointInventory == nil
                 ? "apple-coredevice-service-socket" : "apple-paired-tunnel",
             "mediaOwnershipPolicy": "independent_preview_capture",
@@ -201,6 +208,8 @@ final class AppleDeviceBackend: SessionBackend {
         result["tunnelReleaseAcknowledged"] =
             tunnel?.close() ?? (cleanupFacts["tunnelReleaseAcknowledged"] as? Bool ?? true)
         tunnel = nil
+        let automation = axAutomation?.close() ?? ["required": false, "acknowledged": true]
+        result["axAutomation"] = automation
         deviceLock = nil
         result["connectionsClosed"] = true
         result["shutdownAcknowledged"] =
@@ -210,6 +219,7 @@ final class AppleDeviceBackend: SessionBackend {
             && result["pasteboardRestoreAcknowledged"] as? Bool == true
             && result["recordingCleanupAcknowledged"] as? Bool == true
             && observations["released"] as? Bool == true
+            && automation["acknowledged"] as? Bool == true
         result["backendStopped"] = true
         cleanupFacts = result
         return result

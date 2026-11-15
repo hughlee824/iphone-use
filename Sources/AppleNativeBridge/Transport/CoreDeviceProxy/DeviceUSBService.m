@@ -1,4 +1,5 @@
 #import "../NativeServiceFailure.h"
+#import "../DeviceLockdown.h"
 #import "DeviceUSBService.h"
 #import "CoreDeviceTunnel.h"
 #import "../NativeTiming.h"
@@ -14,57 +15,22 @@
 - (instancetype)initWithUDID:(NSString *)udid {
     if (!(self = [super init])) return nil;
     _socket = -1;
-    NSTimeInterval mark = NSProcessInfo.processInfo.systemUptime;
-    void *library = dlopen("/Library/Apple/System/Library/PrivateFrameworks/MobileDevice.framework/MobileDevice", RTLD_NOW | RTLD_LOCAL);
-    if (!library) ASDeviceTransportFail(@"Device USB runtime unavailable");
-    CFArrayRef (*devices)(void) = dlsym(library, "AMDCreateDeviceList");
-    CFStringRef (*identifier)(CFTypeRef) = dlsym(library, "AMDeviceCopyDeviceIdentifier");
-    int (*interface)(CFTypeRef) = dlsym(library, "AMDeviceGetInterfaceType");
-    int (*connect)(CFTypeRef) = dlsym(library, "AMDeviceConnect");
-    int (*paired)(CFTypeRef) = dlsym(library, "AMDeviceIsPaired");
-    int (*validate)(CFTypeRef) = dlsym(library, "AMDeviceValidatePairing");
-    int (*start)(CFTypeRef) = dlsym(library, "AMDeviceStartSession");
-    int (*stop)(CFTypeRef) = dlsym(library, "AMDeviceStopSession");
-    int (*disconnect)(CFTypeRef) = dlsym(library, "AMDeviceDisconnect");
-    int (*service)(CFTypeRef, CFStringRef, CFDictionaryRef, CFTypeRef *) = dlsym(library, "AMDeviceSecureStartService");
-    int (*getSocket)(CFTypeRef) = dlsym(library, "AMDServiceConnectionGetSocket");
-    _receive = dlsym(library, "AMDServiceConnectionReceive");
-    _send = dlsym(library, "AMDServiceConnectionSend");
-    _invalidate = dlsym(library, "AMDServiceConnectionInvalidate");
-    if (!library || !devices || !identifier || !interface || !connect || !paired || !validate || !start
-        || !stop || !disconnect || !service || !getSocket || !_receive || !_send || !_invalidate)
-        ASDeviceTransportFail(@"Device USB runtime unavailable");
-    mark = ASNativeTimingMark(@"usb.framework_symbols", mark);
-    NSArray *list = CFBridgingRelease(devices());
-    id selected = nil;
-    for (id device in list) {
-        NSString *serial = CFBridgingRelease(identifier((__bridge CFTypeRef)device));
-        if ([serial isEqual:udid] && interface((__bridge CFTypeRef)device) == 1) {
-            if (selected) ASDeviceTransportFail(@"Ambiguous USB device");
-            selected = device;
-        }
-    }
-    if (!selected) ASNativeConnectionFail(@"Selected USB device unavailable");
-    mark = ASNativeTimingMark(@"usb.discovery", mark);
-    CFTypeRef device = (__bridge CFTypeRef)selected;
-    if (connect(device)) ASNativeConnectionFail(@"USB lockdown connection failed");
-    mark = ASNativeTimingMark(@"usb.lockdown_connect", mark);
-    BOOL session = NO;
-    @try {
-        if (!paired(device) || validate(device) || start(device)) ASDeviceTransportFail(@"Existing USB pairing unavailable");
-        session = YES;
-        mark = ASNativeTimingMark(@"usb.validate_start_session", mark);
-        if (service(device, CFSTR("com.apple.internal.devicecompute.CoreDeviceProxy"), NULL, &_channel) || !_channel)
+    ASWithLockdownDevice(udid, ^(CFTypeRef device, void *library) {
+        int (*service)(CFTypeRef, CFStringRef, CFDictionaryRef, CFTypeRef *) = dlsym(library, "AMDeviceSecureStartService");
+        int (*getSocket)(CFTypeRef) = dlsym(library, "AMDServiceConnectionGetSocket");
+        self->_receive = dlsym(library, "AMDServiceConnectionReceive");
+        self->_send = dlsym(library, "AMDServiceConnectionSend");
+        self->_invalidate = dlsym(library, "AMDServiceConnectionInvalidate");
+        if (!service || !getSocket || !self->_receive || !self->_send || !self->_invalidate)
+            ASDeviceTransportFail(@"Device USB runtime unavailable");
+        NSTimeInterval mark = NSProcessInfo.processInfo.systemUptime;
+        if (service(device, CFSTR("com.apple.internal.devicecompute.CoreDeviceProxy"), NULL, &self->_channel) || !self->_channel)
             ASDeviceTransportFail(@"CoreDeviceProxy unavailable");
-        mark = ASNativeTimingMark(@"usb.start_proxy_service", mark);
-        _socket = getSocket(_channel);
-        if (_socket < 0) ASDeviceTransportFail(@"CoreDeviceProxy descriptor unavailable");
-        int yes = 1; setsockopt(_socket, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
-    } @finally {
-        if (session) stop(device);
-        disconnect(device);
-        ASNativeTimingMark(@"usb.session_cleanup", mark);
-    }
+        ASNativeTimingMark(@"usb.start_proxy_service", mark);
+        self->_socket = getSocket(self->_channel);
+        if (self->_socket < 0) ASDeviceTransportFail(@"CoreDeviceProxy descriptor unavailable");
+        int yes = 1; setsockopt(self->_socket, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+    });
     return self;
 }
 - (NSData *)receive {

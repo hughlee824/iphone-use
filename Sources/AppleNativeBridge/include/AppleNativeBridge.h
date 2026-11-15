@@ -54,3 +54,5 @@ FOUNDATION_EXPORT NSDictionary * _Nullable ASAXDisplayGeometry(NSDictionary *inf
 NS_ASSUME_NONNULL_END
 
 FOUNDATION_EXPORT BOOL ASRunObservationWorker(NSString * _Nonnull device, NSString * _Nonnull kind, NSString * _Nonnull generation, NSError * _Nullable * _Nullable error);
+// Fixed automation preference only; isolated helper owns the write deadline and notification.
+FOUNDATION_EXPORT NSDictionary * _Nonnull ASSetAXAutomation(NSString * _Nonnull udid, BOOL enabled);
