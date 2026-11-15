@@ -12,6 +12,8 @@ final class AppleCaptureAttempt {
     var timings: [String: Double] = [:]
     let diagnostics = NativeCaptureDiagnostics()
     var phase = "checksBefore"
+    var captureSource = "coredevice_screenshot"
+    var screenshotLease: [String: Any] = [:]
 
     init(cli: AppleDeviceCLI, generation: String, budget: NativeCaptureBudget?) {
         self.cli = cli
@@ -48,10 +50,7 @@ final class AppleCaptureAttempt {
             // the only source, including after media recovery or screenshot failure.
             let geometry = try timed("displayGeometry") { try validateDisplay(before, requestedAt) }
             try budget?.beginValidation()
-            _ = try timed("screenshot") {
-                try read(before.screenshotArguments(destination: destination), phase: "screenshot")
-            }
-            let png = try timed("readPNG") { try Data(contentsOf: destination) }
+            let png = try pixelData(before, destination: destination)
             let fingerprint = try timed("appleImageValidation") { try validate(png, display: before) }
             let final = try timed("checksAfter") {
                 try NativeCaptureChecks.read { try self.read($0, phase: "checksAfter") }
@@ -81,13 +80,58 @@ final class AppleCaptureAttempt {
                 diagnostics: ["capture": facts])
         }
     }
+    private func pixelData(_ before: NativeDisplay, destination: URL) throws -> Data {
+    let png: Data
+    if let native = cli.nativeScreenshot {
+        do {
+            let frame = try timed("screenshot") {
+                try native.capture(cancelled: { self.cli.cancellation.isCancelled
+                    || self.budget.map { ProcessInfo.processInfo.systemUptime >= $0.deadline } == true })
+            }
+            guard before == frame.display else {
+                throw IPhoneUseError(
+                    "capture_context_changed", "Display changed during native screenshot acquisition")
+            }
+            png = frame.png; captureSource = "instruments_screenshot"; screenshotLease = frame.lease
+        } catch let error as IPhoneUseError where Self.needsDisplaySelection(error) {
+            png = try coreDevicePNG(before, destination: destination)
+        }
+    } else { png = try coreDevicePNG(before, destination: destination) }
+        return png
+    }
+    static func needsDisplaySelection(_ error: IPhoneUseError) -> Bool {
+        ["native_screenshot_display_unsupported", "native_screenshot_orientation_unsupported"].contains(error.code)
+    }
+    private func coreDevicePNG(_ display: NativeDisplay, destination: URL) throws -> Data {
+        _ = try timed("screenshot") {
+            try read(display.screenshotArguments(destination: destination), phase: "screenshot")
+        }
+        return try timed("readPNG") { try Data(contentsOf: destination) }
+    }
+    func nativeObservation() throws -> CapturedObservation {
+        guard let native = cli.nativeScreenshot else {
+            throw IPhoneUseError("capture_unavailable", "Native screenshot unavailable")
+        }
+        try cli.cancellation.check(); try budget?.check()
+        let frame = try timed("screenshotAndDisplay") {
+            try native.capture(cancelled: { self.cli.cancellation.isCancelled
+                || self.budget.map { ProcessInfo.processInfo.systemUptime >= $0.deadline } == true })
+        }
+        let fingerprint = try timed("appleImageValidation") { try validate(frame.png, display: frame.display) }
+        try cli.cancellation.check(); try budget?.check()
+        captureSource = "instruments_screenshot"; screenshotLease = frame.lease
+        timings["total"] = (ProcessInfo.processInfo.systemUptime - monotonic) * 1000
+        return try captured(png: frame.png, fingerprint: fingerprint, display: frame.display,
+                            geometry: ["verification": "native_png_and_current_display_metadata"])
+    }
+
     func validate(_ png: Data, display before: NativeDisplay) throws -> FrameFingerprint {
         let fingerprint = try FrameFingerprint(png: png)
         guard fingerprint.width == Int(before.pixelWidth), fingerprint.height == Int(before.pixelHeight) else {
             throw IPhoneUseError(
                 "native_screenshot_geometry_conflict", "Screenshot dimensions disagree with the current display")
         }
-        let image = try ScreenImage(png: png)
+        let image = try fingerprint.normalizedImage()
         let samples = try image.rgb(rect: before.screen, screen: before.screen, columns: 32, rows: 64)
         guard samples.contains(where: { $0 > 8 }) else {
             throw IPhoneUseError("capture_unavailable", "Screenshot is black or unavailable")
@@ -95,13 +139,14 @@ final class AppleCaptureAttempt {
         return fingerprint
     }
 
-    private func captured(
+    func captured(
         png: Data, fingerprint: FrameFingerprint, display after: NativeDisplay, geometry: [String: Any]
     ) throws -> CapturedObservation {
         return CapturedObservation(
             nodes: [],
             metadata: [
-                "captureSource": "coredevice_screenshot", "captureSourcePolicy": cli.captureSourcePolicy,
+                "captureSource": captureSource, "screenshotConnectionLease": screenshotLease,
+                "captureSourcePolicy": cli.captureSourcePolicy,
                 "captureTimingsMs": timings, "captureCommands": diagnostics.commands, "displayGeometry": geometry,
                 "backend": "apple-native", "deviceID": cli.device, "sessionGeneration": generation,
                 "captureID": UUID().uuidString, "captureStartedAt": started,

@@ -9,7 +9,8 @@ struct AXNode {
 
     var label: String { attributes["label"] as? String ?? "" }
     var identifier: String { attributes["identifier"] as? String ?? "" }
-    var enabled: Bool { attributes["enabled"] as? Bool ?? true }
+    // Missing source state is unknown, never an implicit permission to act.
+    var enabled: Bool? { attributes["enabled"] as? Bool }
     var value: Any? {
         guard let value = attributes["value"], !(value is NSNull), (value as? String) != "" else {
             return nil
@@ -24,6 +25,8 @@ struct CapturedObservation {
     let nodes: [AXNode]
     let metadata: [String: Any]
     let screenshot: Data
+    // Historical comparison input only; never a current screenshot or action target.
+    var axComparisonScreenshot: Data?
 }
 
 struct ObservationReference {
@@ -59,6 +62,8 @@ final class ObservationCache {
     }
     let directory: URL
     var entries: [Entry] = []
+    var textOutputs: [String: [CachedAXText]] = [:]
+    var nextTextOutputID = 1
     private var nextID = 1
     private(set) var currentID: String?
 
@@ -89,6 +94,17 @@ final class ObservationCache {
         try SessionPaths.secureDirectory(location)
         do {
             try capture.screenshot.write(to: location.appendingPathComponent("screen.png"), options: .atomic)
+            var metadata = capture.metadata
+            if let reference = capture.axComparisonScreenshot {
+                do {
+                    let path = location.appendingPathComponent("ax-before.png")
+                    try reference.write(to: path, options: .atomic)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+                } catch {
+                    try? FileManager.default.removeItem(at: location.appendingPathComponent("ax-before.png"))
+                    metadata["axComparisonEvidenceError"] = "Could not retain AX comparison screenshot"
+                }
+            }
             let nodes = capture.nodes.map { node -> [String: Any] in
                 var attributes = node.attributes
                 attributes["ref"] = "\(id):\(node.ref)"
@@ -96,7 +112,7 @@ final class ObservationCache {
                 return attributes
             }
             try saveJSON(
-                ["observation": id, "metadata": capture.metadata, "nodes": nodes],
+                ["observation": id, "metadata": metadata, "nodes": nodes],
                 to: location.appendingPathComponent("snapshot.json"))
             for file in ["screen.png", "snapshot.json"] {
                 try FileManager.default.setAttributes(
@@ -114,6 +130,7 @@ final class ObservationCache {
         currentID = id
         if entries.count > 2 {
             try FileManager.default.removeItem(at: entries[0].directory)
+            textOutputs.removeValue(forKey: entries[0].id)
             entries.removeFirst()
         }
         return result(entries.last!, detail: nil)
@@ -185,6 +202,7 @@ final class ObservationCache {
     func clear() throws {
         invalidate("session_closed")
         entries.removeAll()
+        textOutputs.removeAll()
         if FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.removeItem(at: directory)
         }

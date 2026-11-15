@@ -117,7 +117,8 @@ enum NativePostActionStability {
             let context = try decodeContext(frame)
             let identity = try jsonData(
                 frame.metadata.filter {
-                    ["deviceID", "sessionGeneration", "displayID", "displayRotation", "nativeRotation"].contains($0.key)
+                    ["deviceID", "sessionGeneration", "displayID", "displayRotation", "nativeRotation",
+                     "captureSource"].contains($0.key)
                 })
             let fingerprint = try FrameFingerprint(png: frame.screenshot)
             latest = frame
@@ -184,7 +185,8 @@ enum NativePostActionStability {
         }
 
         private func decodeContext(_ frame: CapturedObservation) throws -> ScreenContext {
-            guard frame.metadata["captureSource"] as? String == "coredevice_screenshot",
+            guard let source = frame.metadata["captureSource"] as? String,
+                ["coredevice_screenshot", "instruments_screenshot"].contains(source),
                 let raw = frame.metadata["screenContext"] as? [String: Any]
             else {
                 throw IPhoneUseError(

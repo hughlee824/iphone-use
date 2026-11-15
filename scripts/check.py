@@ -99,7 +99,7 @@ def acceptance_checks(binary_directory, jobs):
     header = ROOT / "Sources/AppleNativeBridge/include/AppleNativeBridge.h"
     modulemap.write_text(f'module AppleNativeBridge {{ header "{header}" export * }}\n')
     objects = []
-    for target in ("IPhoneUseCore", "IPhoneUseRunnerSupport", "AppleNativeBridge"):
+    for target in ("IPhoneUseCore", "IPhoneUseRunnerSupport", "AppleNativeBridge", "DeviceIP"):
         combined = binary_directory / f"{target}.o"
         inputs = [combined] if combined.is_file() else sorted((binary_directory / f"{target}.build").rglob("*.o"))
         if not inputs:

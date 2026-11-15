@@ -26,6 +26,7 @@ final class ControlledBackend: SessionBackend {
     var blockAction = false
     var blockAfterInput = false
     let inputStarted = DispatchSemaphore(value: 0)
+    var captureOverride: CapturedObservation?
     var failObservation = false
     var observationFailure: IPhoneUseError?
     var nativeSend = false
@@ -79,6 +80,7 @@ final class ControlledBackend: SessionBackend {
         observeCount += 1
         if let observationFailure { throw observationFailure }
         if failObservation { throw IPhoneUseError("capture_failed", "Fixture capture failure") }
+        if let captureOverride { return captureOverride }
         if nativeTextFixture {
             return CapturedObservation(
                 nodes: [],

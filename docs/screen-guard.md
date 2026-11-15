@@ -1,6 +1,6 @@
 # 动作前画面校验与坐标执行
 
-画面校验仅覆盖坐标动作；Runner 元素动作使用当前 AX 身份。Runner 坐标动作默认全局变化上限 1、局部保护区域上限 0；standard 仍为全局 0.01。无关动画不否定 Runner 局部目标；这不证明目标的业务身份。详见 [动作边界](runner-actions.md)。
+画面校验仅覆盖坐标动作；Runner 元素动作使用当前 AX 身份。Runner 坐标动作默认全局变化上限 1、局部保护区域上限 0；standard 坐标手势默认将全屏变化作为诊断，点击、双击和长按仍校验局部区域；swipe 校验起点，路径变化只作诊断。显式 `--max-screen-change` 仍启用全屏限制。无关动画不否定局部目标；这不证明目标的业务身份。详见 [动作边界](runner-actions.md)。
 
 上述 Runner 路径之外，实验性 apple-native 的 `type oN` 和 `press oN --key return` 都从当前截图生成完整字段保护，并在输入前重新截图校验；完整字段使用原分辨率局部比较与颜色无关的有界光标排除，不读取 AX 或自动聚焦。`text-prepare` 只准备自有键盘，随后使旧引用失效并返回新图。具体约束见[原生文字输入](actions.md#实验性原生文字输入)。
 
@@ -12,7 +12,7 @@
 
 新截图完成后，即使像素匹配，若检查已超出预算，坐标手势与文字校验均返回 `input_preflight_timeout`；若已拿到有效截图，附 `preInputDeadlineExceeded=true` 和实际拒绝帧。若 Apple 查询被预算中断且尚无完整有效图，则保留失败阶段，不把未完成截图当作新观察。发生方向恢复时，`orientationRecovery` 记录首次失败检查、恢复、重采集的分段耗时及媒体状态；`captureTimingsMs.total` 包含整个恢复过程，`successfulAttemptTotal` 仅是最终成功截图的内部耗时，不能将两者相加。`orientationRecovery.trigger` 区分静默流、帧交付延迟、方向冲突及连接不可用；分类不替代新鲜方向证据。`preparationMs` / `validationAndCheckMs` 分别记录本阶段准备和最终校验耗时。Apple 查询等待期间检查剩余预算，超时会终止并回收该查询进程，进程清理可有少量额外耗时。
 
-设备和会话绑定、来源、显示器、方向、图像尺寸、整屏和目标/路径保护、取消及媒体健康检查均保留；非法或未来的捕获时间仍拒绝。新观察取代旧观察、动作已派发、连接重建后，旧引用依然无效。结果的 `inputTiming` 记录采用的策略和受理时原观察年龄；它不是页面身份或目标仍存在的确认。
+设备和会话绑定、来源、显示器、方向、图像尺寸、触点局部保护、取消及媒体健康检查均保留；非法或未来的捕获时间仍拒绝。新观察取代旧观察、动作已派发、连接重建后，旧引用依然无效。结果的 `inputTiming` 记录采用的策略和受理时原观察年龄；它不是页面身份或目标仍存在的确认。
 
 原生文字和按键也以当前观察为比较基准，从请求受理开始设立 30 秒输入派发预算；剪贴板处理前后各自从 Apple PNG 请求起最多 8 秒复核（方向准备仍计入同一个 30 秒总预算），最后阶段的期限同时约束所有权检查和派发。`text-finish` 要求当前、动作后截图及匹配事务，不以截图年龄拒绝恢复；所有权仍在恢复前重新读取。Home、录屏沿用各自现有期限；Runner 时序不变。看到相同画面仍不能排除页面曾变化后恢复，尤其无法保证框外业务状态没有变化；调用方仍需按任务核对重要信息。
 
@@ -47,9 +47,9 @@ iphone-use --session "$SESSION" swipe o7 --from-x 315 --from-y 685 --to-x 315 --
 
 此处坐标只演示语法，必须根据当前观察重新选择。Agent 负责视觉识别视频，后端不会自动将画面变化分类为视频，也不把该区域存入会话偏好。每次动作都绑定原 observationID，换页、滚动或获得新观察后不能沿用旧位置。
 
-支持截图坐标的 tap、double-tap、long-press、pinch、swipe，以及指定完整字段的原生 type/press。只允许一个矩形，必须完全位于屏幕内、面积不超过屏幕的 25%，并与全部保护区域不相交：触点周围、滑动走廊、双指路径、完整输入框及额外 `--protect` 都不能被排除。25% 是首版范围限制，不是正确率保证。如果视频挡住了滑动走廊，应基于新图选择视频外路径，不能让后端移除路径保护。
+支持截图坐标的 tap、double-tap、long-press、pinch、swipe，以及指定完整字段的原生 type/press。只允许一个矩形，必须完全位于屏幕内、面积不超过屏幕的 25%，并与全部保护区域不相交：触点周围、滑动走廊、双指路径、完整输入框及额外 `--protect` 都不能被排除。25% 是首版范围限制，不是正确率保证。Runner 仍要求滑动走廊通过保护；standard 默认仅要求滑动起点通过局部保护，走廊变化作诊断，不需要为此指定排除框。显式排除框的几何约束不变。
 
-未指定时仍使用原 `srgb-grid-v1`。指定时使用 `srgb-area-excluded-rect-v2`：将矩形外画面分成最多四个互不重叠的矩形，各自先裁剪，再对每个网格单元覆盖的全部原生 sRGB 像素取整数平均，按原 32×64 全局网格密度向上取整分配行列；以剩余画面面积加权计算变化比例，分母不含排除区域。网格单元按原生像素整数边界分区，余数像素也被计入；每个裁剪区域最多处理 1600 万像素，超出时拒绝比较。旧版高质量插值会把极窄的残留动画边缘放大成整格变化，新版不会自动扩大排除框。完整整屏比较仍记录为 `rawScreenChange`，实际接纳使用排除后的 `screenChange`。保护区域仍使用原始图及 48×48 网格，标准模式默认整屏 0.01、Runner 为 1；局部 0、颜色容差 8 不变。
+未指定时仍使用原 `srgb-grid-v1`。指定时使用 `srgb-area-excluded-rect-v2`：将矩形外画面分成最多四个互不重叠的矩形，各自先裁剪，再对每个网格单元覆盖的全部原生 sRGB 像素取整数平均，按原 32×64 全局网格密度向上取整分配行列；以剩余画面面积加权计算变化比例，分母不含排除区域。网格单元按原生像素整数边界分区，余数像素也被计入；每个裁剪区域最多处理 1600 万像素，超出时拒绝比较。旧版高质量插值会把极窄的残留动画边缘放大成整格变化，新版不会自动扩大排除框。完整整屏比较仍记录为 `rawScreenChange`，实际接纳使用排除后的 `screenChange`。保护区域仍使用原始图及 48×48 网格，Runner 默认整屏上限为 1；standard 坐标手势默认不以整屏变化否决输入，显式上限仍生效。局部 0、颜色容差 8 不变；standard 的 swipe 路径为诊断。
 
 结果同时记录 `ignoredRect`、`rawScreenChange` 和 `exclusionScope=global_comparison_only`。标准与新版 Runner 共用此实现；宿主核对 Runner 的算法、矩形及排除范围回执。旧 Runner 不认识新的算法名，会在输入前拒绝，使用此参数前需构建配套 Runner，不能把旧 Runner 的拒绝当作动作执行。未使用参数的旧路径保持兼容。额外指纹仍受原报文预算约束，过大请求明确拒绝。
 
@@ -62,17 +62,17 @@ iphone-use --session "$SESSION" swipe o7 --from-x 315 --from-y 685 --to-x 315 --
 1. 宿主从观察中读取截图、screen/scope frame、设备 orientation、键盘数量，将元素引用解析为坐标，并生成基准指纹。
 2. 指纹算法 `srgb-grid-v1` 将截图按图片方向归一化，以固定屏幕坐标裁剪，再采样到 sRGB RGB 网格。整屏为 32×64，保护区域为 48×48；保留颜色，不做平移对齐、旋转容差或语义嵌入。
 3. 每个网格单元任意颜色通道的差值大于 8/255 即算变化。变化比例是变化单元数除以总单元数，不是原始像素面积比例，更不是“页面相同的概率”。
-4. 自动保护触摸起点周围 64×64 点；swipe 另保护起终点包围框向外扩展 16 点的区域。保护区域裁剪到屏幕，额外 `--protect` 使用引用可见部分。最多五块局部区域，完整命令受已有 60 KB 宿主预算/64 KiB Runner 请求限制约束。
+4. 自动保护触摸起点周围 64×64 点；swipe 另采样起终点包围框向外扩展 16 点的区域，Runner 用于保护，standard 默认仅用于诊断。保护区域裁剪到屏幕，额外 `--protect` 使用引用可见部分。最多五块局部区域，完整命令受已有 60 KB 宿主预算/64 KiB Runner 请求限制约束。
 5. Runner 保留前台 App 和 App/System Alert 范围检查；屏幕和 scope 的 frame 最多容忍 0.5 点差异，orientation、键盘数量和截图像素尺寸必须一致。不相符则在输入前拒绝。AX 的完整重采样和 type/identifier/label 查询不再进入 tap/swipe 路径；这些动作的 XCTest 内部行为不在此保证内。
 6. Runner 采集一张新截图，与命令携带的原始基准比较。整屏和每一块保护区域都通过各自阈值后，才进入标记 `execution.started` 的输入调用。Runner 不用历史截图代替本次采集；文本操作另保留观察对应的 AX 身份用于校验。
 
-标准模式默认整屏阈值 0.01（Runner 为 1）、局部阈值 0，属于保守工程初值，不是经过多 App 校准的安全值。局部 0 仍允许颜色噪声底限内的变化和降采样无法分辨的变化。
+standard 坐标手势记录原始全屏比例和全部区域比例；`diagnosticOnlyGlobal=true` 表示全屏比例不参与拒绝，`diagnosticOnlyRegions=[1]` 表示 swipe 路径不参与拒绝。显式全屏上限仍生效。文字输入和 Home 保持各自原有校验范围。局部阈值 0 不是经过多 App 校准的安全值。局部 0 仍允许颜色噪声底限内的变化和降采样无法分辨的变化。
 
 ### 标准模式的固定截图来源
 
-标准模式观察、文字准备、动作前校验和动作后观察统一使用 Apple CoreDevice PNG，`captureSource=coredevice_screenshot`、`captureSourcePolicy.strategy=coredevice_only`。没有媒体像素后备来源；Apple 截图失败即报告失败，不改用视频帧。每次动作仍比较原 observationID 绑定的截图，真实变化或期限超限返回拒绝及可用的新观察，不自动重放输入。
+标准模式观察、文字准备、动作前校验和动作后观察统一使用 Apple CoreDevice PNG，`captureSource=coredevice_screenshot`、`captureSourcePolicy.strategy=coredevice_only`。没有媒体像素后备来源；Apple 截图失败即报告失败，不改用视频帧。每次动作仍比较原 observationID 绑定的截图，受保护局部变化、明确上下文冲突或期限超限返回拒绝及可用的新观察，不自动重放输入。
 
-原生媒体手势专用的 `native-gesture-edge-v1`、`regionAppearanceMatches` 和相关诊断已移除。坐标手势仍要求整屏及每一块保护区域通过上述网格规则；像素底限、全局/局部阈值、显式视频排除范围没有扩大。文字输入保留完整字段和显式观察绑定的光标区域校验，Apple PNG 不会消除实际光标或动画变化。
+原生媒体手势专用的 `native-gesture-edge-v1`、`regionAppearanceMatches` 和相关诊断已移除。坐标手势要求受保护的局部区域通过上述网格规则；全屏默认只作诊断，swipe 的整条路径不再是一票否决条件。起点、点击目标和 pinch 局部区域仍受保护。像素底限和显式视频排除范围没有扩大。文字输入保留完整字段和显式观察绑定的光标区域校验，Apple PNG 不会消除实际光标或动画变化。
 
 标准观察和 HID 输入不依赖常驻媒体流；自有媒体只为显式预览或录屏启动，并保留录屏期间的几何校验。方向改变后拒绝旧坐标，录屏方向证据失效时结束片段、确认自有流停止后重取 Apple PNG。详见 [原生后端](apple-native-backend.md#screenshots-and-input)。
 
@@ -82,7 +82,7 @@ iphone-use --session "$SESSION" swipe o7 --from-x 315 --from-y 685 --to-x 315 --
 
 动作结果附带 `result.screenGuard`：algorithm、accepted、screenChange、regionChanges、阈值、区域边界和采集时间。不会把基准 RGB/base64 输出给调用 agent。宿主对成功的坐标动作核对校验分数、阈值与通过事实；缺失或矛盾的成功证据转成 unknown。
 
-- 超阈值：`screen_changed`、`not_dispatched`、`requiresObservation=true`，已知没有发送输入；原引用失效。
+- 超阈值：`screen_changed` 或 standard 的 `target_region_changed`、`not_dispatched`、`requiresObservation=true`，已知没有发送输入；原引用失效。
 - 上下文变化或采样/指纹不可用：同样在输入前拒绝，返回具体 reason 并要求重新 observe；缺失证据不是零变化。
 - 参数、坐标、保护引用不合法：宿主或 Runner 拒绝，不发送输入。
 - 输入后的执行失败、丢失响应或无法取得足够观察：沿用 unknown 和不重发规则，不把动作前的通过证据当成动作完成。

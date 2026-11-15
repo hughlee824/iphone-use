@@ -48,4 +48,9 @@ FOUNDATION_EXPORT NSDictionary * _Nullable ASNativeRoundTrip(NSDictionary *value
 // callers must discard unrelated messages and never store raw log contents.
 FOUNDATION_EXPORT BOOL ASReadDeviceLog(NSString *udid, void (^ready)(void),
                                      void (^line)(NSString *), NSError **error);
+// Runs only in the bounded native AX subprocess; never sends input or starts Runner.
+FOUNDATION_EXPORT NSDictionary * _Nullable ASReadAXSnapshot(NSString *udid, NSError **error);
+FOUNDATION_EXPORT NSDictionary * _Nullable ASAXDisplayGeometry(NSDictionary *info, NSError **error);
 NS_ASSUME_NONNULL_END
+
+FOUNDATION_EXPORT BOOL ASRunObservationWorker(NSString * _Nonnull device, NSString * _Nonnull kind, NSString * _Nonnull generation, NSError * _Nullable * _Nullable error);

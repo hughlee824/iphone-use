@@ -11,6 +11,7 @@ struct DeviceAction {
     let fields: [String: Any]
     let coordinate: Bool
     let guardPolicy: ScreenGuard.Policy
+    let explicitGlobalGuard: Bool
     let protectedReferences: [ObservationReference]
     let swipeMotion: SwipeMotion?
     let textRegion: ScreenRect?
@@ -52,6 +53,7 @@ struct DeviceAction {
             throw IPhoneUseError("coordinate_guard_required", "Screen guard options require explicit coordinates")
         }
         guardPolicy = policy
+        explicitGlobalGuard = request["maxScreenChange"] != nil
         protectedReferences = protected
         self.fields = fields
     }

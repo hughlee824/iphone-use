@@ -11,10 +11,13 @@ final class EvidenceArchiveTests: XCTestCase {
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: false)
         let screenshot = source.appendingPathComponent("capture.png")
         let snapshot = source.appendingPathComponent("snapshot.json")
+        let comparison = source.appendingPathComponent("ax-before.png")
         try Data([1, 2, 3]).write(to: screenshot)
+        try Data([3, 2, 1]).write(to: comparison)
         try Data("{\"text\":\"private fixture\"}".utf8).write(to: snapshot)
         let observation: [String: Any] = ["ok": true, "result": [
-            "screenshot": screenshot.path, "snapshot": snapshot.path, "text": "o2 refs=current"
+            "screenshot": screenshot.path, "snapshot": snapshot.path, "text": "o2 refs=current",
+            "axComparisonScreenshot": comparison.path
         ]]
         let destination = root.appendingPathComponent("evidence")
         var paths = Set<String>()
@@ -45,6 +48,7 @@ final class EvidenceArchiveTests: XCTestCase {
         for path in paths {
             let folder = URL(fileURLWithPath: path).deletingLastPathComponent()
             XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("screenshot.png")), Data([1, 2, 3]))
+            XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("ax-before.png")), Data([3, 2, 1]))
             XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("snapshot.json")),
                            Data("{\"text\":\"private fixture\"}".utf8))
         }
@@ -86,5 +90,20 @@ final class EvidenceArchiveTests: XCTestCase {
         let connected = EvidenceArchive.render(["ok": true, "result": ["mode": "runner"]], directory: root)
         XCTAssertNil(connected["archiveErrors"])
         XCTAssertEqual((connected["artifacts"] as? [String: String])?.count, 1)
+    }
+
+    func testMissingComparisonEvidenceDoesNotRewriteActionFacts() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let response: [String: Any] = [
+            "ok": false, "action": ["outcome": "unknown"], "observation": [
+                "ok": true, "result": ["axComparisonEvidenceError": "fixture write failure"]
+            ]
+        ]
+        let result = EvidenceArchive.render(response, directory: root, agentOutput: true)
+        XCTAssertEqual(result["action"] as? NSDictionary, response["action"] as? NSDictionary)
+        XCTAssertEqual(result["observation"] as? NSDictionary, response["observation"] as? NSDictionary)
+        XCTAssertEqual(result["archiveErrors"] as? [String], ["fixture write failure"])
+        XCTAssertNil(result["agentSummary"])
     }
 }

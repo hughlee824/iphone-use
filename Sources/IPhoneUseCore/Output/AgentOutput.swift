@@ -185,7 +185,8 @@ public enum AgentOutput {
                 "accepted", "algorithm", "validationScope", "dynamicMatches", "screenChange",
                 "maxScreenChange",
                 "regionChanges",
-                "maxRegionChange", "ignoredRect", "caretRect", "caretExclusionRect", "caretObservationID"
+                "maxRegionChange", "ignoredRect", "caretRect", "caretExclusionRect", "caretObservationID",
+                "diagnosticOnlyGlobal", "diagnosticOnlyRegions"
             ].contains($0.key)
         }
         // In explicit dynamic scope, whole-screen motion is diagnostic only.
@@ -212,7 +213,8 @@ public enum AgentOutput {
                 : temporal ? "temporal" : (appearance ? "appearance" : (pixels ? "pixels" : "different"))
         }
         var reasons: [String] = []
-        if let change = check["screenChange"] as? Double, let limit = check["maxScreenChange"] as? Double,
+        if check["diagnosticOnlyGlobal"] as? Bool != true,
+            let change = check["screenChange"] as? Double, let limit = check["maxScreenChange"] as? Double,
             change > limit {
             reasons.append("screen_changed")
         }
@@ -220,7 +222,9 @@ public enum AgentOutput {
             if check["fieldPixelsMatch"] as? Bool == false { reasons.append("field_changed") }
             if let regions = check["regionChanges"] as? [Double],
                 let limit = check["maxRegionChange"] as? Double,
-                regions.contains(where: { $0 > limit }) {
+                regions.enumerated().contains(where: {
+                    !(check["diagnosticOnlyRegions"] as? [Int] ?? []).contains($0.offset) && $0.element > limit
+                }) {
                 reasons.append("protected_region_changed")
             }
         }

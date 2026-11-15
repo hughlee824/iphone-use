@@ -26,7 +26,8 @@ extension ObservationCache {
         let snapshot = entry.directory.appendingPathComponent("snapshot.json").path
         var lines = [
             """
-            observation=\(entry.id) refs=\(entry.validity) scope=\(metadata["scope"] ?? "unknown")\
+            observation=\(entry.id) refs=\(entry.validity)
+            scope=\(metadata["scope"] ?? "unknown")\
              target=\(quoted(metadata["targetBundleId"] ?? NSNull()))\
              foreground=\(quoted(metadata["foregroundBundleId"] ?? NSNull()))
             """,
@@ -42,7 +43,7 @@ extension ObservationCache {
              ax_finished=\(metadata["snapshotFinishedAt"] ?? "unknown")\
              screenshot_at=\(metadata["screenshotCapturedAt"] ?? "unknown")
             """
-        ]
+        ] + ObservationAcquisition.lines(metadata)
         if let error = metadata["axError"] as? String {
             lines.append(
                 "ax_error=\(quoted(String(error.prefix(256))))\(error.count > 256 ? " detail_clipped=true" : "")"
@@ -50,7 +51,7 @@ extension ObservationCache {
         }
         let footer = "snapshot=\(quoted(snapshot)) (cached source; inspect \(entry.id) for details)"
         appendNativeMetadata(metadata, to: &lines)
-        appendContent(entry, detail: detail, footer: footer, lines: &lines)
+        appendContent(entry, detail: detail, lines: &lines)
         if metadata["sourceTruncated"] as? Bool == true {
             lines.append("source_missing=true; uncaptured nodes cannot be expanded from this snapshot")
         }
@@ -60,7 +61,15 @@ extension ObservationCache {
             "text": lines.joined(separator: "\n")
         ]
         if let query = detail?.query { response["query"] = query }
-        return response
+        let reference = entry.directory.appendingPathComponent("ax-before.png")
+        if capture.axComparisonScreenshot != nil {
+            if FileManager.default.fileExists(atPath: reference.path) {
+                response["axComparisonScreenshot"] = reference.path
+            } else {
+                response["axComparisonEvidenceError"] = "Could not retain AX comparison screenshot"
+            }
+        }
+        return deliverText(response, entry: entry)
     }
 
     private func appendNativeMetadata(_ metadata: [String: Any], to lines: inout [String]) {
@@ -83,6 +92,13 @@ extension ObservationCache {
             lines.append(
                 "foreground=unverified keyboard_state=unknown; locate targets visually in the original screenshot"
             )
+            if metadata["snapshotSource"] as? String == "axp_native_snapshot_v1" {
+                lines.append(
+                    "ax_source=axp ax_scope=application coverage=unknown atomic=false element_actions=false")
+                lines.append(
+                    "AX refs are for inspect; use screenshot-bound coordinates. "
+                        + "AX visibility does not prove hittability.")
+            }
             if let stability = metadata["postActionStability"] as? [String: Any] {
                 lines.append(
                     """
@@ -94,15 +110,15 @@ extension ObservationCache {
         }
     }
 
-    private func appendContent(_ entry: Entry, detail: Detail?, footer: String, lines: inout [String]) {
+    private func appendContent(_ entry: Entry, detail: Detail?, lines: inout [String]) {
         if let detail {
-            appendDetail(entry, detail: detail, footer: footer, lines: &lines)
+            appendDetail(entry, detail: detail, lines: &lines)
         } else {
-            appendCompact(entry, footer: footer, lines: &lines)
+            appendCompact(entry, lines: &lines)
         }
     }
 
-    private func appendDetail(_ entry: Entry, detail: Detail, footer: String, lines: inout [String]) {
+    private func appendDetail(_ entry: Entry, detail: Detail, lines: inout [String]) {
         let capture = entry.capture
         var body: [String] = []
         var nextOffset: Int?
@@ -133,18 +149,10 @@ extension ObservationCache {
             if query != nil {
                 attributes["parentRef"] = node.parent.map { "\(entry.id):e\($0 + 1)" } as Any? ?? NSNull()
                 attributes.removeValue(forKey: "index"); attributes.removeValue(forKey: "parent")
-                for key in ["label", "identifier", "value"] {
-                    if let value = attributes[key] as? String, value.count > 160 {
-                        attributes[key] = String(value.prefix(160)) + "…"
-                        attributes["detail_clipped"] = true
-                    }
-                }
+
             }
-            var line = String(data: (try? jsonData(attributes)) ?? Data(), encoding: .utf8)!
-            if line.utf8.count > 4096 {
-                line = "[\(node.ref)] detail_exceeds_budget; full attributes in snapshot file"
-            }
-            if body.count == 20 || !fits(lines + body + [line, footer], reserve: 400 + queryOption.utf8.count) {
+            let line = quoted(attributes)
+            if body.count == 20 {
                 nextOffset = position; break
             }
             body.append(line)
@@ -156,30 +164,29 @@ extension ObservationCache {
         }
     }
 
-    private func appendCompact(_ entry: Entry, footer: String, lines: inout [String]) {
+    private func appendCompact(_ entry: Entry, lines: inout [String]) {
         let capture = entry.capture
-        var body: [String] = []
-        let compact = CompactAX.render(capture.nodes)
-        var shown = 0
-        for line in compact {
-            if lines.count + body.count + 3 >= 60 || !fits(lines + body + [line, footer], reserve: 400) {
-                break
-            }
-            body.append(line)
-            shown += 1
+        let projection = PresentedAX.project(capture)
+        let compact = CompactAX.render(capture.nodes, including: projection.indices)
+        lines.append(
+            "presentation=viewport hierarchy=\(projection.hierarchyKnown ? "modal_filtered" : "unknown") "
+                + "geometry=\(projection.geometryKnown ? "screen_clipped" : "unknown") "
+                + "omitted_nodes=\(capture.nodes.count - projection.indices.count); "
+                + "visibility does not prove hittability")
+        if projection.semanticCandidatesOnly {
+            lines.append("presentation_selection=semantic_candidates_and_keyboard_context; "
+                + "independent_child_controls=\(projection.unqueriedChildControls) with unknown visibility; "
+                + "other structural nodes remain cached")
         }
-        lines += body
-        if shown < compact.count {
-            lines.append(
-                """
-                unexpanded=\(compact.count - shown) lines; inspect \(entry.id) --query TEXT searches all\
-                 captured nodes; inspect an element reference for its subtree
-                """
-            )
+        if projection.omittedKeyboardCharacters > 0 {
+            lines.append("keyboard_character_keys_omitted=\(projection.omittedKeyboardCharacters); "
+                + "full nodes and native visible remain available through inspect")
         }
-    }
-
-    private func fits(_ lines: [String], reserve: Int) -> Bool {
-        lines.joined(separator: "\n").utf8.count + reserve <= 8192
+        if let collection = capture.metadata["axCollection"] as? [String: Any],
+            collection["visibilityCoverage"] as? String == "semantic_candidates" {
+            lines.append("ax_visibility=semantic_candidates; unqueried_visible=unknown; "
+                + "supplemental_nodes=\(collection["supplementalNodeCount"] ?? 0) hierarchy=unknown")
+        }
+        lines += compact
     }
 }

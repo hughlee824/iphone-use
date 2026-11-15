@@ -31,7 +31,7 @@ extension NativeCaptureTests {
         let backend = AppleDeviceBackend(
             config: HostConfiguration(session: "s" + String(repeating: "b", count: 32),
                                       device: "fixture", xctestrun: "fixture", idleTimeoutSeconds: 180),
-            paths: SessionPaths(directory: directory))
+            paths: SessionPaths(directory: directory), axpReader: nil)
         let transport = ScriptedTransport()
         let hid = NativeHIDAdapter(transport: transport, cancellation: backend.cancellation)
         try hid.prepare(); backend.hid = hid

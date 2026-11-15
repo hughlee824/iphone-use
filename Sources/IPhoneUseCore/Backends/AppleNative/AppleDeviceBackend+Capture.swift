@@ -6,20 +6,16 @@ import AppleNativeBridge
 
 extension AppleDeviceBackend {
     func observe() throws -> CapturedObservation {
-        try capture(
-            budget: NativeCaptureBudget(
-                requestDeadline: ProcessInfo.processInfo.systemUptime + 30, purpose: .observation))
+        try observeTextOrScreen(nil)
     }
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation {
-        try capture(
-            textOptions: options,
-            budget: NativeCaptureBudget(
-                requestDeadline: ProcessInfo.processInfo.systemUptime + 30, purpose: .observation))
+        try observeTextOrScreen(options)
     }
     func observeAfterAction(
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
     ) throws -> CapturedObservation {
-        try NativePostActionStability.capture(
+        let deadline = ProcessInfo.processInfo.systemUptime + 30
+        let captured = try NativePostActionStability.capture(
             ignoring: ignoring, sourceContext: sourceContext,
             checkCancellation: { try self.cancellation.check() },
             sample: { deadline in
@@ -29,6 +25,40 @@ extension AppleDeviceBackend {
                     textOptions: textOptions,
                     budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation))
             })
+        return try captureAXP(previous: captured, textOptions: textOptions, deadline: deadline)
+    }
+
+    private func observeTextOrScreen(_ textOptions: NativeTextObservationOptions?) throws -> CapturedObservation {
+        let deadline = ProcessInfo.processInfo.systemUptime + 30
+        return try captureAXP(textOptions: textOptions, deadline: deadline)
+    }
+
+    private func captureAXP(
+        previous: CapturedObservation? = nil,
+        textOptions: NativeTextObservationOptions?, deadline: TimeInterval
+    ) throws -> CapturedObservation {
+        guard let cli else { throw IPhoneUseError("backend_unavailable", "Native backend not started") }
+        let reader = axpReader, cancellation = cancellation
+        return try AXPObservation.capture(
+            device: cli.device, generation: generation, previous: previous,
+            read: { cancelled in
+                guard let reader else {
+                    throw IPhoneUseError("axp_runtime_unavailable", "Native AXP reader unavailable; use the screenshot")
+                }
+                return try reader.read(device: cli.device, cancelled: {
+                    cancelled() || cancellation.isCancelled || ProcessInfo.processInfo.systemUptime >= deadline
+                })
+            }, screenshot: {
+                if previous == nil, textOptions == nil, cli.nativeScreenshot != nil {
+                    let attempt = AppleCaptureAttempt(cli: cli, generation: self.generation,
+                        budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation))
+                    do { return try attempt.nativeObservation() } catch let error as IPhoneUseError
+                        where AppleCaptureAttempt.needsDisplaySelection(error) { }
+                }
+                return try self.capture(
+                    textOptions: textOptions,
+                    budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation))
+            }, checkCancellation: { try self.cancellation.check() })
     }
     func capture(textOptions: NativeTextObservationOptions? = nil, budget: NativeCaptureBudget? = nil) throws
         -> CapturedObservation {

@@ -14,6 +14,9 @@ extension ObservationCache {
             return try homeTarget(entry.capture)
         }
         if entry.capture.metadata["backend"] as? String == "apple-native" {
+            guard action.protectedReferences.isEmpty else {
+                throw IPhoneUseError("native_action_unsupported", "Standard AX references are for inspect only")
+            }
             if ["focus", "clear", "type", "press"].contains(action.kind), action.reference.node == nil {
                 return try textTarget(action, entry: entry)
             }
@@ -181,7 +184,7 @@ extension ObservationCache {
                     y: validatedValue(action.fields["toY"], as: Double.self))
             }
         } else {
-            guard try resolveCurrent(action.reference).enabled else {
+            guard try resolveCurrent(action.reference).enabled == true else {
                 throw IPhoneUseError("target_disabled", "The observed element is disabled")
             }
             let rect = try visibleRect(action.reference, context: context)

@@ -6,8 +6,8 @@ struct ScreenGuardOptions: ParsableArguments {
     @Option(
         help:
             """
-            Maximum screen-grid change BEFORE input (0...1); default: Runner 1, standard 0.01. Not\
-             the expected scroll or animation size.
+            Opt-in maximum screen-grid change BEFORE input (0...1); native gestures otherwise use local\
+             checks. Runner default: 1. Not the expected scroll or animation size.
             """
     ) var maxScreenChange: Double?
     @Option(help: "Maximum changed protected-region fraction (0...max-screen-change); default 0.")

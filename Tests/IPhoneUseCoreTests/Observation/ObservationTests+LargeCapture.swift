@@ -2,7 +2,7 @@ import XCTest
 @testable import IPhoneUseCore
 
 extension ObservationTests {
-    func testLargeCaptureDecodesStoresAndResolvesNodesOmittedFromPresentation() throws {
+    func testLargeCaptureReturnsAllCompactNodesAndPreservesActionIdentity() throws {
         let original = try observationFixture()
         var wire = original.metadata
         wire["screenshotBase64"] = original.screenshot.base64EncodedString()
@@ -22,9 +22,9 @@ extension ObservationTests {
         let (cache, _) = try cache()
         let stored = try cache.store(capture)
         let text = try XCTUnwrap(stored["text"] as? String)
-        XCTAssertLessThanOrEqual(text.utf8.count, 8192)
-        XCTAssertLessThanOrEqual(text.split(separator: "\n").count, 60)
-        XCTAssertFalse(text.contains("LateSearchField"))
+        XCTAssertGreaterThan(text.utf8.count, 8192)
+        XCTAssertLessThan(try jsonData(stored).count, ObservationCache.inlineTextLimit)
+        XCTAssertTrue(text.contains("LateSearchField"))
         XCTAssertFalse(text.contains("source_missing=true"))
         let found = try queryNodes(cache.inspect(ObservationReference("o1"), offset: 0, query: "LateSearchField"))
         XCTAssertEqual(found.count, 1)

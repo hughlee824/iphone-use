@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 enum CompactAX {
-    static func render(_ nodes: [AXNode]) -> [String] {
+    static func render(_ nodes: [AXNode], including: Set<Int>? = nil) -> [String] {
         var children = Array(repeating: [Int](), count: nodes.count)
         for node in nodes { if let parent = node.parent { children[parent].append(node.index) } }
         var kept: [Int] = []
@@ -13,8 +13,10 @@ enum CompactAX {
             let nearest = node.parent.flatMap { ancestor[$0] }
             var keep = shouldKeep(
                 node, nearest: nearest.map { nodes[$0] }, children: children[node.index].map { nodes[$0] })
+            if let including, !including.contains(node.index) { keep = false }
             // Only fold identical generic container siblings, never equally named controls.
-            if node.role == "group", node.identifier.isEmpty, let parent = node.parent {
+            if node.role == "group", node.identifier.isEmpty,
+               !(node.attributes["keyboardFocus"] is Bool), let parent = node.parent {
                 var signature = node.attributes
                 signature.removeValue(forKey: "index")
                 signature.removeValue(forKey: "parent")
@@ -22,7 +24,7 @@ enum CompactAX {
                 if signatures[parent, default: []].contains(key),
                     children[node.index].allSatisfy({
                         nodes[$0].role == "group" && nodes[$0].label.isEmpty && nodes[$0].value == nil
-                            && nodes[$0].enabled
+                            && nodes[$0].enabled == true
                     }) {
                     keep = false
                 }
@@ -41,49 +43,46 @@ enum CompactAX {
     }
 
     private static func shouldKeep(_ node: AXNode, nearest: AXNode?, children: [AXNode]) -> Bool {
+        if isRedundantStructure(node, children: children) { return false }
+        if node.attributes["keyboardFocus"] is Bool { return true }
         let generic = ["group", "application", "window"].contains(node.role)
         var keep =
-            !generic || !node.label.isEmpty || !node.identifier.isEmpty || node.value != nil || !node.enabled
+            !generic || !node.label.isEmpty || !node.identifier.isEmpty || node.value != nil
+            || node.enabled == false
+            || (children.isEmpty && node.enabled == nil && node.attributes["frame"] is [String: Any])
         if node.role == "application" { keep = false }
-        if generic, !children.isEmpty, node.enabled, node.value == nil, node.identifier.isEmpty,
+        if generic, !children.isEmpty, node.enabled != false, node.value == nil, node.identifier.isEmpty,
             children.contains(where: { $0.label == node.label }) {
             keep = false
         }
-        if let nearest, node.role == "text", node.enabled, node.label == nearest.label,
+        if let nearest, node.role == "text", node.enabled != false, node.label == nearest.label,
             node.value == nil || (node.value as? String) == node.label {
             keep = false
         }
         if let nearest, node.role == "web_view", nearest.role == "web_view",
-            node.label.isEmpty, node.identifier.isEmpty, node.value == nil, node.enabled {
+            node.label.isEmpty, node.identifier.isEmpty, node.value == nil, node.enabled != false {
             keep = false
         }
         return keep
     }
 
     private static func renderNode(_ node: AXNode, depth: Int, names: [String: [Int]]) -> String {
-        var clipped = false
-        func brief(_ value: Any) -> String {
-            let string = (value as? String) ?? quoted(value)
-            if string.count > 160 { clipped = true; return quoted(String(string.prefix(160)) + "…") }
-            return quoted(value)
-        }
         var line = String(repeating: "  ", count: depth) + "[\(node.ref)] \(node.role)"
-        if !node.label.isEmpty { line += " \(brief(node.label))" }
+        if !node.label.isEmpty { line += " \(quoted(node.label))" }
         let input = ["text_field", "secure_text_field", "text_view", "search_field"].contains(node.role)
         let value = input ? node.attributes["value"] : node.value
         if let value, !(value is NSNull), input || (value as? String) != node.label {
-            line += " ax_value=\(brief(value))"
+            line += " ax_value=\(quoted(value))"
         }
         if !node.identifier.isEmpty,
             node.label.isEmpty || names["\(node.role):\(node.label)", default: []].count > 1 {
-            line += " id=\(brief(node.identifier))"
+            line += " id=\(quoted(node.identifier))"
         }
-        if !node.enabled { line += " disabled" }
-        if input {
-            let focus = node.attributes["keyboardFocus"] as? Bool
-            line += " keyboard_focus=\(focus.map { $0 ? "true" : "false" } ?? "unknown")"
+        if node.enabled == false { line += " disabled" }
+        if node.enabled == true { line += " enabled=true" }
+        if let focus = node.attributes["keyboardFocus"] as? Bool {
+            line += " keyboard_focus=\(focus)"
         }
-        if clipped { line += " detail_clipped=true" }
         return line
     }
 }

@@ -71,7 +71,7 @@ class EngineeringChecksTests(unittest.TestCase):
             for layout in ('xcode', 'native'):
                 directory = root / layout
                 directory.mkdir()
-                for name in ('IPhoneUseCore', 'IPhoneUseRunnerSupport', 'AppleNativeBridge'):
+                for name in ('IPhoneUseCore', 'IPhoneUseRunnerSupport', 'AppleNativeBridge', 'DeviceIP'):
                     object_path = directory / f'{name}.o' if layout == 'xcode' else directory / f'{name}.build/source.o'
                     object_path.parent.mkdir(exist_ok=True)
                     object_path.touch()

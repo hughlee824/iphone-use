@@ -10,7 +10,8 @@ let package = Package(
         .package(path: "packages/runner-support")
     ],
     targets: [
-        .target(name: "AppleNativeBridge", cSettings: [.unsafeFlags(["-fobjc-arc"])],
+        .target(name: "DeviceIP"),
+        .target(name: "AppleNativeBridge", dependencies: ["DeviceIP"], cSettings: [.unsafeFlags(["-fobjc-arc"])],
                 linkerSettings: [.linkedFramework("Foundation")]),
         .target(name: "IPhoneUseCore", dependencies: [
             "AppleNativeBridge", .product(name: "IPhoneUseRunnerSupport", package: "runner-support")
@@ -24,6 +25,9 @@ let package = Package(
             // Copy only regression inputs, preserving PNG bytes without bundling local files or documentation.
             .copy("Fixtures/Observations/app.json"),
             .copy("Fixtures/Observations/system-alert.json"),
+            .copy("Fixtures/Observations/native-settings-home.json"),
+            .copy("Fixtures/Observations/native-wlan.json"),
+            .copy("Fixtures/Observations/native-join-network.json"),
             .copy("Fixtures/NativeText/encoded-source.png"),
             .copy("Fixtures/NativeText/encoded-0.png"),
             .copy("Fixtures/NativeText/encoded-1.png"),

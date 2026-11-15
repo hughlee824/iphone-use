@@ -17,7 +17,9 @@ public enum EvidenceArchive {
             try write(try jsonData(response), to: receipt)
             artifacts["receipt"] = receipt.path
             let observation = observation(in: response)
-            for (key, name) in [("screenshot", "screenshot.png"), ("snapshot", "snapshot.json")] {
+            if let error = observation["axComparisonEvidenceError"] as? String { errors.append(error) }
+            for (key, name) in [("screenshot", "screenshot.png"), ("snapshot", "snapshot.json"),
+                                ("axComparisonScreenshot", "ax-before.png"), ("fullText", "ax-output.txt")] {
                 guard let source = observation[key] as? String else { continue }
                 do {
                     let destination = folder.appendingPathComponent(name)

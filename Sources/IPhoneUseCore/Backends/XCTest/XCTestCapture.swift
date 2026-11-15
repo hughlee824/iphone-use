@@ -92,9 +92,7 @@ enum XCTestCapture {
             "sourceBundleId": result["bundleId"] as? String ?? NSNull(),
             "screenFrame": result["screenFrame"] as? [String: Any] ?? NSNull()
         ]
-        for key in ["snapshotStartedAt", "snapshotFinishedAt", "screenshotCapturedAt"] {
-            metadata[key] = result[key] as? Double ?? NSNull()
-        }
+        ObservationAcquisition.attachRunner(to: &metadata, source: result)
         metadata["snapshotSource"] = result["snapshotSource"] as? String ?? NSNull()
         metadata["screenContext"] = result["screenContext"] as? [String: Any] ?? NSNull()
         let available = result["axStatus"] as? String == "available"

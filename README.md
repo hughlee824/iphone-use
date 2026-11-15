@@ -25,7 +25,7 @@ CLI and plugin channels update independently. These guides describe the current 
 
 | | standard | runner |
 | --- | --- | --- |
-| Observe | Screenshots | Screenshots and available accessibility elements |
+| Observe | Screenshots; available [AX observations](docs/standard-ax.md) | Screenshots and available accessibility elements |
 | Act | Native HID | XCTest Runner |
 | Runner installation and development signing | Not required | Required |
 
@@ -33,11 +33,11 @@ Start with standard for screenshot-based operation without Runner setup. Choose 
 
 ## Why iPhone-use?
 
-- **See the screen and its structure.** Both modes return screenshots; Runner also returns available AX elements. Expand or search its cached snapshots with `inspect`.
+- **See the screen and its structure.** Both modes return screenshots; Runner and standard AXP observations also provide available AX elements. Expand or search its cached snapshots with `inspect`.
 - **Act on real apps.** Discover installed apps, bring them to the foreground, tap, swipe, drag, edit text, and send editing keys.
 - **Reuse the device session.** Independent CLI calls share one Mac host and the selected control connection. `connect` manages startup; `disconnect` or idle expiry releases the session.
 - **Know what happened.** Actions distinguish `completed`, `not_dispatched`, and `unknown`. Tap and swipe check the screen before dispatch; input actions check frame stability afterward.
-- **Use a small native stack.** Swift, native bridges and Apple's device tooling, with a thin XCTest Runner when that mode is selected. The runtime needs no Python, Node.js, WebDriverAgent, `iproxy`, or `pymobiledevice3`.
+- **Use a small native stack.** Swift, native bridges and Apple's device tooling, with a thin XCTest Runner when that mode is selected. Runtime control and standard AX need no Python, Node.js, WebDriverAgent, `iproxy`, or `pymobiledevice3`.
 
 ## Quick start
 
@@ -71,7 +71,7 @@ export SESSION="SESSION_FROM_CONNECT"
 iphone-use --session "$SESSION" observe
 ```
 
-Open the returned PNG with an image tool. Standard mode returns a screenshot observation ID such as `o1`, without element references. Select a visible button using **screen-point coordinates** from the observation. Map original PNG pixels into the reported `screen_points` rectangle; do not pass screenshot pixels or resized-preview coordinates directly. Replace every placeholder below:
+Open the returned PNG with an image tool. Standard mode returns a screenshot observation ID such as `o1`, with available AX references for inspection only. Select a visible button using **screen-point coordinates** from the observation. Map original PNG pixels into the reported `screen_points` rectangle; do not pass screenshot pixels or resized-preview coordinates directly. Replace every placeholder below:
 
 ```sh
 iphone-use --session "$SESSION" tap OBSERVATION_ID --x POINT_X --y POINT_Y --observe
@@ -273,7 +273,7 @@ python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
 ```
 
-Python 3.9+ is used for release tooling and development tests, not the installed CLI runtime. The check entry point requires full Xcode and the pinned SwiftLint and Actionlint versions, builds the CLI before integration tests, and supplies its executable path explicitly. A missing CLI fails the check. Build concurrency defaults to two jobs. The only external Swift package dependency is [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2), pinned to `1.8.2`. It requires a Swift 6+ compiler; use the supported full Xcode 27 toolchain for native builds. The package manifest tools version does not imply Swift 5.9 compiler compatibility or enable Swift 6 language mode.
+Python 3.9+ is used for release tooling and development tests. Runtime control and AX observations do not depend on Python. The check entry point requires full Xcode and the pinned SwiftLint and Actionlint versions, builds the CLI before integration tests, and supplies its executable path explicitly. A missing CLI fails the check. Build concurrency defaults to two jobs. The native AX transport uses a built-in bounded IPv6/TCP client without a third-party network stack; see [standard AX](docs/standard-ax.md) for its ownership and compatibility boundaries. The only external Swift package dependency is [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2), pinned to `1.8.2`. It requires a Swift 6+ compiler; use the supported full Xcode 27 toolchain for native builds. The package manifest tools version does not imply Swift 5.9 compiler compatibility or enable Swift 6 language mode.
 
 Node.js 22+ runs the documented call templates against controlled tool responses in CI; it is only needed for development tests. After changing the canonical skill, run `python3 scripts/plugin/sync-plugin.py` to update its packaged copy and use `python3 scripts/plugin/set-plugin-version.py X.Y.Z` to update all shared distribution versions before release. CI also compiles the Runner without signing and packages the plugin for review. Website source, tests and Cloudflare deployment are maintained separately in [iphone-use-website](https://github.com/hughlee824/iphone-use-website). See [public-access release checks](docs/public-access-release.md) for the exact commands and hardware acceptance requirements.
 

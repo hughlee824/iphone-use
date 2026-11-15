@@ -77,6 +77,32 @@ class ActionObservationCLITests(unittest.TestCase):
             self.assertTrue(result.stdout, f"CLI returned no JSON: exit={result.returncode}, stderr={result.stderr!r}, requests={requests!r}")
             return result.returncode, json.loads(result.stdout), requests
 
+    def test_inspect_output_routes_once_and_rejects_unsupported_hosts(self):
+        args = ["inspect", "o1", "--output", "t1", "--byte-offset", "32768"]
+        code, response, requests = self.run_cli(args, details={"outputID": "t1", "content": "文😀", "text": "annotated segment"})
+        self.assertEqual(code, 0)
+        self.assertEqual([r["op"] for r in requests], ["inspect"])
+        self.assertEqual(requests[0]["output"], "t1")
+        self.assertEqual(requests[0]["byteOffset"], 32768)
+        self.assertEqual(response["result"]["content"], "文😀")
+        code, response, requests = self.run_cli(args, details={"text": "old host ignored output"})
+        self.assertNotEqual(code, 0)
+        self.assertEqual(response["error"]["code"], "inspect_output_unsupported")
+        self.assertEqual(len(requests), 1)
+
+    def test_invalid_inspect_output_options_do_not_reach_host(self):
+        for args in [
+            ["inspect", "o1:e1", "--output", "t1"],
+            ["inspect", "o1", "--byte-offset", "1"],
+            ["inspect", "o1", "--output", "t1", "--query", "name"],
+            ["inspect", "o1", "--output", "t1", "--offset", "2"],
+            ["inspect", "o1", "--output", "../file"],
+        ]:
+            code, response, requests = self.run_cli(args)
+            self.assertNotEqual(code, 0)
+            self.assertEqual(response["error"]["code"], "invalid_output_read")
+            self.assertEqual(requests, [])
+
     def test_native_evidence_preserves_exit_and_never_replays_on_copy_failure(self):
         with tempfile.TemporaryDirectory() as evidence:
             for outcome in ("completed", "unknown", "not_dispatched", "prepared"):
