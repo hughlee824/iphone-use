@@ -40,23 +40,35 @@ final class AXAutomationProcessTests: XCTestCase {
         let owner = try SessionDeviceLock(root: directory, device: "device")
         let script = directory.appendingPathComponent("helper.py")
         let journal = directory.appendingPathComponent("journal.json")
-        func run(_ source: String, cancelled: @escaping () -> Bool = { false }) throws -> [String: Any] {
+        func run(_ source: String, timeout: Double = 15, cancelled: @escaping () -> Bool = { false })
+            throws -> [String: Any] {
             try source.write(to: script, atomically: true, encoding: .utf8)
             return try AXAutomationProcess(ownership: owner).run(
                 device: "device", journal: journal, token: token, enabled: true, cancelled: cancelled,
-                executable: URL(fileURLWithPath: "/usr/bin/python3"), prefix: ["-I", "-B", script.path], timeout: 1)
+                executable: URL(fileURLWithPath: "/usr/bin/python3"), prefix: ["-I", "-B", script.path],
+                timeout: timeout)
         }
         let prefix = "import sys,json; a=dict(zip(sys.argv[1::2],sys.argv[2::2])); "
         let reply = prefix
             + "json.dump({'device':a['--device'],'token':a['--token'],'enabled':True},open(a['--output'],'w'))"
         XCTAssertEqual(try run(reply)["token"] as? String, token)
-        XCTAssertThrowsError(try run(prefix + "json.dump({'token':'wrong'},open(a['--output'],'w'))"))
-        XCTAssertThrowsError(try run(prefix + "open(a['--output'],'w').write('x'*70000)"))
-        XCTAssertThrowsError(try run("import sys; sys.exit(2)"))
+        XCTAssertThrowsError(try run(prefix + "json.dump({'token':'wrong'},open(a['--output'],'w'))")) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "ax_automation_invalid")
+        }
+        XCTAssertThrowsError(try run(prefix + "open(a['--output'],'w').write('x'*70000)")) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "ax_automation_invalid")
+        }
+        XCTAssertThrowsError(try run("import sys; sys.exit(2)")) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "ax_automation_uncertain")
+        }
         let start = ProcessInfo.processInfo.systemUptime
-        XCTAssertThrowsError(try run("import time; time.sleep(60)"))
+        XCTAssertThrowsError(try run("import time; time.sleep(60)", timeout: 1)) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "ax_automation_uncertain")
+        }
         XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - start, 3)
-        XCTAssertThrowsError(try run("raise Exception('must not run')", cancelled: { true }))
+        XCTAssertThrowsError(try run("raise Exception('must not run')", cancelled: { true })) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "ax_automation_cancelled")
+        }
         let resultPath = directory.appendingPathComponent("ax-result-\(token).json").path
         XCTAssertFalse(FileManager.default.fileExists(atPath: resultPath))
     }
