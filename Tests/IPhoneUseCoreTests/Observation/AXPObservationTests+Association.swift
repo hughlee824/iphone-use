@@ -2,7 +2,7 @@ import XCTest
 @testable import IPhoneUseCore
 
 extension AXPObservationTests {
-    func testChangedContentKeepsAXAndExplainsNonAtomicEvidenceInOutput() throws {
+    func testChangedContentKeepsAXAndAcquisitionEvidenceWithCompactHeader() throws {
         let initial = try screenshot()
         let changed = CapturedObservation(nodes: [], metadata: initial.metadata,
             screenshot: try screenPNG(patches: [(CGRect(x: 20, y: 180, width: 300, height: 400), [0, 0, 0])]))
@@ -12,9 +12,10 @@ extension AXPObservationTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let output = try ObservationCache(directory: root).store(capture)
         let text = try XCTUnwrap(output["text"] as? String)
-        XCTAssertTrue(text.contains("ax=available"))
-        XCTAssertTrue(text.contains("observation_atomic=false acquisition=parallel_ax_screenshot"))
-        XCTAssertTrue(text.contains("atomic=false element_actions=false"))
+        XCTAssertTrue(text.hasPrefix("obs=o1 ax_app=example.test screen=390x844pt"))
+        let acquisition = try XCTUnwrap(capture.metadata["observationAcquisition"] as? [String: Any])
+        XCTAssertEqual(acquisition["atomic"] as? Bool, false)
+        XCTAssertEqual(acquisition["strategy"] as? String, "parallel_ax_screenshot")
         XCTAssertEqual(capture.nodes.count, 3)
         XCTAssertEqual(capture.screenshot, changed.screenshot)
     }

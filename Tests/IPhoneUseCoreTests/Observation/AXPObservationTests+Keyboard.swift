@@ -56,9 +56,9 @@ extension AXPObservationTests {
         XCTAssertFalse(text.contains("\"q\""))
         XCTAssertTrue(text.contains("\"next\""))
         XCTAssertTrue(text.contains("keyboard \"Keyboard\""))
-        XCTAssertTrue(text.contains("presentation_selection=semantic_candidates_and_keyboard_context"))
+        XCTAssertTrue(text.contains("screen=390x844pt"))
         XCTAssertTrue(text.contains("Security, WPA2"))
-        XCTAssertTrue(text.contains("keyboard_character_keys_omitted=1"))
+        XCTAssertEqual(PresentedAX.project(capture).omittedKeyboardCharacters, 1)
         let query = try cache.inspect(ObservationReference("o1"), offset: 0, query: "q")
         XCTAssertTrue((query["text"] as? String)?.contains("o1:e3") == true)
         let raw = try jsonObject(Data(contentsOf: URL(fileURLWithPath: try XCTUnwrap(output["snapshot"] as? String))))
@@ -123,7 +123,7 @@ extension AXPObservationTests {
         let output = try ObservationCache(directory: directory).store(capture)
         let text = try XCTUnwrap(output["text"] as? String)
         XCTAssertTrue(text.contains("ax_omitted_supplemental_candidates=1"))
-        XCTAssertTrue(text.contains("source_missing=true"))
+        XCTAssertTrue(text.contains("truncated=true"))
         XCTAssertTrue(text.contains("Security, WPA2"))
         for malformed in [0, -1, 2, 6] {
             value["omittedSupplementalCandidateCount"] = malformed

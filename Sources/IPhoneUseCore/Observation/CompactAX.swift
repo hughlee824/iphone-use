@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 enum CompactAX {
-    static func render(_ nodes: [AXNode], including: Set<Int>? = nil) -> [String] {
+    static func render(_ nodes: [AXNode], including: Set<Int>? = nil, layout: AXListLayout? = nil) -> [String] {
         var children = Array(repeating: [Int](), count: nodes.count)
         for node in nodes { if let parent = node.parent { children[parent].append(node.index) } }
         var kept: [Int] = []
@@ -11,8 +11,16 @@ enum CompactAX {
         var signatures: [Int: Set<String>] = [:]
         for node in nodes {
             let nearest = node.parent.flatMap { ancestor[$0] }
-            var keep = shouldKeep(
-                node, nearest: nearest.map { nodes[$0] }, children: children[node.index].map { nodes[$0] })
+            // When the row label is moved to its child, compare against the label actually rendered.
+            let namedAncestor = nearest.flatMap { index -> AXNode? in
+                if let layout {
+                    if layout.incompleteContent.contains(index) || layout.rowLabels[index] != nil { return nil }
+                    if node.role == "text", !(node.attributes["visible"] is Bool),
+                       !AXListLayout.plainText(node, under: nodes[index]) { return nil }
+                }
+                return nodes[index]
+            }
+            var keep = shouldKeep(node, nearest: namedAncestor, children: children[node.index].map { nodes[$0] })
             if let including, !including.contains(node.index) { keep = false }
             // Only fold identical generic container siblings, never equally named controls.
             if node.role == "group", node.identifier.isEmpty,
@@ -39,7 +47,7 @@ enum CompactAX {
             }
         }
         let names = Dictionary(grouping: kept, by: { "\(nodes[$0].role):\(nodes[$0].label)" })
-        return kept.map { renderNode(nodes[$0], depth: depths[$0] ?? 0, names: names) }
+        return kept.map { renderNode(nodes[$0], depth: depths[$0] ?? 0, names: names, layout: layout) }
     }
 
     private static func shouldKeep(_ node: AXNode, nearest: AXNode?, children: [AXNode]) -> Bool {
@@ -66,15 +74,24 @@ enum CompactAX {
         return keep
     }
 
-    private static func renderNode(_ node: AXNode, depth: Int, names: [String: [Int]]) -> String {
-        var line = String(repeating: "  ", count: depth) + "[\(node.ref)] \(node.role)"
-        if !node.label.isEmpty { line += " \(quoted(node.label))" }
+    private static func renderNode(
+        _ node: AXNode, depth: Int, names: [String: [Int]], layout: AXListLayout?
+    ) -> String {
+        let row = layout?.rows.contains(node.index) == true
+        let marker = layout != nil && !(node.attributes["visible"] is Bool) ? "?" : ""
+        let incomplete = layout?.incompleteContent.contains(node.index) == true
+        var line = String(repeating: "  ", count: depth) + "[\(node.ref)\(marker)] \(row ? "row" : node.role)"
+        let label = incomplete ? "" : (layout?.rowLabels[node.index] ?? node.label)
+        if !label.isEmpty { line += " \(quoted(label))" }
+        if layout != nil, node.role == "tab", AXPresentationTraits(node).contains(.selected) {
+            line += " selected=true"
+        }
         let input = ["text_field", "secure_text_field", "text_view", "search_field"].contains(node.role)
         let value = input ? node.attributes["value"] : node.value
-        if let value, !(value is NSNull), input || (value as? String) != node.label {
+        if !incomplete, let value, !(value is NSNull), input || (value as? String) != node.label {
             line += " ax_value=\(quoted(value))"
         }
-        if !node.identifier.isEmpty,
+        if !incomplete, !node.identifier.isEmpty,
             node.label.isEmpty || names["\(node.role):\(node.label)", default: []].count > 1 {
             line += " id=\(quoted(node.identifier))"
         }
@@ -82,6 +99,12 @@ enum CompactAX {
         if node.enabled == true { line += " enabled=true" }
         if let focus = node.attributes["keyboardFocus"] as? Bool {
             line += " keyboard_focus=\(focus)"
+        }
+        if let layout, let rect = PresentedAX.rect(node.attributes["frame"]) {
+            line += " @" + StandardCompactAX.coordinates(rect)
+            if let clip = layout.clips[node.index] {
+                line += " clip=" + clip.bands.map(StandardCompactAX.coordinates).joined(separator: "|")
+            }
         }
         return line
     }

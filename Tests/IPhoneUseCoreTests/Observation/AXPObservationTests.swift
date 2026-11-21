@@ -145,7 +145,8 @@ final class AXPObservationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = ObservationCache(directory: directory)
         let output = try cache.store(capture)
-        XCTAssertTrue((output["text"] as? String)?.contains("element_actions=false") == true)
+        XCTAssertEqual(output["observation"] as? String, "o1")
+        XCTAssertEqual(capture.metadata["axElementActions"] as? Bool, false)
         let query = try cache.inspect(ObservationReference("o1"), offset: 0, query: "Repeated")
         XCTAssertTrue((query["text"] as? String)?.contains("matched_nodes=2") == true)
         for operation in ["tap", "focus", "clear", "type", "press"] {

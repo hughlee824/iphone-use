@@ -47,8 +47,11 @@ extension ObservationCache {
         var response = original
         // Frozen output never advertises historical refs=current; each read supplies live validity.
         let text = original["text"] as? String ?? ""
-        let document = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+        var document = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
             .dropFirst().joined(separator: "\n")
+        if text.hasPrefix("obs="), entry.capture.metadata["backend"] as? String == "apple-native" {
+            document = StandardCompactAX.legend + "\n" + text
+        }
         let identity = "observation=\(entry.id) refs=\(entry.validity)"
             + (entry.capture.metadata["sourceTruncated"] as? Bool == true ? "\nsource_missing=true" : "")
         response["text"] = identity

@@ -24,6 +24,35 @@ extension ObservationCache {
         let metadata = capture.metadata
         let screenshot = entry.directory.appendingPathComponent("screen.png").path
         let snapshot = entry.directory.appendingPathComponent("snapshot.json").path
+        let standard = detail == nil && metadata["backend"] as? String == "apple-native"
+        var lines: [String]
+        if standard {
+            lines = StandardCompactAX.lines(capture, id: entry.id)
+            lines.append("screenshot=\(quoted(screenshot))")
+        } else {
+            lines = diagnosticLines(entry, detail: detail, screenshot: screenshot, snapshot: snapshot)
+        }
+        var response: [String: Any] = [
+            "observation": entry.id, "refs": entry.validity, "screenshot": screenshot, "snapshot": snapshot,
+            "text": lines.joined(separator: "\n")
+        ]
+        if let query = detail?.query { response["query"] = query }
+        let reference = entry.directory.appendingPathComponent("ax-before.png")
+        if capture.axComparisonScreenshot != nil {
+            if FileManager.default.fileExists(atPath: reference.path) {
+                response["axComparisonScreenshot"] = reference.path
+            } else {
+                response["axComparisonEvidenceError"] = "Could not retain AX comparison screenshot"
+            }
+        }
+        return deliverText(response, entry: entry)
+    }
+
+    private func diagnosticLines(
+        _ entry: Entry, detail: Detail?, screenshot: String, snapshot: String
+    ) -> [String] {
+        let capture = entry.capture
+        let metadata = capture.metadata
         var lines = [
             """
             observation=\(entry.id) refs=\(entry.validity)
@@ -56,20 +85,7 @@ extension ObservationCache {
             lines.append("source_missing=true; uncaptured nodes cannot be expanded from this snapshot")
         }
         lines.append(footer)
-        var response: [String: Any] = [
-            "observation": entry.id, "refs": entry.validity, "screenshot": screenshot, "snapshot": snapshot,
-            "text": lines.joined(separator: "\n")
-        ]
-        if let query = detail?.query { response["query"] = query }
-        let reference = entry.directory.appendingPathComponent("ax-before.png")
-        if capture.axComparisonScreenshot != nil {
-            if FileManager.default.fileExists(atPath: reference.path) {
-                response["axComparisonScreenshot"] = reference.path
-            } else {
-                response["axComparisonEvidenceError"] = "Could not retain AX comparison screenshot"
-            }
-        }
-        return deliverText(response, entry: entry)
+        return lines
     }
 
     private func appendNativeMetadata(_ metadata: [String: Any], to lines: inout [String]) {

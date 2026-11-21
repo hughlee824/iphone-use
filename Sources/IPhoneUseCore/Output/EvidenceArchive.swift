@@ -17,6 +17,15 @@ public enum EvidenceArchive {
             try write(try jsonData(response), to: receipt)
             artifacts["receipt"] = receipt.path
             let observation = observation(in: response)
+            if let text = observation["text"] as? String, text.hasPrefix("obs="),
+               let footer = text.range(of: "\nscreenshot=", options: .backwards) {
+                let destination = folder.appendingPathComponent("compact-ax.txt")
+                let document = StandardCompactAX.legend + "\n" + text[..<footer.lowerBound] + "\n"
+                do {
+                    try write(Data(document.utf8), to: destination)
+                    artifacts["compactAX"] = destination.path
+                } catch { errors.append("compactAX: \(error)") }
+            }
             if let error = observation["axComparisonEvidenceError"] as? String { errors.append(error) }
             for (key, name) in [("screenshot", "screenshot.png"), ("snapshot", "snapshot.json"),
                                 ("axComparisonScreenshot", "ax-before.png"), ("fullText", "ax-output.txt")] {

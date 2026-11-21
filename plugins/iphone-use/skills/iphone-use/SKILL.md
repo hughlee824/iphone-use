@@ -37,6 +37,8 @@ An observation pairs AX and PNG under one ID; it is **not an atomic snapshot**. 
 
 Compact AX omits unknown states. Missing state attributes mean unknown, never an implicit true/false or permission to act. Known enabled states appear as `enabled=true` or `disabled`; known focus appears as `keyboard_focus=true/false`. Indentation follows the nearest retained ancestor after redundant layout wrappers are folded; `inspect` preserves captured attributes and original hierarchy. Identical names can still refer to different controls.
 
+Standard compact AX starts with `obs`, the AX source app when known, and screen size in points. Read `@x,y,w,h` as absolute screen points from the top left, including child nodes. `clip=` gives the geometrically exposed portion, with separate rectangles divided by a vertical bar. Neither box proves tappability; confirm the target on the attached PNG. In `[e12?]`, the suffix marks unknown AX visibility. Inspect that node with `oN:e12`.
+
 Observe returns the full compact text; inspect pages contain complete attributes. Oversized results set `outputDeferred=true` and provide `fullText` plus `nextRead`. Follow `inspect oN --output tN --byte-offset N` against the same cached observation; concatenate `content` fields (not the annotated `text`) for exact UTF-8 reconstruction. Use each response's current `refs`, never infer action validity from an archived file. Output files are temporary; `--evidence-dir` archives them. `outputError` means presentation delivery failed, not that phone input should be replayed.
 
 - `completed`: execution completed or verified no-op; inspect the actual UI result.
