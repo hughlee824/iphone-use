@@ -53,6 +53,21 @@ public struct FrameFingerprint {
         hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
+    // The provider retains the immutable normalized pixels; no PNG decode or
+    // second full-sized bitmap is needed. The encoded observation stays untouched.
+    public func normalizedImage() throws -> ScreenImage {
+        guard let provider = CGDataProvider(data: pixels as CFData),
+            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+            let image = CGImage(
+                width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                bytesPerRow: width * 4, space: colorSpace,
+                bitmapInfo: CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Big.rawValue
+                    | CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else { throw Failure.invalidImage }
+        return ScreenImage(image: image)
+    }
+
     // Diagnostic mask of ALL raw pixel differences, including tolerated color/caret
     // differences. Original screenshots remain untouched; this is never an observation.
     public func differencePNG(from reference: FrameFingerprint) throws -> Data {

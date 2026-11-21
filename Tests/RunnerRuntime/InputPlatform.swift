@@ -29,7 +29,7 @@ final class XCUIElementSnapshot {
     let elementType: XCUIElement.ElementType
     init(_ element: XCUIElement) {
         self.element = element
-        children = element.children.map(Self.init)
+        children = (element.snapshotChildren ?? element.children).map(Self.init)
         value = element.value; frame = element.frame; elementType = element.elementType
     }
 }
@@ -37,6 +37,9 @@ class XCUIElement {
     enum ElementType: UInt { case any, textView, textField, secureTextField, searchField }
     let identity = NSUUID()
     var children: [XCUIElement] = []
+    // Model a system-filtered snapshot while query objects still retain background elements.
+    // This does not implement or certify XCTest's private modal filtering policy.
+    var snapshotChildren: [XCUIElement]?
     var value: Any? = "old"
     var focused = false
     var removed = false
@@ -63,8 +66,9 @@ struct TestCoordinate {
                thenHoldForDuration: Double) { preconditionFailure("Unexpected gesture") }
 }
 final class TestAlerts {
-    var count: Int { 0 }
-    var firstMatch: XCUIElement { preconditionFailure("Unexpected alert") }
+    var elements: [XCUIElement] = []
+    var count: Int { elements.count }
+    var firstMatch: XCUIElement { elements[0] }
 }
 final class XCUIApplication: XCUIElement {
     enum State { case runningForeground }

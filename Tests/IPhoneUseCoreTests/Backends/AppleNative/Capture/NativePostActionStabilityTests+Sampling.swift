@@ -193,9 +193,9 @@ extension NativePostActionStabilityTests {
         XCTAssertEqual(facts(result)["stable"] as? Bool, false)
     }
 
-    func testCancellationAndLockFailureNeverReturnCachedSuccess() throws {
+    func testCancellationAndAcquisitionFailureNeverReturnCachedSuccess() throws {
         let firstSample = try frame()
-        for code in ["native_cancelled", "device_locked", "native_orientation_unverified"] {
+        for code in ["native_cancelled", "capture_failed", "native_orientation_unverified"] {
             var time = 0.0, count = 0
             XCTAssertThrowsError(
                 try NativePostActionStability.capture(

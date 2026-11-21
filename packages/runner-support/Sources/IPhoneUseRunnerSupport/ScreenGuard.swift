@@ -64,6 +64,10 @@ public struct ScreenGuard: Codable {
         public let screenChange: Double
         public let regionChanges: [Double]
         public let policy: Policy
+        // Native coordinate preflight may retain measurements without using them as vetoes.
+        // Default checks (including Runner and text) keep their original scope.
+        public var diagnosticOnlyGlobal = false
+        public var diagnosticOnlyRegions: [Int] = []
         public var dynamicMatches: [Bool]?
         public var fieldPixelsMatch: Bool?
         public var fieldCaretMatch = false
@@ -74,11 +78,14 @@ public struct ScreenGuard: Codable {
         public var ignoredRect: ScreenRect?
         public var rawScreenChange: Double?
         public var regionsAccepted: Bool {
-            regionChanges.allSatisfy { $0 <= policy.maxRegionChange }
+            regionChanges.enumerated().allSatisfy {
+                diagnosticOnlyRegions.contains($0.offset) || $0.element <= policy.maxRegionChange
+            }
         }
+        public var globalAccepted: Bool { diagnosticOnlyGlobal || screenChange <= policy.maxScreenChange }
         public var accepted: Bool {
             if let dynamicMatches { return dynamicMatches.count == 2 && dynamicMatches.allSatisfy { $0 } }
-            return screenChange <= policy.maxScreenChange
+            return globalAccepted
                 && (regionsAccepted && fieldPixelsMatch != false || fieldCaretMatch || fieldAppearanceMatch)
         }
         public var result: [String: Any] {
@@ -88,6 +95,11 @@ public struct ScreenGuard: Codable {
                 "regionChanges": regionChanges, "maxScreenChange": policy.maxScreenChange,
                 "maxRegionChange": policy.maxRegionChange, "pixelTolerance": ScreenGuard.pixelTolerance
             ]
+            if diagnosticOnlyGlobal || !diagnosticOnlyRegions.isEmpty {
+                result["validationScope"] = "native_gesture_regions"
+                result["diagnosticOnlyGlobal"] = diagnosticOnlyGlobal
+                result["diagnosticOnlyRegions"] = diagnosticOnlyRegions
+            }
             if let dynamicMatches {
                 result["algorithm"] = ScreenGuard.dynamicAlgorithm
                 result["dynamicMatches"] = dynamicMatches

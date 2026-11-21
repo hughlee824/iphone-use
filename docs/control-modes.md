@@ -6,7 +6,7 @@ iPhone-use provides explicit mode selection. Use `--version` and `connect --help
 
 | | standard | runner |
 | --- | --- | --- |
-| Observation | Screenshots | Screenshots and available accessibility elements |
+| Observation | Screenshots; available [AX observations](standard-ax.md) | Screenshots and available accessibility elements |
 | Input | Native HID | XCTest Runner |
 | Runner installation and development signing | Not required | Required |
 
@@ -74,7 +74,7 @@ The preference is global to this macOS user. There are no device-level overrides
 Agent rules:
 
 1. Use [explicit sequential connection reuse](session-reuse.md) when continuing a healthy connection. Respect created/borrowed ownership and obtain a fresh observation. Otherwise connect using the user’s explicit choice or saved default; do not choose based on installed developer tools.
-2. Read the session's support and readiness. Standard mode uses screenshot `oN` references; Runner permits captured `oN:eN` elements where supported. Screenshots still work for Runner coordinate taps/swipes.
+2. Read the session's support and readiness. Standard actions use screenshot `oN` references; available AX `oN:eN` references are for inspection only; Runner permits captured `oN:eN` elements where supported. Screenshots still work for Runner coordinate taps/swipes.
 3. Keep session/observation binding, coordinates, screen protection and outcome facts intact. Text `--mode insert|replace|append` controls editing and is separate from **connect** `--mode standard|runner`.
 4. Unsupported operations or unavailable control are explicit failures. Do not start another backend to complete them. If the result is unknown, observe and judge the effect; never replay automatically.
 5. Changing the user configuration affects only new connections. To change a device's active mode, explicitly close its session, handle pending input/clipboard/media cleanup, then connect with the new mode and observe again. Never transfer old references or pending actions. Existing per-device locking prevents simultaneous iPhone-use control sessions. Cleanup uncertainty is reported, not resolved by switching routes.
@@ -91,7 +91,7 @@ Runner implements Return, Backspace, arrows and Tab/Shift+Tab with the same name
 
 ## Current differences
 
-Both modes support coordinate tap, long-press, swipe/drag, double-tap, pinch, Home and application lifecycle commands. Runner also exposes available elements and uses element references for text/press; standard mode uses visually confirmed focus and optional screenshot field rectangles. Runner Escape remains unsupported, and ordinary Runner typing rejects CR/CRLF while standard paste preserves it. Both modes additionally support explicit `--method touch-paste` staging and `text-finish`; it accepts literal CR/LF without key synthesis. Native keyboard preparation and auto/keys/paste method selection remain standard-only. Keep these differences explicit in session support; neither mode silently starts the other control backend.
+Both modes support coordinate tap, long-press, swipe/drag, double-tap, pinch, Home and application lifecycle commands. Both modes expose available AX for inspection. Runner uses element references for text/press; standard mode uses visually confirmed focus and optional screenshot field rectangles. Runner Escape remains unsupported, and ordinary Runner typing rejects CR/CRLF while standard paste preserves it. Both modes additionally support explicit `--method touch-paste` staging and `text-finish`; it accepts literal CR/LF without key synthesis. Native keyboard preparation and auto/keys/paste method selection remain standard-only. Keep these differences explicit in session support; neither mode silently starts the other control backend.
 
 Both modes implement `record-start` / `record-stop` through the shared native media recorder. The current source also provides an experimental read-only `preview` command. Explicit preview or recording requests delegate to the independent capture process; input stays on XCTest or HID. Preview can also start by device ID without either control session. A recording started while preview is active shares its decoded frames and retains the media connection until both consumers stop. It neither creates a HID control session nor waits for XCTest attachment export. Preview does not create observations or renew the session through browser requests. See [Runner recording](runner-recording.md) and [local preview](local-preview.md) for ownership, usage and the known performance/rotation limits. Stable 30 fps has not passed acceptance.
 

@@ -13,19 +13,21 @@ struct NativeInputPreflight {
     let fieldGuard: NativeTextFieldGuard?
     let caretGuard: NativeBoundCaretGuard?
     let budget: NativeCaptureBudget?
+    let gestureValidation: NativeGestureValidation?
     static func check(
         guard screenGuard: ScreenGuard, displayID: UInt64?, displayRotation: String? = nil,
         displayUniqueID: String? = nil,
         captureSource: String? = nil, deadline: TimeInterval, maximumCaptures: Int,
         fieldGuard: NativeTextFieldGuard? = nil, caretGuard: NativeBoundCaretGuard? = nil,
-        budget: NativeCaptureBudget? = nil, now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        budget: NativeCaptureBudget? = nil, gestureValidation: NativeGestureValidation? = nil,
+        now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         record: ([String: Any]) -> Void = { _ in }, capture: () throws -> CapturedObservation
     ) throws -> (ScreenGuard.Check, Int) {
         try Self(
             screenGuard: screenGuard, displayID: displayID, displayUniqueID: displayUniqueID,
             displayRotation: displayRotation,
             captureSource: captureSource, deadline: deadline, maximumCaptures: maximumCaptures, fieldGuard: fieldGuard,
-            caretGuard: caretGuard, budget: budget
+            caretGuard: caretGuard, budget: budget, gestureValidation: gestureValidation
         ).run(now: now, record: record, capture: capture)
     }
 
@@ -33,6 +35,9 @@ struct NativeInputPreflight {
         now: () -> TimeInterval, record: ([String: Any]) -> Void, capture: () throws -> CapturedObservation
     ) throws -> (ScreenGuard.Check, Int) {
         guard (1...6).contains(maximumCaptures), deadline.isFinite else { throw ScreenGuard.Failure.invalidGuard }
+        if gestureValidation != nil, fieldGuard != nil || caretGuard != nil {
+            throw ScreenGuard.Failure.invalidGuard
+        }
         let started = now()
         let capturesLimit = fieldGuard == nil ? maximumCaptures : 1
         var actualCaptures = 0
@@ -74,7 +79,7 @@ struct NativeInputPreflight {
                     frame, check: check, fieldRejection: fieldRejection, timing: (started, captureStarted),
                     sample: Sample(attempt: attempt, checkedAt: checkedAt, inTime: inTime)))
             if check.accepted && inTime { return (check, actualCaptures) }
-            if attempt == capturesLimit || !inTime || check.screenChange > check.policy.maxScreenChange {
+            if attempt == capturesLimit || !inTime || !check.globalAccepted {
                 throw rejection(
                     check, inTime: inTime, fieldRejection: fieldRejection, actualCaptures: actualCaptures, frame: frame)
             }
@@ -171,6 +176,7 @@ struct NativeInputPreflight {
             comparisonImage = image
         }
         check = try screenGuard.check(image: comparisonImage, context: context)
+        gestureValidation?.apply(to: &check)
         if let fieldGuard {
             let current = try fieldGuard.pixels(png: frame.screenshot, context: context, decodedImage: image)
             let match = fieldGuard.compare(current, caret: caretGuard)
@@ -188,8 +194,8 @@ struct NativeInputPreflight {
             !inTime
             ? "input_preflight_timeout"
             : (fieldGuard == nil
-                ? "stale_observation"
-                : (check.screenChange > check.policy.maxScreenChange
+                ? (gestureValidation != nil && check.globalAccepted ? "target_region_changed" : "stale_observation")
+                : (!check.globalAccepted
                     ? "screen_changed" : fieldRejection ?? "text_field_changed"))
         let message =
             reason == "caret_confirmation_required"

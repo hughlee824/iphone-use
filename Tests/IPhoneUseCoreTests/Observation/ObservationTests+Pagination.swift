@@ -22,19 +22,21 @@ extension ObservationTests {
         let (cache, _) = try cache()
         let response = try cache.store(
             CapturedObservation(nodes: nodes, metadata: metadata, screenshot: original.screenshot))
-        let text = (try XCTUnwrap(response["text"] as? String))
-        XCTAssertLessThanOrEqual(text.utf8.count, 8192)
-        XCTAssertLessThanOrEqual(text.split(separator: "\n").count, 60)
-        XCTAssertTrue(text.contains("unexpanded="))
-        XCTAssertTrue(text.contains("source_missing=true"))
-        XCTAssertTrue(text.contains("detail_clipped=true"))
-        XCTAssertTrue(text.contains("\\n\\\"quoted\\\""))
+        XCTAssertLessThan(try jsonData(response).count, ObservationCache.inlineTextLimit)
+        XCTAssertEqual(response["outputDeferred"] as? Bool, true)
+        let full = try String(contentsOfFile: XCTUnwrap(response["fullText"] as? String), encoding: .utf8)
+        XCTAssertTrue(full.contains("source_missing=true"))
+        XCTAssertFalse(full.contains("detail_clipped=true"))
+        XCTAssertTrue(full.contains("\\n\\\"quoted\\\""))
         var offset = 0
         var visited = 0
         repeat {
-            let page = try (try XCTUnwrap(cache.inspect(ObservationReference("o1"), offset: offset)["text"] as? String))
-            XCTAssertLessThanOrEqual(page.utf8.count, 8192)
-            visited += page.split(separator: "\n").filter { $0.hasPrefix("[e") }.count
+            let result = try cache.inspect(ObservationReference("o1"), offset: offset)
+            XCTAssertLessThan(try jsonData(result).count, ObservationCache.inlineTextLimit)
+            let page = try String(contentsOfFile: XCTUnwrap(result["fullText"] as? String), encoding: .utf8)
+            let matches = try queryNodes(["text": page])
+            visited += matches.count
+            XCTAssertTrue(matches.allSatisfy { ($0["value"] as? String) == String(repeating: "北京", count: 2000) })
             if let line = page.split(separator: "\n").first(where: { $0.hasPrefix("more:") }),
                 let range = line.range(of: "--offset ") {
                 offset = Int(line[range.upperBound...].split(separator: " ")[0])!

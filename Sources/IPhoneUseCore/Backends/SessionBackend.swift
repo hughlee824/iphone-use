@@ -12,6 +12,7 @@ protocol SessionBackend: AnyObject {
     func observe() throws -> CapturedObservation
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation
     func observeAfterAction(
+        actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
     ) throws -> CapturedObservation
     func perform(_ action: DeviceAction, target: ObservedTarget, onInputStarted: @escaping () -> Void) throws
@@ -39,6 +40,7 @@ extension SessionBackend {
     func previewTick() -> Bool { false }
     func setEventDeliveryQueue(_ queue: DispatchQueue) {}
     func observeAfterAction(
+        actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
     ) throws -> CapturedObservation {
         throw IPhoneUseError(

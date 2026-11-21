@@ -9,7 +9,8 @@ extension ObservationTests {
         let nodes = (0..<200).map { index -> AXNode in
             var attributes = original.nodes[26].attributes
             attributes["index"] = index; attributes["parent"] = index == 0 ? NSNull() : 0
-            attributes["label"] = index == 185 ? "Calendar" : "Background \(index)"
+            attributes["label"] = index == 185 ? "Calendar"
+                : "Background \(index) " + String(repeating: "description ", count: 10)
             attributes["identifier"] = index == 185 ? "calendar.entry" : ""
             attributes["value"] = index == 185 ? String(repeating: "北京", count: 2000) + "TailNeedle" : ""
             attributes["enabled"] = index != 185
@@ -20,8 +21,8 @@ extension ObservationTests {
         let (cache, _) = try cache()
         let stored = try cache.store(
             CapturedObservation(nodes: nodes, metadata: original.metadata, screenshot: original.screenshot))
-        XCTAssertFalse(((try XCTUnwrap(stored["text"] as? String))).contains("Calendar"))
-        XCTAssertTrue(((try XCTUnwrap(stored["text"] as? String))).contains("--query TEXT"))
+        XCTAssertTrue(((try XCTUnwrap(stored["text"] as? String))).contains("Calendar"))
+        XCTAssertTrue(((try XCTUnwrap(stored["text"] as? String))).contains("TailNeedle"))
         for query in ["cAlEnDaR", "calendar.entry", "tailneedle", "button"] {
             let result = try cache.inspect(ObservationReference("o1"), offset: 0, query: query)
             let matches = try queryNodes(result)
@@ -30,11 +31,12 @@ extension ObservationTests {
             XCTAssertEqual(match["ref"] as? String, "o1:e186")
             XCTAssertEqual(match["parentRef"] as? String, "o1:e1")
             XCTAssertEqual(match["enabled"] as? Bool, false)
-            XCTAssertEqual(match["detail_clipped"] as? Bool, true)
+            XCTAssertNil(match["detail_clipped"])
+            XCTAssertEqual(match["value"] as? String, nodes[185].attributes["value"] as? String)
             XCTAssertTrue(
                 NSDictionary(dictionary: (try XCTUnwrap(match["frame"] as? [String: Any]))).isEqual(
                     to: (try XCTUnwrap(nodes[185].attributes["frame"] as? [String: Any]))))
-            XCTAssertLessThanOrEqual(((try XCTUnwrap(result["text"] as? String))).utf8.count, 8192)
+            XCTAssertLessThan(try jsonData(result).count, ObservationCache.inlineTextLimit)
         }
         XCTAssertThrowsError(try cache.inspect(ObservationReference("o1"), offset: 1, query: "Calendar"))
         XCTAssertThrowsError(try cache.inspect(ObservationReference("o1"), offset: -1, query: "Calendar"))
@@ -61,7 +63,7 @@ extension ObservationTests {
             let matches = try queryNodes(result)
             XCTAssertTrue(text.contains("matched_nodes=30 searched_nodes=60"))
             XCTAssertLessThanOrEqual(matches.count, 20)
-            XCTAssertLessThanOrEqual(text.utf8.count, 8192)
+            XCTAssertLessThanOrEqual(text.utf8.count, ObservationCache.inlineTextLimit)
             refs += try matches.map { (try XCTUnwrap($0["ref"] as? String)) }
             guard let continuation = text.split(separator: "\n").first(where: { $0.hasPrefix("more:") })
             else { break }

@@ -24,14 +24,14 @@ extension NativeCaptureTests {
         }
     }
 
-    func testControlUsesOwnScreenshotsWithoutMediaAndStillRejectsLockAndWrongGeometry() throws {
+    func testControlUsesOwnScreenshotsWithoutMediaOrLockGateAndRejectsWrongGeometry() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try SessionPaths.secureDirectory(directory)
         defer { try? FileManager.default.removeItem(at: directory) }
         let backend = AppleDeviceBackend(
             config: HostConfiguration(session: "s" + String(repeating: "b", count: 32),
                                       device: "fixture", xctestrun: "fixture", idleTimeoutSeconds: 180),
-            paths: SessionPaths(directory: directory))
+            paths: SessionPaths(directory: directory), axpReader: nil)
         let transport = ScriptedTransport()
         let hid = NativeHIDAdapter(transport: transport, cancellation: backend.cancellation)
         try hid.prepare(); backend.hid = hid
@@ -52,10 +52,8 @@ extension NativeCaptureTests {
         XCTAssertEqual(transport.requests.count, 1, "Only HID preparation; no media inventory or preview request")
         XCTAssertTrue(transport.sends.isEmpty)
         locked = true
-        XCTAssertThrowsError(try backend.observe()) {
-            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "device_locked")
-        }
-        XCTAssertEqual(screenshots, 1)
+        XCTAssertEqual(try backend.observe().screenshot, png)
+        XCTAssertEqual(screenshots, 2)
         locked = false; png = try screenPNG(width: 18, height: 12)
         XCTAssertThrowsError(try backend.observe()) {
             XCTAssertEqual(($0 as? IPhoneUseError)?.code, "native_screenshot_geometry_conflict")

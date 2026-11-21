@@ -97,7 +97,13 @@ struct Disconnect: ParsableCommand {
 
 struct Observe: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Capture a screenshot with a new observation ID; Runner also returns available elements.")
+        abstract: "Capture a screenshot and available AX with a new observation ID.",
+        discussion: """
+        Compact AX omits unknown states: absent enabled or keyboard_focus does not mean true or false.\
+         Known enabled states appear as enabled=true or disabled. Indentation follows the nearest retained\
+         ancestor after folding redundant layout wrappers. Inspect preserves full captured attributes and\
+         original hierarchy. Neither omitted states nor visible content prove actionability.
+        """)
     @OptionGroup var options: SessionOptions
     mutating func run() throws {
         let session = try options.requiredSession()
@@ -121,7 +127,9 @@ struct Inspect: ParsableCommand {
                  prove visibility or clickability.\u{20}
                 """
                 + "A truncated source may omit the target; inspect cannot fetch missing source data. "
-                + "For an already known element, inspect its reference directly instead of paging the whole tree."
+                + "For an already known element, inspect its reference directly instead of paging the whole tree. "
+                + "Oversized results provide a full text file and --output/--byte-offset continuation. "
+                + "Byte offsets address UTF-8 scalar boundaries; concatenate content fields to recover the exact text."
     )
     @OptionGroup var options: SessionOptions
     @Argument(help: "Observation or element reference, such as o1 or o1:e2.") var reference: String
@@ -134,11 +142,28 @@ struct Inspect: ParsableCommand {
     ) var query: String?
     @Option(help: "Node offset, or match offset with --query, returned by the previous inspect page.")
     var offset = 0
+    @Option(name: .customLong("output"),
+            help: "Cached oversized output ID returned by observe or inspect; observation reference only.")
+    var outputID: String?
+    @Option(help: "UTF-8 byte offset returned with --output; requires --output; no --query or nonzero --offset.")
+    var byteOffset: Int?
     mutating func run() throws {
         let session = try options.requiredSession()
         var fields: [String: Any] = ["reference": reference, "offset": offset]
         fields["query"] = query
-        try output(compact: true, evidenceDir: options.evidence.directory) {
+        try output(compact: outputID == nil, evidenceDir: options.evidence.directory) {
+            if let output = outputID {
+                guard query == nil, offset == 0,
+                      reference.range(of: "^o[1-9][0-9]*$", options: .regularExpression) != nil,
+                      output.range(of: "^t[1-9][0-9]*$", options: .regularExpression) != nil,
+                      (byteOffset ?? 0) >= 0 else {
+                    throw IPhoneUseError("invalid_output_read", "Use --output with an observation and --byte-offset")
+                }
+                fields["output"] = output
+                fields["byteOffset"] = byteOffset ?? 0
+            } else if byteOffset != nil {
+                throw IPhoneUseError("invalid_output_read", "--byte-offset requires --output")
+            }
             let response = try SessionClient.call(session: session, operation: "inspect", fields: fields)
             if let query, response["ok"] as? Bool == true,
                 (response["result"] as? [String: Any])?["query"] as? String != query {
@@ -149,6 +174,10 @@ struct Inspect: ParsableCommand {
                      then observe again
                     """
                 )
+            }
+            if let output = outputID, response["ok"] as? Bool == true,
+               (response["result"] as? [String: Any])?["outputID"] as? String != output {
+                throw IPhoneUseError("inspect_output_unsupported", "Session host did not confirm this output ID")
             }
             return response
         }

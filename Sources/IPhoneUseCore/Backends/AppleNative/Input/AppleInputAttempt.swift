@@ -138,6 +138,9 @@ final class AppleInputAttempt {
             deadline: deadline,
             maximumCaptures: 1, fieldGuard: keyboardAction ? target.textFieldGuard : nil,
             caretGuard: keyboardAction ? target.textCaretGuard : nil, budget: budget,
+            gestureValidation: try target.gesture.map {
+                try NativeGestureValidation(action: action, gesture: $0)
+            },
             record: { sample in
                 var sample = sample; sample["stage"] = stage
                 preInputChecks.append(sample)

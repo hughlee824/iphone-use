@@ -46,9 +46,14 @@ extension HostRequestExecution {
     }
 
     func inspect() throws {
-        response["result"] = try observations.inspect(
-            reference!, offset: validatedValue(request["offset"], as: Int.self),
-            query: request["query"] as? String)
+        if let output = request["output"] as? String {
+            response["result"] = try observations.inspectText(
+                reference!, outputID: output, byteOffset: validatedValue(request["byteOffset"], as: Int.self))
+        } else {
+            response["result"] = try observations.inspect(
+                reference!, offset: validatedValue(request["offset"], as: Int.self),
+                query: request["query"] as? String)
+        }
         effective = true
     }
 

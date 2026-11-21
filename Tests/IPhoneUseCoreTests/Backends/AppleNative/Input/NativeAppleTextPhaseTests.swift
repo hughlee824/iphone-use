@@ -75,7 +75,7 @@ final class NativeAppleTextPhaseTests: XCTestCase {
         XCTAssertEqual(result.0.caretObservationID, "o1")
         XCTAssertEqual(result.1, 1)
         XCTAssertEqual(state.screenshots, 1)
-        XCTAssertEqual(state.lockChecks, 2)
+        XCTAssertEqual(state.lockChecks, 0)
         XCTAssertEqual(state.displayChecks, 2)
     }
 
@@ -133,9 +133,9 @@ final class NativeAppleTextPhaseTests: XCTestCase {
         XCTAssertEqual(state.screenshots, 1)
     }
 
-    func testAppleBurstRetainsFinalLockDisplayAndCancellationGuards() throws {
+    func testAppleBurstRetainsDisplayAndCancellationGuards() throws {
         let png = try screenPNG()
-        for changed in ["locked", "off", "rotated", "cancelled"] {
+        for changed in ["rotated", "cancelled"] {
             let state = CaptureState()
             XCTAssertThrowsError(
                 try capture(source: png, frames: [png], state: state, changed: changed), changed)

@@ -25,7 +25,7 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 | | standard | runner |
 | --- | --- | --- |
-| 观察 | 截图 | 截图与可用辅助功能元素 |
+| 观察 | 截图；可用 [AX 观察](docs/standard-ax.md) | 截图与可用辅助功能元素 |
 | 操作 | 原生 HID | XCTest Runner |
 | Runner 安装与开发签名 | 不需要 | 需要 |
 
@@ -33,11 +33,11 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 ## 为什么选择 iPhone-use？
 
-- **同时观察画面与界面结构。** 两种模式都返回截图；Runner 额外提供可用 AX 元素，可用 `inspect` 展开或搜索缓存快照。
+- **同时观察画面与界面结构。** 两种模式都返回截图；Runner 和 standard AXP 提供可用 AX 元素，可用 `inspect` 展开或搜索缓存快照。standard 连接时尝试启用设备级 AX 自动化暴露；清理时尝试显式关闭，并报告是否获确认。见[生命周期与清理边界](docs/standard-ax.md#session-owned-automation-enhancement)。
 - **操作真实 App。** 发现已安装 App、切换前台、点击、滑动、拖动、编辑文本，以及发送 Return。
 - **跨命令复用设备会话。** 独立 CLI 调用共享同一个 Mac 宿主及所选控制连接。`connect` 管理启动，`disconnect` 或空闲到期释放会话。
 - **明确动作执行状态。** 区分 `completed`、`not_dispatched` 和 `unknown`。点击与滑动在派发前校验画面，输入动作在执行后检测帧稳定。
-- **精简的原生技术栈。** 使用 Swift、自写原生桥接及 Apple 设备工具；选择 Runner 模式时运行薄 XCTest Runner。运行时无需 Python、Node.js、WebDriverAgent、`iproxy` 或 `pymobiledevice3`。
+- **精简的原生技术栈。** 使用 Swift、自写原生桥接及 Apple 设备工具；选择 Runner 模式时运行薄 XCTest Runner。运行时控制及 standard AX 均无需 Python、Node.js、WebDriverAgent、`iproxy` 或 `pymobiledevice3`。
 
 ## 快速开始
 
@@ -260,7 +260,7 @@ python3 scripts/tools/install-actionlint.py
 python3 scripts/check.py
 ```
 
-Python 3.9+ 仅用于发布工具和开发测试，不是已安装 CLI 的运行依赖。检查入口需要完整 Xcode，以及固定版本的 SwiftLint 和 Actionlint，先构建 CLI，再把可执行文件路径显式传给集成测试；缺少 CLI 会报错。默认构建并发为两个任务。唯一外部 Swift 包依赖为 [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2)，锁定版本 `1.8.2`。该依赖要求 Swift 6+ 编译器；原生构建请使用受支持的完整 Xcode 27 工具链。Package.swift 的 tools version 不代表兼容 Swift 5.9 编译器，也不表示启用 Swift 6 语言模式。
+Python 3.9+ 用于发布工具和开发测试；运行时控制及 AX 观察不依赖 Python。检查入口需要完整 Xcode，以及固定版本的 SwiftLint 和 Actionlint，先构建 CLI，再把可执行文件路径显式传给集成测试；缺少 CLI 会报错。默认构建并发为两个任务。原生 AX 传输使用内置受限 IPv6/TCP 客户端，不依赖第三方网络栈；其资源归属和兼容范围见 [standard AX](docs/standard-ax.md)。唯一外部 Swift 包依赖为 [Swift ArgumentParser](https://github.com/apple/swift-argument-parser/tree/1.8.2)，锁定版本 `1.8.2`。该依赖要求 Swift 6+ 编译器；原生构建请使用受支持的完整 Xcode 27 工具链。Package.swift 的 tools version 不代表兼容 Swift 5.9 编译器，也不表示启用 Swift 6 语言模式。
 
 CI 使用 Node.js 22+ 将文档中的调用模板用于受控工具响应；Node 仅为开发测试所需。修改 canonical skill 后运行 `python3 scripts/plugin/sync-plugin.py` 更新包内副本；发布变更前使用 `python3 scripts/plugin/set-plugin-version.py X.Y.Z` 同步更新所有共享分发版本。CI 还会无签名编译 Runner，并打包插件供审阅。官网源码、测试和 Cloudflare 部署独立维护于 [iphone-use-website](https://github.com/hughlee824/iphone-use-website)。具体命令和真机验收要求见[公开接入发布检查](docs/public-access-release.md)。
 

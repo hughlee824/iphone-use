@@ -4,11 +4,12 @@ import ImageIO
 import AppleNativeBridge
 
 final class AppleDeviceCLI {
+    var nativeScreenshot: NativeScreenshotReader?
     let device: String
     let cancellation: NativeCancellation
     private let reader: (([String]) throws -> [String: Any])?
     var captureSourcePolicy: [String: Any] {
-        ["strategy": "coredevice_only"]
+        ["strategy": nativeScreenshot == nil ? "coredevice_only" : "native_instruments_with_display_fallback"]
     }
     init(
         device: String, cancellation: NativeCancellation, reader: (([String]) throws -> [String: Any])? = nil
@@ -54,7 +55,7 @@ final class AppleDeviceCLI {
         prepareDisplay: (NativeDisplay) throws -> Void = { _ in },
         validateDisplay: (NativeDisplay, Double) throws -> [String: Any] = { _, _ in [:] }
     ) throws -> CapturedObservation {
-        try AppleCaptureAttempt(cli: self, generation: generation, budget: budget)
-            .run(prepareDisplay: prepareDisplay, validateDisplay: validateDisplay)
+        let attempt = AppleCaptureAttempt(cli: self, generation: generation, budget: budget)
+        return try attempt.run(prepareDisplay: prepareDisplay, validateDisplay: validateDisplay)
     }
 }

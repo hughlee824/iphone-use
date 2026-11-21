@@ -6,6 +6,7 @@ final class FixtureResourcesTests: XCTestCase {
         let directory = try XCTUnwrap(Bundle.module.resourceURL)
         let expected = Set(
             ["app.json", "system-alert.json", "encoded-source.png", "caret-source.png"]
+                + ["native-settings-home.json", "native-wlan.json", "native-join-network.json"]
                 + (0..<6).map { "encoded-\($0).png" }
                 + (1...6).map { "caret-\($0).png" })
         let actual = try FileManager.default.contentsOfDirectory(atPath: directory.path)

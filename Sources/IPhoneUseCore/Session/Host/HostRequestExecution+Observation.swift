@@ -15,6 +15,7 @@ extension HostRequestExecution {
                         try textObservationOptions.map { try backend.observeText($0) } ?? backend.observe()
                 } else {
                     capture = try backend.observeAfterAction(
+                        actionKind: action?.kind,
                         textOptions: textObservationOptions,
                         ignoring: action?.ignoredScreenRect ?? textObservationOptions?.ignoring,
                         sourceContext: postActionSourceContext)

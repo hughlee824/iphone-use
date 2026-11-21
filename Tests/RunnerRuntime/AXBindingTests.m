@@ -154,8 +154,8 @@ int main(void) {
         error = nil;
         Check([RunnerAXBinding snapshotOfElement:element error:&error] == first && !error,
               @"explicit snapshot request succeeds");
-        Check([element.parameters isEqual:@{@"snapshotKeyHonorModalViews": @NO}],
-              @"snapshot collection disables modal filtering explicitly");
+        Check([element.parameters isEqual:@{@"snapshotKeyHonorModalViews": @YES}],
+              @"observation and input validation honor the presented modal hierarchy");
         element.current = second;
         Check([RunnerAXBinding snapshotOfElement:element error:&error] == second && element.requests == 2,
               @"each capture asks for a fresh snapshot instead of reusing a cached root");

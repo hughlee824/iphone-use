@@ -59,12 +59,12 @@ static BOOL ObjectMethod(NSObject *object, SEL selector, NSUInteger arguments) {
             Fail(error, @"Explicit XCTest snapshot parameters are unavailable on this runtime");
             return nil;
         }
-        // Always request a new standard-attribute snapshot. A query's nonmodal
-        // setting is not inherited by snapshotWithError:, and its cached root
-        // is not a fresh observation. Visibility/actionability is checked separately.
+        // Observe and validate against the same fresh, modal-aware hierarchy.
+        // Export every returned node; do not confuse complete capture with
+        // including inaccessible views behind a modal presentation.
         NSError *failure = nil;
         id snapshot = ((id (*)(id, SEL, id, NSError **))objc_msgSend)(
-            element, selector, @{@"snapshotKeyHonorModalViews": @NO}, &failure);
+            element, selector, @{@"snapshotKeyHonorModalViews": @YES}, &failure);
         Class snapshotClass = NSClassFromString(@"XCElementSnapshot");
         if (failure || !snapshotClass || ![snapshot isKindOfClass:snapshotClass]) {
             Fail(error, failure ? [NSString stringWithFormat:@"XCTest snapshot request failed (code %ld)",

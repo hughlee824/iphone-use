@@ -11,7 +11,9 @@ struct InputActionTests {
         try failures()
         try clearValues()
         try clearIdentityChanges()
-        print("Runner input runtime regressions passed: identity, focus transitions, nil clear, no replay")
+        try modalTransitions()
+        try alertTransitions()
+        print("Runner input runtime regressions passed: identity, focus, modal transitions, nil clear, no replay")
     }
 
     @MainActor
@@ -29,11 +31,11 @@ struct InputActionTests {
     @MainActor
     private static func command(
         _ runner: LiveSessionTests, _ target: XCUIElement, kind: String, key: String? = nil,
-        ancestors: [XCUIElement] = []
+        ancestors: [XCUIElement] = [], scope: String = "app", root: XCUIElement? = nil
     ) -> [String: Any] {
         runner.observedReferences = RunnerAXReferences()
         let app = runner.currentApp!
-        let chain = [app] + ancestors + [target]
+        let chain = [root ?? app] + ancestors + [target]
         let path = chain.enumerated().map { index, element -> [String: Any] in
             ["identityToken": runner.observedReferences.register(element.identity),
              "type": element.elementType.rawValue, "childIndex": index == 0 ? 0 : chain[index - 1].children.firstIndex {
@@ -41,7 +43,7 @@ struct InputActionTests {
              }!, "value": element.value ?? NSNull()]
         }
         var command: [String: Any] = [
-            "kind": kind, "target": ["bundleId": "fixture", "scope": "app", "path": path]
+            "kind": kind, "target": ["bundleId": "fixture", "scope": scope, "path": path]
         ]
         command["key"] = key
         if kind == "type" { command["mode"] = "insert"; command["text"] = "suffix" }
@@ -182,6 +184,67 @@ struct InputActionTests {
             precondition(runner.events == 1 && first.inputEvents == [.text("delete")])
             precondition(replacement.inputEvents.isEmpty && neighbor.inputEvents.isEmpty)
             precondition(neighbor.value as? String == "neighbor")
+        }
+    }
+
+    @MainActor
+    private static func modalTransitions() throws {
+        for opening in [true, false] {
+            for kind in ["tap", "focus", "type", "press", "clear"] {
+                let (runner, fields) = fixture()
+                let app = runner.currentApp!
+                let background = fields[0], modal = XCUIElement(), modalField = XCUIElement()
+                modal.children = [modalField]; modalField.focused = true
+                // Keep both objects alive, readable, enabled and focused: only the fresh hierarchy
+                // can reject the old target. Equal type/value cannot authorize a replacement.
+                modalField.value = background.value
+                app.children = [background, modal]
+                app.snapshotChildren = opening ? [background] : [modal]
+                let old = opening ? background : modalField
+                let request = command(runner, old, kind: kind, key: kind == "press" ? "tab" : nil,
+                                      ancestors: opening ? [] : [modal])
+                app.snapshotChildren = opening ? [modal] : [background]
+                do {
+                    _ = try runner.perform(request)
+                    preconditionFailure("Modal transition must reject a hidden old target")
+                } catch let error as CommandError { precondition(error.code == "target_changed") }
+                precondition(runner.events == 0 && !runner.executionStarted)
+                precondition(background.inputEvents.isEmpty && modalField.inputEvents.isEmpty)
+                do {
+                    _ = try runner.perform(request)
+                    preconditionFailure("Rejected action must still consume its observation references")
+                } catch let error as CommandError { precondition(error.code == "stale_target_reference") }
+                precondition(runner.events == 0)
+                // A fresh reference to the presented input works; do not accidentally reject all input.
+                let current = opening ? modalField : background
+                _ = try runner.perform(command(runner, current, kind: "type", ancestors: opening ? [modal] : []))
+                precondition(current.inputEvents == [.text("suffix")] && runner.events == 1)
+                precondition(old.inputEvents.isEmpty)
+            }
+        }
+    }
+
+    @MainActor
+    private static func alertTransitions() throws {
+        for opening in [true, false] {
+            let (runner, fields) = fixture()
+            let app = runner.currentApp!, alert = XCUIElement(), field = fields[0]
+            alert.children = [field]
+            app.alerts.elements = opening ? [] : [alert]
+            func request() -> [String: Any] {
+                command(runner, field, kind: "type", scope: opening ? "app" : "appAlert",
+                        root: opening ? app : alert)
+            }
+            let old = request()
+            app.alerts.elements = opening ? [alert] : []
+            do {
+                _ = try runner.perform(old)
+                preconditionFailure("Changed alert scope must reject before input")
+            } catch let error as CommandError { precondition(error.code == "app_alert_changed") }
+            precondition(runner.events == 0 && field.inputEvents.isEmpty)
+            app.alerts.elements = opening ? [] : [alert]
+            _ = try runner.perform(request())
+            precondition(runner.events == 1 && field.inputEvents == [.text("suffix")])
         }
     }
 }

@@ -71,6 +71,17 @@ extension HostRequest {
                 guard request["query"] == nil || request["query"] is String else {
                     throw IPhoneUseError("invalid_inspect_query", "Query must be text")
                 }
+                if let output = request["output"] {
+                    guard let output = output as? String,
+                          output.range(of: "^t[1-9][0-9]*$", options: .regularExpression) != nil,
+                          reference?.node == nil, offset == 0, request["query"] == nil,
+                          let byteOffset = request["byteOffset"] as? Int, byteOffset >= 0 else {
+                        throw IPhoneUseError(
+                            "invalid_output_read", "Use --output with an observation and --byte-offset")
+                    }
+                } else if request["byteOffset"] != nil {
+                    throw IPhoneUseError("invalid_output_read", "Byte offset requires a cached output ID")
+                }
             } catch {
                 reject((error as? IPhoneUseError)?.code ?? "invalid_reference", String(describing: error))
                 return false

@@ -2,7 +2,7 @@
 
 iPhone-use provides observations and actions for an external agent operating a physical iPhone. The calling agent owns task planning, image interpretation, and judging outcomes. iPhone-use owns device access, reference validity, execution facts, and session cleanup.
 
-The current source supports explicit [standard and runner modes](control-modes.md). Standard uses the [Apple native backend](apple-native-backend.md) for CoreDevice screenshots and HID; runner uses XCTest. Read-only preview and recording run in a separate per-device capture process, independently of both control backends. An active session never switches its control backend automatically.
+The current source supports explicit [standard and runner modes](control-modes.md). Standard uses the [Apple native backend](apple-native-backend.md) for CoreDevice screenshots and HID, with [read-only AXP observations](standard-ax.md) through an isolated native worker and shared device-service transport; runner uses XCTest. Read-only preview and recording run in a separate per-device capture process, independently of both control backends. An active session never switches its control backend automatically.
 
 ## Runtime components
 
@@ -12,7 +12,10 @@ flowchart LR
     CLI <-->|Unix socket / JSON| Host[Swift session host]
     Host <-->|standard control| Native[CoreDevice PNG / HID]
     Host <-->|runner control| Runner[XCTest Runner]
-    Native <--> Apps[iPhone apps]
+    Host <-->|standard observation| AXP[Native AXP worker]
+    AXP <-->|shared device service / IPv6 TCP| USB[Owned USB CoreDeviceProxy]
+    USB <--> Apps[iPhone apps]
+    Native <--> Apps
     Runner <--> Apps
     CLI <-->|explicit preview by device| Capture[Independent capture process]
     Host <-->|optional recording / preview client| Capture
@@ -33,6 +36,7 @@ The CLI and host are two process roles of the same executable. A connection star
 | [Session host](../Sources/IPhoneUseCore/Session/Host/SessionHost.swift) | Serial request execution, device ownership, observation references, outcome classification, and lifecycle coordination. |
 | [Observation cache](../Sources/IPhoneUseCore/Observation/Observation.swift) | AX compaction, cached snapshots, queries, pagination, and reference invalidation. |
 | [XCTest backend](../Sources/IPhoneUseCore/Backends/XCTest/XCTestBackend.swift) | Standalone Runner process ownership, capability checks, USB loopback transport, and backend cleanup. |
+| [Native device-service transport](../Sources/AppleNativeBridge/Transport/CoreDeviceProxy/DeviceServiceTransport.h) | Owned USB/RSD discovery and bounded IPv6/TCP byte streams for services; AXP semantics stay above it. Existing HID/media broker paths remain separate. |
 | [Device discovery](../Sources/IPhoneUseCore/Device/DeviceDiscovery.swift) | Device metadata, installed-app queries, and native-tool diagnostics. |
 | [Runner setup](../Sources/IPhoneUseCore/Setup/RunnerSetup.swift) / [source build](../Sources/IPhoneUseCore/Setup/RunnerBuild.swift) | Preparing a packaged Runner with local signing, or building a signed Runner from source. |
 | [iOS Runner](../Runner/LiveSessionTests.swift) | Screenshots, AX collection, app activation, input primitives, device-side checks, and execution facts. |
@@ -67,7 +71,7 @@ An explicit `preview --device UDID` starts a per-device capture process and a re
 
 The viewer service persists device-scoped random capabilities under the private configuration directory; it accepts authenticated source registration over a private Unix socket and never persists source URLs or frames. Source leases and browser decode-generation checks isolate reconnections. The capture process owns its own cancellation and topology timer. Control disconnect/idle expiry cannot close preview; explicit preview stop does not close control. Recordings reuse the capture process and are associated with the requesting client's owner ID; disconnect ends only that owner's recording. Capturing preview never renews the control idle deadline. After all media consumers stop, the capture process exits following ten idle minutes. HTTP remains read-only; geometric gesture receipts are optional asynchronous decoration and cannot delay/fail input.
 
-Standard control obtains its own fresh Apple screenshots, checks lock/backlight, before/after display identity, image dimensions and screen guards. It no longer gates HID readiness on a media session inventory or uses preview pixels/health as input authority. Unknown input is never replayed. Independent capture still refuses to replace another application's native media stream.
+Standard control obtains its own fresh Apple screenshots, validates screenshot-associated display identity, orientation, image dimensions and screen guards. Lock, backlight and black image content are not screenshot admission gates. It no longer gates HID readiness on a media session inventory or uses preview pixels/health as input authority. Unknown input is never replayed. Independent capture still refuses to replace another application's native media stream.
 
 
 `NativePreview` keeps only the latest JPEG and uses two bounded CPU conversion slots; superseded results are discarded. The source target is 30 fps with JPEG quality 0.7. The browser requests its screen aperture × DPR; one shared encode follows the largest active viewer demand (five-second expiry), capped at actual source pixels including reduced active rectangles. Bootstrap and legacy clients use a 960-pixel longest edge. Resolution revisions discard superseded asynchronous encodes and re-encode quiet frames without changing source ownership. Receiver and snapshot decode queues use `userInitiated` QoS, with separate queue-wait/decode timing. Core Image exports JPEGs directly; conversion and compression are reported as one combined duration. When preview already has a decoded frame, the host prepares the encoder before subscribing and starts the recording clock after preparation. This prevents cold encoder setup from filling the bounded pixel queue; it does not enlarge the queue or discard admitted frames. The recording writer releases encoder resources before complete file validation. Resource pressure can still cause stalls or recording backpressure; stable 30 fps has not passed acceptance.
@@ -175,7 +179,7 @@ See [installation](install.md), [onboarding](onboarding.md), and [release toolin
 
 ## Runner 路径定位与完整 AX 采集
 
-`observationVersion=4` 通过 `snapshotWithParameters:error:` 显式请求 `snapshotKeyHonorModalViews=false` 的标准属性快照，不读取查询对象缓存的根快照。每次观察和动作校验都重新请求。导出不再固定截断为 200 个节点；宿主保存返回树的全部节点，展示仍受 60 行 / 8 KiB 预算约束，`inspect` 在缓存上查询和分页。既有传输大小与时间限制继续生效，超限明确失败，不静默返回部分树。App 未向 XCTest 暴露的节点无法凭此补齐；非模态采集也不代表所有节点可操作，执行前仍检查上下文、enabled，并按动作检查 hittable 或键盘焦点。
+`observationVersion=4` 通过 `snapshotWithParameters:error:` 显式请求 `snapshotKeyHonorModalViews=true` 的标准属性快照，不读取查询对象缓存的根快照。每次观察和动作校验都重新请求。导出不再固定截断为 200 个节点；宿主保存模态过滤后返回树的全部节点，展示按视口精简，不再设置 60 行上限；精简正文与属性完整返回，异常超大结果通过完整文件和同一缓存分段读取，`inspect` 使用相同交付机制并保留节点分页，详见[观察输出](observations.md#异常超大文本)。既有传输大小与时间限制继续生效，超限明确失败，不静默返回部分树。App 未向 XCTest 暴露的节点无法凭此补齐；模态过滤也不代表所有节点可见或可操作，执行前仍检查上下文、enabled，并按动作检查 hittable 或键盘焦点。
 
 `actionVersion=13` 的元素动作沿新快照的祖先身份链解析；同一父节点内允许唯一身份改变同级序号。绑定后重新读取元素及根快照验证，拒绝替换、跨父节点移动或歧义。祖先 label/value/frame 不再作为不变量。键盘输入检查真实 `hasKeyboardFocus`；只有需要触摸的动作检查 hittable。坐标动作仍走独立画面保护路径。
 

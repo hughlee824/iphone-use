@@ -26,6 +26,10 @@ Element actions resolve a fresh root snapshot. Each observed ancestor identity m
 
 Keyboard input does not require hittability when the selected target already owns focus. Parameters still reject unsupported control keys and text beyond 4096 UTF-8 bytes; LF requires a text view, and Runner CR/CRLF remain unsupported. Secure text is never reconstructed for clearing/append.
 
+Current Runner observations include `keyboardFocus` (`true`, `false`, or `null` when unavailable) for input fields; compact output renders only known `keyboard_focus=true/false` values. Unavailable or missing focus, including in older snapshots, is omitted and means unknown, not unfocused. The value is read from an identity-bound element during observation, not inferred from a visible keyboard. A current positive focus observation lets the agent proceed to `type` without a redundant `focus`; every input still resolves the live target and checks its current focus before dispatch.
+
+New hosts opt into skipping post-input stability sampling for a verified no-event `focus`. The Runner still performs the same live identity and focus checks; only a confirmed no-op can take this path. Its result has no sampled stability claim or action frame, and `--observe` still obtains a fresh observation. Focus taps, uncertain events and other actions retain their sampling behavior. Older hosts do not request this optimization.
+
 ## Replacement and append workflows
 
 Use actual current references at every step; these examples are a sequence of agent decisions, not a batch script.

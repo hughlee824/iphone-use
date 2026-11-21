@@ -6,36 +6,100 @@ import AppleNativeBridge
 
 extension AppleDeviceBackend {
     func observe() throws -> CapturedObservation {
-        try capture(
-            budget: NativeCaptureBudget(
-                requestDeadline: ProcessInfo.processInfo.systemUptime + 30, purpose: .observation))
+        try observeTextOrScreen(nil)
     }
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation {
-        try capture(
-            textOptions: options,
-            budget: NativeCaptureBudget(
-                requestDeadline: ProcessInfo.processInfo.systemUptime + 30, purpose: .observation))
+        try observeTextOrScreen(options)
     }
     func observeAfterAction(
+        actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
     ) throws -> CapturedObservation {
-        try NativePostActionStability.capture(
-            ignoring: ignoring, sourceContext: sourceContext,
-            checkCancellation: { try self.cancellation.check() },
-            sample: { deadline in
-                // All samples and owned recovery share one bounded post-action
-                // deadline. No sampling can extend the original input lease.
-                try self.capture(
+        let deadline = ProcessInfo.processInfo.systemUptime + 30
+        let diagnostics = NativePostActionDiagnostics.fromEnvironment()
+        let adjacentTap = actionKind == "tap"
+        let tapDisplay = NativeTapFrameWorker.DisplayHistory()
+        do {
+            let captured = try NativePostActionStability.capture(
+                policy: adjacentTap ? .adjacentTap : .conventional,
+                ignoring: ignoring, sourceContext: sourceContext, checkCancellation: { try self.cancellation.check() },
+                sample: { cutoff in
+                    if adjacentTap {
+                        return try tapDisplay.sample { noteDisplay in
+                            try self.stabilitySample(until: deadline, startBefore: cutoff, noteDisplay: noteDisplay,
+                                textOptions: textOptions, diagnostics: diagnostics)
+                        }
+                    }
+                    return try self.stabilitySample(until: cutoff, startBefore: nil, noteDisplay: nil,
+                        textOptions: textOptions, diagnostics: diagnostics)
+                })
+            diagnostics?.stability = captured.metadata["postActionStability"]
+            if adjacentTap {
+                let result = try captureAXP(selected: captured, textOptions: textOptions, deadline: deadline)
+                return diagnostics?.complete(result) ?? result
+            }
+            let started = ProcessInfo.processInfo.systemUptime
+            let result = try captureAXP(previous: captured, textOptions: textOptions, deadline: deadline)
+            diagnostics?.record(result, phase: "finalObservation", started: started)
+            return diagnostics?.complete(result) ?? result
+        } catch {
+            diagnostics?.fail(error)
+            throw error
+        }
+    }
+
+    private func stabilitySample(
+        until deadline: TimeInterval, startBefore: TimeInterval?, noteDisplay: ((NativeDisplay) -> Void)?,
+        textOptions: NativeTextObservationOptions?, diagnostics: NativePostActionDiagnostics?
+    ) throws -> CapturedObservation {
+        let started = ProcessInfo.processInfo.systemUptime
+        let capture = {
+            try self.capture(textOptions: textOptions,
+                budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation,
+                    screenshotStartDeadline: startBefore, noteDisplay: noteDisplay))
+        }
+        do {
+            let frame = try startBefore == nil ? capture() : tapFrames.run(capture)
+            diagnostics?.record(frame, phase: "stability", started: started)
+            return frame
+        } catch {
+            diagnostics?.record(error, started: started)
+            throw error
+        }
+    }
+
+    private func observeTextOrScreen(_ textOptions: NativeTextObservationOptions?) throws -> CapturedObservation {
+        let deadline = ProcessInfo.processInfo.systemUptime + 30
+        return try captureAXP(textOptions: textOptions, deadline: deadline)
+    }
+
+    private func captureAXP(
+        previous: CapturedObservation? = nil, selected: CapturedObservation? = nil,
+        textOptions: NativeTextObservationOptions?, deadline: TimeInterval
+    ) throws -> CapturedObservation {
+        guard let cli else { throw IPhoneUseError("backend_unavailable", "Native backend not started") }
+        let reader = axpReader, cancellation = cancellation
+        func read(_ cancelled: () -> Bool) throws -> [String: Any] {
+            guard let reader else {
+                throw IPhoneUseError("axp_runtime_unavailable", "Native AXP reader unavailable; use the screenshot")
+            }
+            return try reader.read(device: cli.device, cancelled: {
+                cancelled() || cancellation.isCancelled || ProcessInfo.processInfo.systemUptime >= deadline
+            })
+        }
+        if let selected {
+            return try AXPObservation.captureSelected(selected, device: cli.device, generation: generation,
+                read: { try read { false } }, checkCancellation: { try cancellation.check() })
+        }
+        return try AXPObservation.capture(
+            device: cli.device, generation: generation, previous: previous, read: read, screenshot: {
+                return try self.capture(
                     textOptions: textOptions,
                     budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation))
-            })
+            }, checkCancellation: { try self.cancellation.check() })
     }
-    func capture(textOptions: NativeTextObservationOptions? = nil, budget: NativeCaptureBudget? = nil) throws
-        -> CapturedObservation {
-        try captureOnce(textOptions: textOptions, budget: budget)
-    }
-    private func captureOnce(
-        textOptions: NativeTextObservationOptions?, budget: NativeCaptureBudget?
+    func capture(
+        textOptions: NativeTextObservationOptions? = nil, budget: NativeCaptureBudget? = nil
     ) throws -> CapturedObservation {
         guard let cli else { throw IPhoneUseError("backend_unavailable", "Native backend not started") }
         let captured = try cli.capture(
@@ -53,6 +117,7 @@ extension AppleDeviceBackend {
                 rects: [textOptions.field], policy: .init(), ignoring: textOptions.ignoring)
             metadata["textObservationOptions"] = try textOptions.result
         }
-        return CapturedObservation(nodes: captured.nodes, metadata: metadata, screenshot: captured.screenshot)
+        return CapturedObservation(nodes: captured.nodes, metadata: metadata, screenshot: captured.screenshot,
+            validatedPixels: captured.validatedPixels)
     }
 }

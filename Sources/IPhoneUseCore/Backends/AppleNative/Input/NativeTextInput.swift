@@ -97,19 +97,24 @@ struct NativeInputTiming {
     }
 }
 
-// One preparation/capture phase. Apple reads may consult the deadline in parallel;
-// validation starts only after those reads have joined and geometry is verified.
+// One preparation/capture phase. Validation starts before requesting pixels;
+// associated geometry and target checks must finish within the same lifetime.
 final class NativeCaptureBudget {
     enum Purpose { case input, observation }
     let requestDeadline: TimeInterval
     let purpose: Purpose
+    let noteDisplay: ((NativeDisplay) -> Void)?
+    let screenshotStartDeadline: TimeInterval?
     private(set) var validationStartedAt: TimeInterval?
     var deadline: TimeInterval {
         purpose == .input
             ? min(requestDeadline, validationStartedAt.map { $0 + 8 } ?? requestDeadline) : requestDeadline
     }
 
-    init(requestDeadline: TimeInterval, purpose: Purpose = .input) {
+    init(requestDeadline: TimeInterval, purpose: Purpose = .input, screenshotStartDeadline: TimeInterval? = nil,
+         noteDisplay: ((NativeDisplay) -> Void)? = nil) {
+        self.noteDisplay = noteDisplay
+        self.screenshotStartDeadline = screenshotStartDeadline
         self.requestDeadline = requestDeadline
         self.purpose = purpose
     }

@@ -45,9 +45,7 @@ extension NativeCaptureTests {
     }
 
     func testInvalidApplePixelsCannotBecomeObservations() throws {
-        let black = try screenPNG(
-            width: 12, height: 18, patches: [(CGRect(x: 0, y: 0, width: 12, height: 18), [0, 0, 0])])
-        for png in [Data("broken PNG".utf8), black, try screenPNG(width: 18, height: 12)] {
+        for png in [Data("broken PNG".utf8), try screenPNG(width: 18, height: 12)] {
             var screenshots = 0
             let cli = AppleDeviceCLI(
                 device: "fixture", cancellation: NativeCancellation(),
@@ -63,12 +61,14 @@ extension NativeCaptureTests {
         }
     }
 
-    func testAppleFailureDoesNotSwitchPinnedSourceAndLockStopsAllPixelAcquisition() throws {
+    func testAppleFailureDoesNotSwitchPinnedSourceOrQueryLockState() throws {
         var locked = false, screenshots = 0
         let cli = AppleDeviceCLI(
             device: "fixture", cancellation: NativeCancellation(),
             reader: { arguments in
-                if arguments.last == "lockState" { return ["passcodeRequired": locked] }
+                if arguments.last == "lockState" {
+                    XCTFail("No screenshot lock gate"); return ["passcodeRequired": locked]
+                }
                 if arguments.last == "displays" { return self.display() }
                 screenshots += 1
                 throw IPhoneUseError("fixture", "Apple screenshot failed")
@@ -83,9 +83,9 @@ extension NativeCaptureTests {
             try cli.capture(
                 generation: "fixture",
                 validateDisplay: { _, _ in
-                    XCTFail("Locked capture must stop before acquiring pixels"); return [:]
+                    return [:]
                 }))
-        XCTAssertEqual(screenshots, 3)
+        XCTAssertEqual(screenshots, 4)
     }
     func testFreshnessRejectsCacheQueueDelayAndFutureTimestamps() throws {
         let pixels = try pixels()

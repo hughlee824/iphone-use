@@ -9,11 +9,14 @@ final class RunnerFocusObservationTests: XCTestCase {
             ]
             let node = AXNode(index: 0, parent: nil, role: "text_view", attributes: attributes)
             let text = CompactAX.render([node]).joined(separator: "\n")
-            let expected = (value as? Bool).map { $0 ? "true" : "false" } ?? "unknown"
-            XCTAssertTrue(text.contains("keyboard_focus=\(expected)"))
+            if let expected = value as? Bool {
+                XCTAssertTrue(text.contains("keyboard_focus=\(expected)"))
+            } else {
+                XCTAssertFalse(text.contains("keyboard_focus="))
+            }
         }
         let old = AXNode(index: 0, parent: nil, role: "text_view", attributes: ["enabled": true])
-        XCTAssertTrue(CompactAX.render([old])[0].contains("keyboard_focus=unknown"))
+        XCTAssertFalse(CompactAX.render([old])[0].contains("keyboard_focus="))
     }
 
     func testOnlyVerifiedFocusNoOpMayOmitStability() throws {

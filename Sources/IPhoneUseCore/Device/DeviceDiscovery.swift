@@ -5,7 +5,7 @@ enum CoreDevice {
     static func read(
         _ arguments: [String], savingTo output: URL? = nil,
         cancelled: () -> Bool = { false }, trailingArguments: [String] = [], timeout: Int = 20,
-        launchEnvironment: [String: String]? = nil
+        launchEnvironment: [String: String]? = nil, inheritedInput: FileHandle? = nil
     ) throws -> [String: Any] {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
             "iphone-use-discovery-\(UUID().uuidString)")
@@ -16,8 +16,7 @@ enum CoreDevice {
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let log = try FileHandle(forWritingTo: logURL)
         defer { try? log.close() }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        let process = commandProcess(input: inheritedInput ?? .nullDevice, log: log)
         process.arguments = commandArguments(
             arguments, output: resultURL, trailingArguments: trailingArguments, timeout: timeout)
         if let launchEnvironment {
@@ -27,14 +26,22 @@ enum CoreDevice {
             for (key, value) in launchEnvironment { environment["DEVICECTL_CHILD_" + key] = value }
             process.environment = environment
         }
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = log
-        process.standardError = log
         try run(process, arguments: arguments, logURL: logURL, timeout: timeout, cancelled: cancelled)
         guard let result = try jsonObject(Data(contentsOf: resultURL))["result"] as? [String: Any] else {
             throw IPhoneUseError("invalid_discovery", "CoreDevice did not return a result object")
         }
         return result
+    }
+
+    // AX's related notification tool retains its inherited control lease. Other callers use null
+    // stdin, so unrelated discovery/actions/media cannot accidentally extend AX ownership.
+    static func commandProcess(input: FileHandle = .nullDevice, log: FileHandle) -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.standardInput = input
+        process.standardOutput = log
+        process.standardError = log
+        return process
     }
 
     private static func run(

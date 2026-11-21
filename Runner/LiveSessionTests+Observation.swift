@@ -174,7 +174,7 @@ extension LiveSessionTests {
                 ?? NSNull(),
             "displayID": commandDisplayID as Any? ?? NSNull(),
             "coordinateSpace": "screen_points", "nodes": nodes, "truncated": false,
-            "snapshotSource": "explicit_nonmodal_standard_attributes_v1",
+            "snapshotSource": "explicit_modal_standard_attributes_v1",
             "screenContext": context,
             "axStatus": nodes.isEmpty ? "unavailable" : "available", "axError": axError as Any? ?? NSNull(),
             "snapshotStartedAt": snapshotTime, "snapshotFinishedAt": snapshotFinished,

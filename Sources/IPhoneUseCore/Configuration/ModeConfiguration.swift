@@ -17,7 +17,7 @@ public enum ControlMode: String, Codable {
         if self == .standard {
             return [
                 "operations": common + ["text-prepare", "text-finish"],
-                "observationSources": ["screenshot"],
+                "observationSources": ["screenshot", "available_elements"],
                 "actionTargets": [
                     "tap": ["screen_point"], "swipe": ["screen_path"],
                     "type": ["visually_focused_input", "touch_paste_staging"],

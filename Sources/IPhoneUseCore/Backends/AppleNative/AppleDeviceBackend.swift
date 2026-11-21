@@ -8,8 +8,11 @@ final class AppleDeviceBackend: SessionBackend {
     let paths: SessionPaths
     let cancellation = NativeCancellation()
     let generation = UUID().uuidString
+    let tapFrames = NativeTapFrameWorker()
     var cli: AppleDeviceCLI?
+    let axpReader: AXPReader?
     private var deviceLock: SessionDeviceLock?
+    var axAutomation: AXAutomation?
     var pasteboardTransport: NativeTransport?
     var pasteboard: NativeTextPasteboard?
     var pasteboardError: String?
@@ -28,13 +31,14 @@ final class AppleDeviceBackend: SessionBackend {
     private let makeHID: (NativeTransport, NativeCancellation) -> NativeHIDAdapter
 
     init(
-        config: HostConfiguration, paths: SessionPaths,
+        config: HostConfiguration, paths: SessionPaths, axpReader: AXPReader? = AXPReader(),
         makeHID: @escaping (NativeTransport, NativeCancellation) -> NativeHIDAdapter = {
             NativeHIDAdapter(transport: $0, cancellation: $1)
         }
     ) {
         self.config = config
         self.paths = paths
+        self.axpReader = axpReader
         self.makeHID = makeHID
     }
     func start() throws -> [String: Any] {
@@ -76,6 +80,12 @@ final class AppleDeviceBackend: SessionBackend {
             try input.prepare(displayUniqueID: display.uniqueID)
             hid = input
         } catch { try recordStartupFailure(error) }
+        if axpReader != nil {
+            let automation = AXAutomation(device: udid, ownership: deviceLock)
+            axAutomation = automation
+            automation.start(cancelled: { self.cancellation.isCancelled })
+        }
+        prepareObservations(hardware: hardware)
         return try status()
     }
     private func recordStartupFailure(_ error: Error) throws {
@@ -123,6 +133,7 @@ final class AppleDeviceBackend: SessionBackend {
             "pressKeys": NativePressKey.allCases.map(\.rawValue),
             "pasteboard": pasteboard?.status ?? ["restorePending": false], "sessionClosing": closing,
             "hidState": hidState?.rawValue ?? "unprepared", "runnerStarted": false,
+            "axAutomation": axAutomation?.status ?? ["state": "not_started", "cleanupPending": false],
             "serviceTransport": config.nativeEndpointInventory == nil
                 ? "apple-coredevice-service-socket" : "apple-paired-tunnel",
             "mediaOwnershipPolicy": "independent_preview_capture",
@@ -137,7 +148,8 @@ final class AppleDeviceBackend: SessionBackend {
         [
             "terminate": !closing, "relaunch": !closing,
             "recording": recordingSupported && !closing, "screenshot": true,
-            "tap": control.available, "ax": false, "swipe": control.available, "pinch": control.available,
+            "tap": control.available, "ax": axpReader != nil && !closing,
+            "swipe": control.available, "pinch": control.available,
             "doubleTap": control.available, "longPress": control.available,
             "home": control.available && buttonError == nil, "text": control.available && hid?.canType == true,
             "press": control.available && hid?.canType == true
@@ -182,6 +194,8 @@ final class AppleDeviceBackend: SessionBackend {
         stopped = true
         cancellation.cancel()
         var result = hid?.release() ?? ["releaseRequired": false, "releaseUncertain": false]
+        let observations = closeObservations()
+        result["observationConnections"] = observations
         result.merge(independentMedia?.close() ?? ["recordingCleanupAcknowledged": true]) { _, new in new }
         result.merge(hid?.closeKeyboard() ?? ["keyboardRemoveAcknowledged": true]) { _, new in new }
         result.merge(pasteboard?.close() ?? ["pasteboardRestoreAcknowledged": true]) { _, new in new }
@@ -195,6 +209,8 @@ final class AppleDeviceBackend: SessionBackend {
         result["tunnelReleaseAcknowledged"] =
             tunnel?.close() ?? (cleanupFacts["tunnelReleaseAcknowledged"] as? Bool ?? true)
         tunnel = nil
+        let automation = axAutomation?.close() ?? ["required": false, "acknowledged": true]
+        result["axAutomation"] = automation
         deviceLock = nil
         result["connectionsClosed"] = true
         result["shutdownAcknowledged"] =
@@ -203,6 +219,8 @@ final class AppleDeviceBackend: SessionBackend {
             && result["keyboardRemoveAcknowledged"] as? Bool == true
             && result["pasteboardRestoreAcknowledged"] as? Bool == true
             && result["recordingCleanupAcknowledged"] as? Bool == true
+            && observations["released"] as? Bool == true
+            && automation["acknowledged"] as? Bool == true
         result["backendStopped"] = true
         cleanupFacts = result
         return result

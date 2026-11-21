@@ -1,0 +1,30 @@
+#import <Foundation/Foundation.h>
+#import "AXPReceiveQueue.h"
+#import <assert.h>
+#import <stdint.h>
+static const NSUInteger MiB=1024*1024;
+static NSData *Data(NSUInteger n){return [NSData dataWithData:[NSMutableData dataWithLength:n]];}
+static unsigned long long N(ASAXReaderTarget *q,NSString *k){return [[q budgetMetrics][k] unsignedLongLongValue];}
+static void Failure(ASAXReaderTarget *q,NSString *reason){assert([[q budgetMetrics][@"failure"] isEqual:reason]);BOOL threw=NO;@try{[q takePacket];}@catch(NSException *e){threw=YES;}assert(threw);threw=NO;@try{[q beginObservation];}@catch(NSException *e){threw=YES;}assert(threw);}
+static void Run(NSString *name,void(^test)(void)){@autoreleasepool{test();printf("PASS %s\n",name.UTF8String);}}
+int main(){@autoreleasepool{
+ Run(@"cumulative_over_40MiB_with_request_reset",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(MiB);for(int i=0;i<100;i++){@autoreleasepool{[q beginObservation];[q processDataFromRemoteDevice:d];assert(N(q,@"queuedBytes")==MiB);assert([[q takePacket] length]==MiB);assert(N(q,@"queuedBytes")==0);assert(N(q,@"observationBytes")==MiB);[q finishObservation];}}assert(N(q,@"totalReceivedBytes")==100*MiB);});
+ Run(@"packet_exact_limit",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q beginObservation];[q processDataFromRemoteDevice:Data(20*MiB)];assert([[q takePacket]length]==20*MiB);[q finishObservation];});
+ Run(@"packet_over_limit",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q processDataFromRemoteDevice:Data(20*MiB+1)];assert(N(q,@"queuedBytes")==0);Failure(q,@"packet_bytes");});
+ Run(@"queue_exact_then_one_byte_over_while_idle",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);[q processDataFromRemoteDevice:d];[q processDataFromRemoteDevice:d];assert(N(q,@"queuedBytes")==40*MiB);[q processDataFromRemoteDevice:Data(1)];Failure(q,@"queue_bytes");assert(N(q,@"queuedBytes")==40*MiB);});
+ Run(@"queue_dequeue_releases_budget",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);for(int i=0;i<4;i++){[q processDataFromRemoteDevice:d];assert([[q takePacket]length]==20*MiB);}assert(N(q,@"queuedBytes")==0);assert(N(q,@"totalReceivedBytes")==80*MiB);});
+ Run(@"observation_still_bounded_when_queue_drains",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);[q beginObservation];for(int i=0;i<2;i++){[q processDataFromRemoteDevice:d];[q takePacket];}assert(N(q,@"observationBytes")==40*MiB);[q processDataFromRemoteDevice:Data(1)];Failure(q,@"observation_bytes");});
+ Run(@"observation_exact_limit_then_next_observation",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);for(int t=0;t<2;t++){[q beginObservation];for(int i=0;i<2;i++){[q processDataFromRemoteDevice:d];[q takePacket];}[q finishObservation];}assert(N(q,@"totalReceivedBytes")==80*MiB);});
+ Run(@"preexisting_backlog_charged_not_discarded",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);[q processDataFromRemoteDevice:d];[q beginObservation];assert(N(q,@"observationBytes")==20*MiB);[q takePacket];[q processDataFromRemoteDevice:d];[q takePacket];[q processDataFromRemoteDevice:Data(1)];Failure(q,@"observation_bytes");});
+ Run(@"end_begin_does_not_clear_pending_queue",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q beginObservation];[q processDataFromRemoteDevice:Data(19)];[q finishObservation];[q processDataFromRemoteDevice:Data(7)];[q beginObservation];assert(N(q,@"observationBytes")==26);assert([[q takePacket]length]==19);assert([[q takePacket]length]==7);[q finishObservation];});
+ Run(@"zero_byte_notification_count_limit",^{ASAXReaderTarget*q=[ASAXReaderTarget new];for(int i=0;i<128;i++)[q processDataFromRemoteDevice:Data(0)];assert(N(q,@"queuedPackets")==128);[q processDataFromRemoteDevice:Data(0)];Failure(q,@"queue_packets");});
+ Run(@"invalid_data_type",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q processDataFromRemoteDevice:(id)@"bad"];Failure(q,@"invalid_data_type");});
+ Run(@"sticky_failure_does_not_accept_more_data",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q processDataFromRemoteDevice:(id)@1];[q processDataFromRemoteDevice:Data(10)];assert(N(q,@"queuedPackets")==0);assert(N(q,@"totalReceivedBytes")==0);Failure(q,@"invalid_data_type");});
+ Run(@"mutable_input_is_owned_copy",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSMutableData*d=[NSMutableData dataWithLength:10];[q processDataFromRemoteDevice:d];[d setLength:0];assert([[q takePacket]length]==10);assert(N(q,@"queuedBytes")==0);});
+ Run(@"counter_saturates_without_closing_connection",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q setValue:@(UINT64_MAX-2) forKey:@"totalReceived"];[q processDataFromRemoteDevice:Data(3)];assert(N(q,@"totalReceivedBytes")==UINT64_MAX);assert(N(q,@"totalSaturated")==1);assert([[q takePacket]length]==3);});
+ Run(@"duplicate_begin_fails_closed",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q beginObservation];BOOL threw=NO;@try{[q beginObservation];}@catch(NSException*e){threw=YES;}assert(threw);Failure(q,@"observation_already_active");});
+ Run(@"finish_without_begin_fails_closed",^{ASAXReaderTarget*q=[ASAXReaderTarget new];BOOL threw=NO;@try{[q finishObservation];}@catch(NSException*e){threw=YES;}assert(threw);Failure(q,@"observation_not_active");});
+ Run(@"concurrent_callbacks_preserve_byte_and_packet_counts",^{ASAXReaderTarget*q=[ASAXReaderTarget new];[q beginObservation];dispatch_apply(64,dispatch_get_global_queue(0,0),^(size_t i){[q processDataFromRemoteDevice:Data(i+1)];});assert(N(q,@"queuedPackets")==64);assert(N(q,@"queuedBytes")==64*65/2);NSUInteger sum=0;NSData*d;while((d=[q takePacket]))sum+=d.length;assert(sum==64*65/2);assert(N(q,@"queuedBytes")==0);[q finishObservation];});
+ Run(@"finish_rejects_failure_arriving_after_last_dequeue",^{ASAXReaderTarget*q=[ASAXReaderTarget new];NSData*d=Data(20*MiB);[q beginObservation];for(int i=0;i<2;i++){[q processDataFromRemoteDevice:d];[q takePacket];}[q processDataFromRemoteDevice:Data(1)];BOOL threw=NO;@try{[q finishObservation];}@catch(NSException*e){threw=YES;}assert(threw);Failure(q,@"observation_bytes");});
+ return 0;
+}}

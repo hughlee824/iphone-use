@@ -98,9 +98,9 @@ extension NativeCaptureTests {
         XCTAssertEqual(fresh.screenshot, png)
     }
 
-    func testCaptureFailureRetainsBothParallelReadsAndFailedCommand() throws {
+    func testCaptureFailureRetainsGeometryReadsAndFailedCommand() throws {
         let png = try screenPNG(width: 12, height: 18)
-        for stage in ["checksBefore", "screenshot", "checksAfter"] {
+        for stage in ["displayBefore", "screenshot", "displayAfter"] {
             var screenshotRequested = false
             let cli = AppleDeviceCLI(
                 device: "fixture", cancellation: NativeCancellation(),
@@ -114,7 +114,7 @@ extension NativeCaptureTests {
                         }
                     } else if command == "device info lockState" {
                         return ["passcodeRequired": false]
-                    } else if (stage == "checksAfter") != screenshotRequested || stage == "screenshot" {
+                    } else if (stage == "displayAfter") != screenshotRequested || stage == "screenshot" {
                         return self.display()
                     }
                     throw IPhoneUseError(
@@ -138,7 +138,7 @@ extension NativeCaptureTests {
                     failed.first?["command"] as? String,
                     stage == "screenshot" ? "device capture screenshot" : "device info displays")
                 XCTAssertEqual((failed.first?["process"] as? [String: Any])?["processExited"] as? Bool, true)
-                XCTAssertEqual(commands.filter { $0["phase"] as? String == "checksBefore" }.count, 2)
+                XCTAssertEqual(commands.filter { $0["phase"] as? String == "displayBefore" }.count, 1)
                 XCTAssertNotNil((capture["timingsMs"] as? [String: Double])?[stage])
                 XCTAssertNotNil(try? jsonData(failure.diagnostics))
             }
