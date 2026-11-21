@@ -12,7 +12,8 @@ extension AXPObservationTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let output = try ObservationCache(directory: root).store(capture)
         let text = try XCTUnwrap(output["text"] as? String)
-        XCTAssertTrue(text.hasPrefix("obs=o1 ax_app=example.test screen=390x844pt"))
+        XCTAssertTrue(text.hasPrefix("obs=o1"))
+        XCTAssertTrue(text.contains("\n[app] example.test @0,0,390,844\n"))
         let acquisition = try XCTUnwrap(capture.metadata["observationAcquisition"] as? [String: Any])
         XCTAssertEqual(acquisition["atomic"] as? Bool, false)
         XCTAssertEqual(acquisition["strategy"] as? String, "parallel_ax_screenshot")

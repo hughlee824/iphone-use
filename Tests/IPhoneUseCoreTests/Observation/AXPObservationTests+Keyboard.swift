@@ -56,7 +56,7 @@ extension AXPObservationTests {
         XCTAssertFalse(text.contains("\"q\""))
         XCTAssertTrue(text.contains("\"next\""))
         XCTAssertTrue(text.contains("keyboard \"Keyboard\""))
-        XCTAssertTrue(text.contains("screen=390x844pt"))
+        XCTAssertTrue(text.contains("\n[app] example.test @0,0,390,844\n"))
         XCTAssertTrue(text.contains("Security, WPA2"))
         XCTAssertEqual(PresentedAX.project(capture).omittedKeyboardCharacters, 1)
         let query = try cache.inspect(ObservationReference("o1"), offset: 0, query: "q")

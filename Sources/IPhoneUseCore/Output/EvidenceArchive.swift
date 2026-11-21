@@ -20,7 +20,7 @@ public enum EvidenceArchive {
             if let text = observation["text"] as? String, text.hasPrefix("obs="),
                let footer = text.range(of: "\nscreenshot=", options: .backwards) {
                 let destination = folder.appendingPathComponent("compact-ax.txt")
-                let document = StandardCompactAX.legend + "\n" + text[..<footer.lowerBound] + "\n"
+                let document = StandardCompactAX.standaloneDocument(String(text[..<footer.lowerBound])) + "\n"
                 do {
                     try write(Data(document.utf8), to: destination)
                     artifacts["compactAX"] = destination.path

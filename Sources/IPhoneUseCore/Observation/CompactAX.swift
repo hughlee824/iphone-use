@@ -2,7 +2,13 @@ import Foundation
 import CoreGraphics
 
 enum CompactAX {
-    static func render(_ nodes: [AXNode], including: Set<Int>? = nil, layout: AXListLayout? = nil) -> [String] {
+    static func render(_ nodes: [AXNode], including: Set<Int>? = nil) -> [String] {
+        render(nodes, including: including, layout: nil).lines
+    }
+
+    static func render(
+        _ nodes: [AXNode], including: Set<Int>?, layout: AXListLayout?
+    ) -> (lines: [String], hasUnknownVisibility: Bool) {
         var children = Array(repeating: [Int](), count: nodes.count)
         for node in nodes { if let parent = node.parent { children[parent].append(node.index) } }
         var kept: [Int] = []
@@ -47,7 +53,14 @@ enum CompactAX {
             }
         }
         let names = Dictionary(grouping: kept, by: { "\(nodes[$0].role):\(nodes[$0].label)" })
-        return kept.map { renderNode(nodes[$0], depth: depths[$0] ?? 0, names: names, layout: layout) }
+        var hasUnknownVisibility = false
+        let lines = kept.map { index in
+            let node = nodes[index]
+            let unknown = layout != nil && !(node.attributes["visible"] is Bool)
+            hasUnknownVisibility = hasUnknownVisibility || unknown
+            return renderNode(node, depth: depths[index] ?? 0, names: names, layout: layout, unknownVisibility: unknown)
+        }
+        return (lines, hasUnknownVisibility)
     }
 
     private static func shouldKeep(_ node: AXNode, nearest: AXNode?, children: [AXNode]) -> Bool {
@@ -75,12 +88,13 @@ enum CompactAX {
     }
 
     private static func renderNode(
-        _ node: AXNode, depth: Int, names: [String: [Int]], layout: AXListLayout?
+        _ node: AXNode, depth: Int, names: [String: [Int]], layout: AXListLayout?, unknownVisibility: Bool
     ) -> String {
         let row = layout?.rows.contains(node.index) == true
-        let marker = layout != nil && !(node.attributes["visible"] is Bool) ? "?" : ""
+        let marker = unknownVisibility ? "?" : ""
         let incomplete = layout?.incompleteContent.contains(node.index) == true
-        var line = String(repeating: "  ", count: depth) + "[\(node.ref)\(marker)] \(row ? "row" : node.role)"
+        let indent = String(repeating: "  ", count: layout == nil ? depth : depth + 1)
+        var line = indent + "[\(node.ref)\(marker)] \(row ? "row" : node.role)"
         let label = incomplete ? "" : (layout?.rowLabels[node.index] ?? node.label)
         if !label.isEmpty { line += " \(quoted(label))" }
         if layout != nil, node.role == "tab", AXPresentationTraits(node).contains(.selected) {

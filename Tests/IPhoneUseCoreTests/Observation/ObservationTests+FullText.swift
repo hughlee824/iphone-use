@@ -88,6 +88,22 @@ extension ObservationTests {
         XCTAssertEqual(end["outputComplete"] as? Bool, true)
     }
 
+    func testOversizedStandardCompactFileKeepsObservationFirstAndLegendSecond() throws {
+        let value = String(repeating: "文", count: 60000)
+        let base = try largeTextCapture(value)
+        let source = CapturedObservation(nodes: base.nodes, metadata: ["backend": "apple-native",
+            "axStatus": "available"], screenshot: base.screenshot)
+        let (cache, _) = try cache()
+        let result = try cache.store(source)
+        let live = StandardCompactAX.lines(source, id: "o1")
+        let expected = ["obs=o1 [eN?]=AX visibility unknown", StandardCompactAX.legend] + live.dropFirst()
+            + ["screenshot=" + quoted(try XCTUnwrap(result["screenshot"] as? String))]
+        let document = try readAllText(result, cache: cache)
+        XCTAssertEqual(document, Data(expected.joined(separator: "\n").utf8))
+        let file = try XCTUnwrap(result["fullText"] as? String)
+        XCTAssertEqual(document, try Data(contentsOf: URL(fileURLWithPath: file)))
+    }
+
     func testEscapedControlCharactersRespectEncodedResponseBudget() throws {
         let (cache, _) = try cache()
         let value = String(repeating: "\u{1}\"\\", count: 40000)

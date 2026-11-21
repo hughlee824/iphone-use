@@ -17,11 +17,11 @@ extension StandardCompactAXTests {
             control(6, 2, "button", "Unconfirmed", traits: 1, visible: nil),
             control(7, 2, "button", "Hidden", traits: 1, visible: false)
         ])
-        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst()), [
-            "[e1?] tab_bar \"Tab Bar\" @0,175,100,25",
-            "  [e4] tab \"Inbox\" selected=true @0,175,100,25",
-            "  [e5] tab @0,175,100,25",
-            "    [e6?] text \"Library\" @0,175,100,25"
+        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst(2)), [
+            "  [e1?] tab_bar \"Tab Bar\" @0,175,100,25",
+            "    [e4] tab \"Inbox\" selected=true @0,175,100,25",
+            "    [e5] tab @0,175,100,25",
+            "      [e6?] text \"Library\" @0,175,100,25"
         ])
         XCTAssertEqual(source.nodes[3].role, "unknown")
         XCTAssertEqual(source.nodes[3].parent, 2)
@@ -36,11 +36,11 @@ extension StandardCompactAXTests {
             control(4, 3, "button", "Attachment", traits: 1),
             control(5, 1, "button", "Release Tag", traits: 0x200008000, visible: nil)
         ])
-        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst()), [
-            "[e1?] tab_bar @0,175,100,25",
-            "  [e3] tab \"Home\" selected=true @0,175,100,25",
-            "  [e4] button \"Publish\" @0,175,100,25",
-            "    [e5] button \"Attachment\" @0,175,100,25"
+        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst(2)), [
+            "  [e1?] tab_bar @0,175,100,25",
+            "    [e3] tab \"Home\" selected=true @0,175,100,25",
+            "    [e4] button \"Publish\" @0,175,100,25",
+            "      [e5] button \"Attachment\" @0,175,100,25"
         ])
     }
 

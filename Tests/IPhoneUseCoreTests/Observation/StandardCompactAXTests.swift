@@ -42,13 +42,13 @@ final class StandardCompactAXTests: XCTestCase {
             control(6, nil, "group", "Hidden", traits: 0x8000, visible: false),
             control(7, 6, "button", "Hidden child", traits: 0x1)
         ])
-        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst()), [
-            "[e1?] tab_bar @0,175,100,25",
-            "  [e2] tab \"Home\" selected=true @0,175,100,25",
-            "  [e3] tab \"Library\" @0,175,100,25",
-            "  [e4] text \"Status\" @0,175,100,25",
-            "  [e5] group \"Actions\" @0,175,100,25",
-            "    [e6] button \"Edit\" @0,175,100,25"
+        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst(2)), [
+            "  [e1?] tab_bar @0,175,100,25",
+            "    [e2] tab \"Home\" selected=true @0,175,100,25",
+            "    [e3] tab \"Library\" @0,175,100,25",
+            "    [e4] text \"Status\" @0,175,100,25",
+            "    [e5] group \"Actions\" @0,175,100,25",
+            "      [e6] button \"Edit\" @0,175,100,25"
         ])
     }
 
@@ -58,10 +58,10 @@ final class StandardCompactAXTests: XCTestCase {
             control(1, 0, "button", "Home", traits: 0x210000009),
             control(2, 0, "button", "Library", traits: 0x210000001)
         ])
-        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst()), [
-            "[e1] toolbar \"Actions\" @0,175,100,25",
-            "  [e2] button \"Home\" @0,175,100,25",
-            "  [e3] button \"Library\" @0,175,100,25"
+        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst(2)), [
+            "  [e1] toolbar \"Actions\" @0,175,100,25",
+            "    [e2] button \"Home\" @0,175,100,25",
+            "    [e3] button \"Library\" @0,175,100,25"
         ])
     }
 
@@ -88,11 +88,11 @@ final class StandardCompactAXTests: XCTestCase {
             node(17, 3, ("text", "UILabel"), "Hidden", (25, 20), visible: false)
         ])
         let lines = StandardCompactAX.lines(source, id: "o2")
-        XCTAssertEqual(lines.first, "obs=o2 ax_app=fixture.app screen=100x200pt [eN?]=AX visibility unknown")
-        XCTAssertTrue(lines.contains("  [e4?] row \"未読,通知をミュート\" @0,20,100,60"))
-        XCTAssertTrue(lines.contains("    [e5?] image \"Avatar\" @0,23,100,15"))
-        XCTAssertTrue(lines.contains("  [e11?] row @0,158,100,60 clip=0,158,100,17"))
-        XCTAssertTrue(lines.contains("    [e12?] text \"Name\" @0,160,100,20 clip=0,160,100,15"))
+        XCTAssertEqual(lines.first, "obs=o2 [eN?]=AX visibility unknown")
+        XCTAssertTrue(lines.contains("    [e4?] row \"未読,通知をミュート\" @0,20,100,60"))
+        XCTAssertTrue(lines.contains("      [e5?] image \"Avatar\" @0,23,100,15"))
+        XCTAssertTrue(lines.contains("    [e11?] row @0,158,100,60 clip=0,158,100,17"))
+        XCTAssertTrue(lines.contains("      [e12?] text \"Name\" @0,160,100,20 clip=0,160,100,15"))
         XCTAssertEqual(lines.filter { $0.contains("\"Name\"") }.count, 2)
         for missing in ["[e7?]", "Secret", "Recycled frame", "Hidden", "Offscreen"] {
             XCTAssertFalse(lines.contains { $0.contains(missing) })
@@ -120,7 +120,7 @@ final class StandardCompactAXTests: XCTestCase {
             AXNode(index: 2, parent: 1, role: "text", attributes: ["label": "Unlocated", "visible": true])
         ])
         XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").suffix(1)),
-                       ["  [e2] row @0,175,100,60 clip=0,175,100,25"])
+                       ["    [e2] row @0,175,100,60 clip=0,175,100,25"])
     }
 
     func testCustomTopBarRequiresHeaderAndVisibleControlOutsideNavigationContent() {
@@ -136,14 +136,14 @@ final class StandardCompactAXTests: XCTestCase {
             node(5, 4, ("table", "UITableView"), "", (0, 200), visible: true)
         ]
         let lines = StandardCompactAX.lines(capture(nodes), id: "o1")
-        XCTAssertTrue(lines.contains("[e3?] group \"Title\" @0,10,100,15"))
-        XCTAssertTrue(lines.contains("[e6] table @0,0,100,200 clip=0,30,100,170"))
+        XCTAssertTrue(lines.contains("  [e3?] group \"Title\" @0,10,100,15"))
+        XCTAssertTrue(lines.contains("  [e6] table @0,0,100,200 clip=0,30,100,170"))
         var noHeader = nodes
         noHeader[2] = title
-        XCTAssertTrue(StandardCompactAX.lines(capture(noHeader), id: "o1").contains("[e6] table @0,0,100,200"))
+        XCTAssertTrue(StandardCompactAX.lines(capture(noHeader), id: "o1").contains("  [e6] table @0,0,100,200"))
         var noControl = nodes
         noControl[3] = node(3, 1, ("button", "UIButton"), "Menu", (10, 15), visible: false)
-        XCTAssertTrue(StandardCompactAX.lines(capture(noControl), id: "o1").contains("[e6] table @0,0,100,200"))
+        XCTAssertTrue(StandardCompactAX.lines(capture(noControl), id: "o1").contains("  [e6] table @0,0,100,200"))
     }
 
     func testRowWithIdenticalTitleKeepsOneReadableChild() {
@@ -153,8 +153,8 @@ final class StandardCompactAXTests: XCTestCase {
             node(2, 1, ("text", "UILabel"), "One title", (24, 30))
         ])
         let lines = StandardCompactAX.lines(source, id: "o1")
-        XCTAssertTrue(lines.contains("  [e2] row @0,20,100,60"))
-        XCTAssertTrue(lines.contains("    [e3?] text \"One title\" @0,24,100,30"))
+        XCTAssertTrue(lines.contains("    [e2] row @0,20,100,60"))
+        XCTAssertTrue(lines.contains("      [e3?] text \"One title\" @0,24,100,30"))
         XCTAssertEqual(lines.filter { $0.contains("One title") }.count, 1)
     }
 
@@ -167,7 +167,7 @@ final class StandardCompactAXTests: XCTestCase {
             node(4, nil, ("window", "UIWindow"), "", (0, 200)),
             node(5, 4, ("button", "UIButton"), "Allow", (80, 35), visible: true)
         ])
-        XCTAssertEqual(StandardCompactAX.lines(source, id: "o1").dropFirst(), ["[e6] button \"Allow\" @0,80,100,35"])
+        XCTAssertEqual(StandardCompactAX.lines(source, id: "o1").dropFirst(2), ["  [e6] button \"Allow\" @0,80,100,35"])
     }
 
     func testScreenshotOnlyHeaderIncludesKnownFailureAndUnstableState() {
@@ -179,7 +179,38 @@ final class StandardCompactAXTests: XCTestCase {
         metadata["postActionStability"] = ["stable": false]
         let source = CapturedObservation(nodes: [], metadata: metadata, screenshot: Data())
         XCTAssertEqual(StandardCompactAX.lines(source, id: "o3"), [
-            "obs=o3 screen=100x200pt ax=unavailable reason=\"root changed\" stable=false"
+            "obs=o3 ax=unavailable reason=\"root changed\" stable=false"
+        ])
+    }
+
+    func testAppRootUsesAXSourceAndCapturedScreenOriginWhenKnown() {
+        let nodes = [node(0, nil, ("button", ""), "Continue", (20, 20), visible: true)]
+        var metadata = capture(nodes).metadata
+        metadata["foregroundBundleId"] = "other.app"
+        metadata["screenFrame"] = ["x": 0, "y": 10, "width": 200, "height": 100]
+        func lines() -> [String] {
+            StandardCompactAX.lines(CapturedObservation(nodes: nodes, metadata: metadata, screenshot: Data()), id: "o4")
+        }
+        XCTAssertEqual(lines(), ["obs=o4", "[app] fixture.app @0,10,200,100",
+                                 "  [e1] button \"Continue\" @0,20,100,20"])
+        metadata.removeValue(forKey: "axApplicationBundleId")
+        XCTAssertEqual(lines()[1], "[app] @0,10,200,100")
+        metadata.removeValue(forKey: "screenFrame")
+        XCTAssertEqual(lines()[1], "[app]")
+    }
+
+    func testHeaderIgnoresFilteredUnknownNodesAndMarkerLikeTextInLabels() {
+        let source = capture([
+            node(0, nil, ("table", ""), "", (0, 200), visible: true),
+            node(1, 0, ("cell", ""), "Outside", (210, 20)),
+            node(2, nil, ("text", ""), "Literal [e123?]", (20, 20), visible: true)
+        ])
+        let lines = StandardCompactAX.lines(source, id: "o1")
+        XCTAssertEqual(lines, [
+            "obs=o1",
+            "[app] fixture.app @0,0,100,200",
+            "  [e1] table @0,0,100,200",
+            "  [e3] text \"Literal [e123?]\" @0,20,100,20"
         ])
     }
 
@@ -194,7 +225,10 @@ final class StandardCompactAXTests: XCTestCase {
         let export = EvidenceArchive.render(["ok": true, "result": result], directory: directory)
         let path = try XCTUnwrap((export["artifacts"] as? [String: String])?["compactAX"])
         let document = try String(contentsOfFile: path, encoding: .utf8)
-        XCTAssertEqual(document, ([StandardCompactAX.legend] + StandardCompactAX.lines(source, id: "o1"))
-            .joined(separator: "\n") + "\n")
+        let live = StandardCompactAX.lines(source, id: "o1")
+        XCTAssertEqual(document.components(separatedBy: "\n"),
+                       [try XCTUnwrap(live.first), StandardCompactAX.legend] + live.dropFirst() + [""])
+        XCTAssertEqual(StandardCompactAX.legend, "@x,y,w,h = absolute screen points from top-left; "
+            + "clip = bounds after geometric clipping (| separates regions)")
     }
 }

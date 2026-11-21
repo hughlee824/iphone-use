@@ -29,8 +29,8 @@ extension StandardCompactAXTests {
             node(4, 1, ("text", ""), "Outside", (205, 20), visible: true)
         ])
         let lines = StandardCompactAX.lines(source, id: "o1")
-        XCTAssertTrue(lines.contains("    [e3] text \"Verified title\" @0,30,100,20"))
-        XCTAssertTrue(lines.contains("  [e2?] row"))
+        XCTAssertTrue(lines.contains("      [e3] text \"Verified title\" @0,30,100,20"))
+        XCTAssertTrue(lines.contains("    [e2?] row"))
         for absent in ["Unverified", "Whole row", "Outside"] { XCTAssertFalse(lines.contains { $0.contains(absent) }) }
     }
 
@@ -77,7 +77,7 @@ extension StandardCompactAXTests {
             AXNode(index: 3, parent: 2, role: "image", attributes: ["visible": false])
         ])
         let lines = StandardCompactAX.lines(source, id: "o1")
-        XCTAssertTrue(lines.contains("    [e3] button \"Rename\" @0,160,100,30"))
+        XCTAssertTrue(lines.contains("      [e3] button \"Rename\" @0,160,100,30"))
         XCTAssertFalse(lines.contains { $0.contains("[e4") })
     }
 
@@ -95,9 +95,9 @@ extension StandardCompactAXTests {
             node(9, 8, ("button", ""), "Tools", (70, 16), visible: true)
         ])
         let lines = StandardCompactAX.lines(source, id: "o1")
-        XCTAssertTrue(lines.contains("[e2] table @0,20,100,160 clip=0,20,100,50|0,90,100,90"))
-        XCTAssertTrue(lines.contains("    [e4] text \"Upper\" @0,26,100,18"))
-        XCTAssertTrue(lines.contains("    [e6] text \"Lower\" @0,112,100,18"))
+        XCTAssertTrue(lines.contains("  [e2] table @0,20,100,160 clip=0,20,100,50|0,90,100,90"))
+        XCTAssertTrue(lines.contains("      [e4] text \"Upper\" @0,26,100,18"))
+        XCTAssertTrue(lines.contains("      [e6] text \"Lower\" @0,112,100,18"))
         XCTAssertFalse(lines.contains { $0.contains("Covered") })
     }
 

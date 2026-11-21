@@ -23,8 +23,8 @@ extension StandardCompactAXTests {
         ])
         let lines = StandardCompactAX.lines(input, id: "o1")
         XCTAssertEqual(Array(lines.suffix(2)), [
-            "  [e2?] row @0,180,100,50 clip=0,180,100,20",
-            "    [e4?] text \"General\" @0,188,100,28 clip=0,188,100,12"
+            "    [e2?] row @0,180,100,50 clip=0,180,100,20",
+            "      [e4?] text \"General\" @0,188,100,28 clip=0,188,100,12"
         ])
         XCTAssertEqual(PresentedAX.project(input).indices, [0])
         XCTAssertNil(input.nodes[3].attributes["visible"])
@@ -43,9 +43,9 @@ extension StandardCompactAXTests {
             node(6, nil, ("button", ""), "", (80, 40)),
             node(7, 6, ("text", ""), "Unknown owner", (84, 12))
         ])
-        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst()), [
-            "[e1] button ax_value=\"4 unread\" @0,12,100,40",
-            "  [e2?] text \"Messages\" @0,46,100,12 clip=0,46,100,6"
+        XCTAssertEqual(Array(StandardCompactAX.lines(source, id: "o1").dropFirst(2)), [
+            "  [e1] button ax_value=\"4 unread\" @0,12,100,40",
+            "    [e2?] text \"Messages\" @0,46,100,12 clip=0,46,100,6"
         ])
         XCTAssertEqual(PresentedAX.project(source).indices, [0])
     }

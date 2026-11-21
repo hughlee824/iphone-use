@@ -2,7 +2,15 @@ import Foundation
 
 /// A read-only projection. Node references, attributes and action admission belong to the original capture.
 enum StandardCompactAX {
-    static let legend = "geometry: @x,y,w,h in screen points; origin=top-left; clip=geometric intersection"
+    static let legend = "@x,y,w,h = absolute screen points from top-left; "
+        + "clip = bounds after geometric clipping (| separates regions)"
+
+    static func standaloneDocument(_ text: String) -> String {
+        var document = text
+        let headerEnd = document.firstIndex(of: "\n") ?? document.endIndex
+        document.insert(contentsOf: "\n" + legend, at: headerEnd)
+        return document
+    }
 
     static func number(_ value: CGFloat) -> String {
         let text = String(Double(value))
@@ -13,15 +21,9 @@ enum StandardCompactAX {
         [rect.minX, rect.minY, rect.width, rect.height].map(number).joined(separator: ",")
     }
 
-    static func header(_ capture: CapturedObservation, id: String) -> String {
+    private static func header(_ capture: CapturedObservation, id: String, hasUnknownVisibility: Bool) -> String {
         let metadata = capture.metadata
         var fields = ["obs=\(id)"]
-        if let app = metadata["axApplicationBundleId"] as? String {
-            fields.append("ax_app=\(app)")
-        }
-        if let screen = PresentedAX.rect(metadata["screenFrame"]) {
-            fields.append("screen=\(number(screen.width))x\(number(screen.height))pt")
-        }
         if metadata["axStatus"] as? String != "available" {
             fields.append("ax=unavailable")
             if let error = metadata["axError"] as? String {
@@ -32,7 +34,11 @@ enum StandardCompactAX {
         if let stability = metadata["postActionStability"] as? [String: Any], stability["stable"] as? Bool == false {
             fields.append("stable=false")
         }
-        if !capture.nodes.isEmpty { fields.append("[eN?]=AX visibility unknown") }
+        let collection = metadata["axCollection"] as? [String: Any]
+        if let omitted = collection?["omittedSupplementalCandidateCount"] as? Int, omitted > 0 {
+            fields.append("ax_omitted_supplemental_candidates=\(omitted)")
+        }
+        if hasUnknownVisibility { fields.append("[eN?]=AX visibility unknown") }
         return fields.joined(separator: " ")
     }
 
@@ -42,12 +48,14 @@ enum StandardCompactAX {
         let nodes = presentationRoles(capture.nodes, tabs: tabs)
         let screen = PresentedAX.rect(capture.metadata["screenFrame"])
         let layout = AXListLayout(nodes, selected: projection.indices, screen: screen, tabs: tabs)
-        let collection = capture.metadata["axCollection"] as? [String: Any]
-        var lines = [header(capture, id: id)]
-        if let omitted = collection?["omittedSupplementalCandidateCount"] as? Int, omitted > 0 {
-            lines.append("ax_omitted_supplemental_candidates=\(omitted)")
-        }
-        return lines + CompactAX.render(nodes, including: layout.selected, layout: layout)
+        let body = CompactAX.render(nodes, including: layout.selected, layout: layout)
+        let info = header(capture, id: id, hasUnknownVisibility: body.hasUnknownVisibility)
+        guard !nodes.isEmpty || capture.metadata["axStatus"] as? String == "available" else { return [info] }
+
+        var root = "[app]"
+        if let app = capture.metadata["axApplicationBundleId"] as? String, !app.isEmpty { root += " " + app }
+        if let screen { root += " @" + coordinates(screen) }
+        return [info, root] + body.lines
     }
 
     private static func presentationRoles(_ nodes: [AXNode], tabs: AXTabOwnership) -> [AXNode] {
