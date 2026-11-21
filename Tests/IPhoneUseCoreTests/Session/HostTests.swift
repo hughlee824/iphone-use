@@ -174,16 +174,17 @@ final class HostTests: XCTestCase {
 
     func host(
         timeout: Double, backend: ControlledBackend, native: Bool = false,
-        touchPaste: TouchPasteSession? = nil
+        touchPaste: TouchPasteSession? = nil, diagnostics: DiagnosticPreferences = .init()
     ) throws -> RunningHost {
         let directory = URL(fileURLWithPath: "/private/tmp/as-test-\(UUID().uuidString.prefix(8))")
-        try SessionPaths.secureDirectory(directory)
-        let paths = SessionPaths(directory: directory)
-        let session = "test-session"
+        let session = "s" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        let paths = SessionPaths(directory: directory.appendingPathComponent(session))
+        try SessionPaths.secureDirectory(paths.directory)
         let config = HostConfiguration(
             session: session, device: "test", xctestrun: "/unused", idleTimeoutSeconds: timeout,
             backend: native ? "apple-native" : nil)
-        let host = SessionHost(config: config, paths: paths, backend: backend, touchPaste: touchPaste)
+        let host = SessionHost(config: config, paths: paths, backend: backend, touchPaste: touchPaste,
+                               diagnosticPreferences: diagnostics)
         let finished = expectation(description: "host exited")
         DispatchQueue.global().async {
             do { try host.run() } catch { XCTFail("Host failed: \(error)") }

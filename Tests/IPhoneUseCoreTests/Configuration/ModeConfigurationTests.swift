@@ -171,6 +171,32 @@ final class ModeConfigurationTests: XCTestCase {
         }
     }
 
+    func testFirstDiagnosticsWriteHonorsLegacyModeAndReadsDoNotTriggerMigration() throws {
+        let root = try directory()
+        var probes = 0
+        let store = ModeConfiguration(directory: root, legacyRunner: { probes += 1; return true })
+        XCTAssertEqual(try store.diagnostics(update: nil), DiagnosticPreferences())
+        XCTAssertEqual(probes, 0)
+        _ = try store.diagnostics { $0.level = .error }
+        XCTAssertEqual(try select(store).mode, .runner)
+        XCTAssertEqual(probes, 1)
+    }
+
+    func testInvalidDiagnosticOverridesCannotBeOverwrittenByEitherWriter() throws {
+        let root = try directory()
+        try SessionPaths.secureDirectory(root)
+        let file = root.appendingPathComponent("config.json")
+        let store = ModeConfiguration(directory: root, legacyRunner: { false })
+        for fields in ["null", "[]", #"{"captureEvidence":null}"#, #"{"level":"verbose"}"#,
+                       #"{"captureEvidence":1}"#, #"{"historyDays":0}"#, #"{"extra":true}"#] {
+            let original = Data(#"{"version":1,"mode":"standard","diagnostics":\#(fields)}"#.utf8)
+            try original.write(to: file)
+            XCTAssertThrowsError(try store.set(mode: "runner"))
+            XCTAssertThrowsError(try store.diagnostics { $0.level = .debug })
+            XCTAssertEqual(try Data(contentsOf: file), original)
+        }
+    }
+
     func testInvalidLegacyStateRequiresExplicitChoiceAndDoesNotPersistDefault() throws {
         let root = try directory()
         let store = ModeConfiguration(

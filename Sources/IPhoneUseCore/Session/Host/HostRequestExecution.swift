@@ -4,6 +4,7 @@ import Foundation
 // Accessed only while holding SessionHost's serial device work queue.
 final class HostRequestExecution {
     let host: SessionHost
+    let diagnosticID: String
     let admission: HostRequest
     var response: [String: Any]
     var previousObservation: String?
@@ -27,12 +28,21 @@ final class HostRequestExecution {
     init(host: SessionHost, admission: HostRequest) {
         self.host = host
         self.admission = admission
+        diagnosticID = UUID(uuidString: admission.id)?.uuidString ?? UUID().uuidString
         response = ["id": admission.id, "session": host.config.session, "ok": true]
         effective = admission.appAction
         textObservationOptions = admission.textObservationOptions
     }
 
     func run() {
+        let started = ProcessInfo.processInfo.systemUptime
+        recordAdmission()
+        let native = backend as? AppleDeviceBackend
+        var guardPNG: Data?
+        if host.diagnostics?.preferences.captureEvidence == true {
+            native?.diagnosticGuardFrame = { guardPNG = $0 }
+        }
+        defer { native?.diagnosticGuardFrame = nil }
         do {
             try checkPendingPaste()
             try dispatch()
@@ -41,7 +51,7 @@ final class HostRequestExecution {
         }
         captureAfterAction()
         enrichRecovery()
-        recordEvent()
+        recordEvent(elapsedMs: (ProcessInfo.processInfo.systemUptime - started) * 1000, guardPNG: guardPNG)
     }
 
     func checkPendingPaste() throws {

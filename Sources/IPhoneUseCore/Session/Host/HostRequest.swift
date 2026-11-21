@@ -9,6 +9,7 @@ final class HostRequest {
     let operation: String
     let appLifecycle: Bool
     let appAction: Bool
+    private(set) var rejectionCode: String?
     var previewOptions = NativePreviewOptions()
     var reference: ObservationReference?
     var action: DeviceAction?
@@ -41,6 +42,7 @@ final class HostRequest {
     }
 
     func reject(_ code: String, _ message: String) {
+        rejectionCode = code
         var response: [String: Any] = [
             "id": id, "session": config.session, "ok": false,
             "outcome": "not_dispatched", "error": ["code": code, "message": message]

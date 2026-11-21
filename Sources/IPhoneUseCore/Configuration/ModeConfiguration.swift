@@ -65,8 +65,9 @@ public struct ModeSelection {
 /// User preference is resolved once, before starting a host. Running hosts never read it.
 public struct ModeConfiguration {
     private struct Document: Codable {
-        let version: Int
-        let mode: ControlMode
+        var version = 1
+        var mode: ControlMode
+        var diagnostics: DiagnosticOverrides?
     }
     private let directory: URL
     private let legacyRunner: () throws -> Bool
@@ -134,28 +135,41 @@ public struct ModeConfiguration {
 
     public func set(mode: String) throws -> [String: Any] {
         let mode = try ControlMode.parse(mode)
-        try SessionPaths.secureDirectory(directory)
         let lock = try configurationLock()
         defer { withExtendedLifetime(lock) {} }
-        _ = try read() // Do not overwrite malformed or newer configuration formats.
-        try write(mode)
+        var document = try read() ?? Document(mode: mode)
+        document.mode = mode
+        try write(document)
         return [
             "mode": mode.rawValue, "backend": mode.backend, "configPath": file.path,
             "saved": true, "appliesTo": "new_sessions"
         ]
     }
 
+    func diagnostics(update: ((inout DiagnosticPreferences) throws -> Void)?) throws -> DiagnosticPreferences {
+        guard let update else { return try read()?.diagnostics?.effective ?? DiagnosticPreferences() }
+        let lock = try configurationLock()
+        defer { withExtendedLifetime(lock) {} }
+        let saved = try read()
+        var settings = saved?.diagnostics?.effective ?? DiagnosticPreferences()
+        try update(&settings)
+        try settings.validate()
+        var document = try saved ?? Document(mode: initialSelection().mode)
+        document.diagnostics = settings == DiagnosticPreferences() ? nil : DiagnosticOverrides(settings)
+        try write(document)
+        return settings
+    }
+
     private func defaults(persist: Bool) throws -> ModeSelection {
         if persist {
-            try SessionPaths.secureDirectory(directory)
             let lock = try configurationLock()
             defer { withExtendedLifetime(lock) {} }
-            if let mode = try read() { return ModeSelection(mode: mode, source: "configuration") }
+            if let mode = try read()?.mode { return ModeSelection(mode: mode, source: "configuration") }
             let selection = try initialSelection()
-            try write(selection.mode)
+            try write(Document(mode: selection.mode))
             return selection
         }
-        if let mode = try read() { return ModeSelection(mode: mode, source: "configuration") }
+        if let mode = try read()?.mode { return ModeSelection(mode: mode, source: "configuration") }
         return try initialSelection()
     }
 
@@ -166,7 +180,7 @@ public struct ModeConfiguration {
             source: legacy ? "legacy_runner_migration" : "default")
     }
 
-    private func read() throws -> ControlMode? {
+    private func read() throws -> Document? {
         let files = FileManager.default
         // attributesOfItem also detects dangling symlinks; missing is distinct from unreadable.
         let attributes: [FileAttributeKey: Any]
@@ -183,16 +197,24 @@ public struct ModeConfiguration {
         do {
             let data = try Data(contentsOf: file)
             let object = try jsonObject(data)
-            guard Set(object.keys) == Set(["version", "mode"]) else {
+            guard Set(object.keys).isSubset(of: ["version", "mode", "diagnostics"]) else {
                 throw IPhoneUseError(
                     "invalid_configuration",
-                    "Expected configuration version 1 with only version and mode fields")
+                    "Expected version, mode and optional diagnostics fields")
+            }
+            if let value = object["diagnostics"] {
+                let keys = DiagnosticOverrides.CodingKeys.allCases.map(\.rawValue)
+                guard let fields = value as? [String: Any], Set(fields.keys).isSubset(of: keys),
+                    !fields.values.contains(where: { $0 is NSNull }) else {
+                    throw IPhoneUseError("invalid_configuration", "Invalid diagnostics field in configuration")
+                }
             }
             let document = try JSONDecoder().decode(Document.self, from: data)
             guard document.version == 1 else {
                 throw IPhoneUseError("invalid_configuration", "Unsupported configuration version")
             }
-            return document.mode
+            try document.diagnostics?.effective.validate()
+            return document
         } catch {
             throw IPhoneUseError(
                 "invalid_configuration",
@@ -200,18 +222,19 @@ public struct ModeConfiguration {
         }
     }
 
-    private func write(_ mode: ControlMode) throws {
+    private func write(_ document: Document) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(Document(version: 1, mode: mode)).write(to: file, options: .atomic)
+        try encoder.encode(document).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 
     private func configurationLock() throws -> DeviceLock {
+        try SessionPaths.secureDirectory(directory)
         do { return try DeviceLock(root: directory, device: "configuration") } catch {
             throw IPhoneUseError(
                 "configuration_busy",
-                "Cannot lock mode configuration; another configuration operation may be active: \(error)")
+                "Cannot lock configuration; another configuration operation may be active: \(error)")
         }
     }
 }

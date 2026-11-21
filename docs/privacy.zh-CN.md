@@ -17,6 +17,8 @@
 
 ## Mac 上可能保留什么？
 
+默认在本机短期保留关键截图和 AX，以便断开后排障。运行 `iphone-use diagnostics config --evidence off` 可对新会话关闭。默认反馈包只含脱敏时间线和索引，只有显式选择才会导出画面和 AX。详见[诊断留存与清理](diagnostics.md)。
+
 会话产物默认位于 `/private/tmp/iphone-use-<uid>`，也可由 `IPHONE_USE_STATE_DIR` 指定。偏好位于 `~/.iphone-use/config.json`，发布包的 Runner 准备状态位于 `~/Library/Application Support/iphone-use`，预览访问凭据位于 `~/.iphone-use/previews/<port>/`，受 `IPHONE_USE_CONFIG_DIR` 控制；签名私钥保留在 Keychain。详见[架构](architecture.md)和[模式配置](control-modes.md)。
 
 截图、录屏、设备标识和日志都应按潜在私密数据处理。断开会话不等于删除保存的录屏、复制文件、客户端历史或模型服务端记录。本地预览只用于观看；关闭浏览器标签不会停止预览服务或断开手机。断开后画面停止，但预览 URL 不会失效；同一设备以后明确启用预览时，旧链接仍可访问。需要使旧链接失效时，按[预览访问撤销](local-preview.md#稳定入口与原标签页重连)操作。

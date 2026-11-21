@@ -15,7 +15,7 @@
 
 iPhone-use 是让 Codex、Claude Code 等 AI Agent 操作真实 iPhone 的开源 macOS 命令行工具。它提供设备观察与操作，Agent 负责理解任务、规划动作并核对结果。
 
-Agent 需要在 Mac 上执行本地命令并读取 PNG 图片。设备控制在本地执行；客户端仍可能将截图和界面文字发送给模型，详见[隐私与数据流](docs/privacy.zh-CN.md)。
+Agent 需要在 Mac 上执行本地命令并读取 PNG 图片。设备控制在本地执行；客户端仍可能将截图和界面文字发送给模型，详见[隐私与数据流](docs/privacy.zh-CN.md)。默认在本机短期保留关键截图和 AX，可[配置留存并在断开后导出诊断包](docs/diagnostics.md)。
 
 [网站](https://iphone-use.com) · [首个 iPhone 任务](docs/first-task.md) · [客户端插件](docs/plugins.md) · [命令概览](#命令概览) · [文档导航](#文档导航)
 

@@ -8,6 +8,7 @@ final class AppleDeviceBackend: SessionBackend {
     let paths: SessionPaths
     let cancellation = NativeCancellation()
     let generation = UUID().uuidString
+    var diagnosticGuardFrame: ((Data) -> Void)?
     let tapFrames = NativeTapFrameWorker()
     var cli: AppleDeviceCLI?
     let axpReader: AXPReader?
