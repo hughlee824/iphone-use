@@ -31,6 +31,16 @@ class ObservationFailureTests(unittest.TestCase):
         cls.binary = Path(temporary.name) / "worker"
         cls.compile_peer(cls.binary, ROOT / "Sources/AppleNativeBridge/Transport/DTXReadOnlyRequest.m")
 
+    def test_screenshot_cutoff_is_exclusive_and_scoped_to_one_capture(self):
+        generation = "00000000-0000-0000-0000-000000000001"
+        capture = {"op": "capture", "generation": generation, "id": generation}
+        commands = [dict(capture, screenshotStartDeadline=1.5), capture, {"op": "close", "generation": generation}]
+        result = subprocess.run([self.binary, "screenshot_cutoff"], check=True, text=True, capture_output=True,
+                                input="".join(json.dumps(c) + "\n" for c in commands), timeout=5)
+        values = [e["value"] for e in map(json.loads, result.stdout.splitlines()) if e["event"] == "result"]
+        self.assertEqual(values, [{"before": True, "at": False, "after": False},
+                                  {"before": True, "at": True, "after": True}])
+
     def test_dtx_unexpected_return_cannot_borrow_legacy_connection_failure(self):
         with tempfile.TemporaryDirectory(prefix="iphone-use-dtx-return-") as directory:
             root = Path(directory)

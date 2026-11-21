@@ -3,7 +3,7 @@ import IPhoneUseRunnerSupport
 @testable import IPhoneUseCore
 
 extension NativeCaptureTests {
-    func testSharedPixelsPreserveBlackThresholdOriginalPNGAndFrameHash() throws {
+    func testSharedPixelsAcceptBlackAndPreserveOriginalPNGAndFrameHash() throws {
         for level: UInt8 in [0, 8, 9, 255] {
             let png = try screenPNG(
                 width: 12, height: 18,
@@ -14,16 +14,10 @@ extension NativeCaptureTests {
                 })
             let attempt = AppleCaptureAttempt(cli: cli, generation: "fixture", budget: nil)
             let display = try NativeDisplay(display())
-            if level <= 8 {
-                XCTAssertThrowsError(try attempt.validate(png, display: display)) {
-                    XCTAssertEqual(($0 as? IPhoneUseError)?.code, "capture_unavailable")
-                }
-            } else {
-                let fingerprint = try attempt.validate(png, display: display)
-                let capture = try attempt.captured(png: png, fingerprint: fingerprint, display: display, geometry: [:])
-                XCTAssertEqual(capture.screenshot, png)
-                XCTAssertEqual(fingerprint.hash, try FrameFingerprint(png: png).hash)
-            }
+            let fingerprint = try attempt.validate(png, display: display)
+            let capture = try attempt.captured(png: png, fingerprint: fingerprint, display: display, geometry: [:])
+            XCTAssertEqual(capture.screenshot, png)
+            XCTAssertEqual(fingerprint.hash, try FrameFingerprint(png: png).hash)
         }
     }
 }

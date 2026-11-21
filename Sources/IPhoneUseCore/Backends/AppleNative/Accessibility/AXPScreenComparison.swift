@@ -26,8 +26,8 @@ struct AXPScreenComparison {
         ]
         // Preserve image validation and the context-mismatch short circuit.
         if differences.isEmpty {
-            let reference = try FrameFingerprint(png: first.screenshot)
-            let current = try FrameFingerprint(png: second.screenshot)
+            let reference = try first.fingerprint()
+            let current = try second.fingerprint()
             let comparison = FrameComparison(reference: reference, current: current)
             equivalent = comparison.equivalent
             contextCompatible = comparison.dimensionsMatch

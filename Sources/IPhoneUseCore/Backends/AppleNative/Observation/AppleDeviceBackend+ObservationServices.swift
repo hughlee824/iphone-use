@@ -14,6 +14,7 @@ extension AppleDeviceBackend {
         }
     }
     func closeObservations() -> [String: Any] {
+        tapFrames.drain()
         let accessibility = axpReader?.close() ?? [:]
         let screen = cli?.nativeScreenshot?.worker.close() ?? [:]
         return ["ax": accessibility, "screenshot": screen, "released": released(accessibility) && released(screen)]

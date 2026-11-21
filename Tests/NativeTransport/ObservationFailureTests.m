@@ -70,6 +70,14 @@ void ASAXFail(NSString *reason) {
 }
 NSDictionary *ASRunAXObservation(NSString *mode, ASObservationCommands *commands) {
     @try {
+        if ([mode isEqual:@"screenshot_cutoff"]) {
+            [commands ready];
+            while ([commands next]) {
+                [commands publish:@{@"before":@([commands canStartScreenshotAt:1.499]),
+                    @"at":@([commands canStartScreenshotAt:1.5]), @"after":@([commands canStartScreenshotAt:1.501])}];
+            }
+            return @{};
+        }
         if ([mode hasPrefix:@"ax_"]) return AXWorker(mode,commands);
         if ([mode hasPrefix:@"recover"]) {
             BOOL dtx = [mode hasPrefix:@"recover_dtx"];

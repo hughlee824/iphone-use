@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import IPhoneUseRunnerSupport
 
 struct AXNode {
     let index: Int
@@ -25,6 +26,9 @@ struct CapturedObservation {
     let nodes: [AXNode]
     let metadata: [String: Any]
     let screenshot: Data
+    // Transient pixels of this immutable screenshot. Never stored in the observation cache.
+    var validatedPixels: FrameFingerprint?
+    func fingerprint() throws -> FrameFingerprint { try validatedPixels ?? FrameFingerprint(png: screenshot) }
     // Historical comparison input only; never a current screenshot or action target.
     var axComparisonScreenshot: Data?
 }
@@ -123,9 +127,11 @@ final class ObservationCache {
             throw error
         }
         invalidate("superseded")
+        var stored = capture
+        stored.validatedPixels = nil
         entries.append(
             Entry(
-                id: id, capture: capture, directory: location, validity: "current",
+                id: id, capture: stored, directory: location, validity: "current",
                 storedAtUptime: ProcessInfo.processInfo.systemUptime))
         currentID = id
         if entries.count > 2 {

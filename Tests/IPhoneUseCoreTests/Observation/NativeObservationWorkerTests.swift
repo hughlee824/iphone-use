@@ -107,6 +107,42 @@ final class NativeObservationWorkerTests: XCTestCase {
         try String(contentsOfFile: XCTUnwrap(worker.arguments.last) + ".starts", encoding: .utf8)
             .split(separator: "\n").map(String.init)
     }
+    func testCaptureCutoffAllowsPendingReplyAndPreservesReusableConnection() throws {
+        let worker = try worker(behavior: "if count == 1: time.sleep(0.3)")
+        try worker.prewarm()
+        let cutoff = ProcessInfo.processInfo.systemUptime + 0.15
+        let late = try worker.read(startBefore: cutoff, cancelled: { false })
+        XCTAssertGreaterThan(ProcessInfo.processInfo.systemUptime, cutoff)
+        XCTAssertThrowsError(try worker.read(startBefore: cutoff, cancelled: { false })) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "capture_timeout")
+        }
+        let next = try worker.read(cancelled: { false })
+        XCTAssertEqual(next["pid"] as? Int, late["pid"] as? Int)
+        XCTAssertEqual(next["count"] as? Int, 2)
+    }
+
+    func testOnlyBudgetedCaptureSendsScreenshotCutoffToWorker() throws {
+        let worker = try worker(behavior: """
+        emit({'event':'result','id':command['id'],'value':{'deviceID':device,
+                  'cutoff':command.get('screenshotStartDeadline'), 'pid':os.getpid()}}); continue
+        """)
+        let cutoff = ProcessInfo.processInfo.systemUptime + 10
+        let budgeted = try worker.read(startBefore: cutoff, cancelled: { false })
+        XCTAssertEqual(budgeted["cutoff"] as? Double, cutoff)
+        let ordinary = try worker.read(cancelled: { false })
+        XCTAssertTrue(ordinary["cutoff"] is NSNull)
+        XCTAssertEqual(ordinary["pid"] as? Int, budgeted["pid"] as? Int)
+    }
+
+    func testFailedInFlightCaptureDoesNotRetryAfterCutoff() throws {
+        let worker = try worker(behavior: "time.sleep(0.3); \(connectionFailure); break")
+        try worker.prewarm()
+        XCTAssertThrowsError(try worker.read(startBefore: ProcessInfo.processInfo.systemUptime + 0.15,
+            cancelled: { false })) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "observation_connection_failed")
+        }
+        XCTAssertEqual(try starts(worker).count, 1)
+    }
     func testReportedConnectionFailureRebuildsWithinSameRead() throws {
         let worker = try worker(
             behavior: "if first: time.sleep(0.1); \(connectionFailure); break", requestTimeout: 1)

@@ -98,6 +98,7 @@ final class ControlledBackend: SessionBackend {
     var postActionStable = true
     private(set) var postActionObserveCount = 0
     func observeAfterAction(
+        actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
     ) throws -> CapturedObservation {
         postActionObserveCount += 1

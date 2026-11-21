@@ -3,6 +3,7 @@
 #import "../Transport/CoreDeviceProxy/DeviceServiceTransport.h"
 @interface ASObservationCommands : NSObject
 - (instancetype)initWithGeneration:(NSString *)generation;
+- (BOOL)canStartScreenshotAt:(NSTimeInterval)uptime;
 - (void)ready;
 - (BOOL)next;
 - (BOOL)nextWithHealthCheck:(void (^)(void))check;

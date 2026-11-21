@@ -8,11 +8,28 @@ enum NativePostActionStability {
     static let minimumDuration: TimeInterval = 1.5
     static let stableDuration: TimeInterval = 0.4
     static let requiredFrames = 3
+
     // Readiness only: permit a tiny bounded animation, without identifying it
     // as a caret or carrying this tolerance into input authorization.
     static let maximumChangedFraction = 0.001
     static let maximumLocalArea = 320.0 // square screen points
     static let maximumLocalDimension = 80.0
+
+    // Only acquisition failures permit fallback. Identity, geometry and cancellation errors propagate.
+    private static let lateFrameFailures: Set<String> = [
+        "observation_worker_timeout", "observation_service_failed", "observation_connection_failed",
+        "observation_worker_closed", "observation_worker_unavailable", "observation_worker_pipe",
+        "observation_worker_invalid",
+        "native_screenshot_invalid", "capture_failed", "capture_unavailable", "coredevice_failed"
+    ]
+
+    private static let captureTimeouts: Set<String> = [
+        "capture_timeout", "input_preflight_timeout", "coredevice_timeout"
+    ]
+
+    static func permitsFallback(_ code: String) -> Bool {
+        captureTimeouts.contains(code) || lateFrameFailures.contains(code)
+    }
 
     static func localizedChangeBounds(
         _ comparison: FrameComparison, frame: FrameFingerprint, screen: ScreenRect, previous: CGRect?
@@ -34,21 +51,24 @@ enum NativePostActionStability {
     }
 
     static func capture(
+        policy: Policy = .conventional,
         ignoring: ScreenRect? = nil, sourceContext: ScreenContext? = nil,
         now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }, checkCancellation: () throws -> Void,
         sample: (TimeInterval) throws -> CapturedObservation
     ) throws -> CapturedObservation {
-        let started = now(), deadline = started + timeout
-        var state = SamplingState(started: started, deadline: deadline, sourceContext: sourceContext)
+        let started = now(), deadline = started + policy.budget
+        var state = SamplingState(policy: policy, started: started, deadline: deadline, sourceContext: sourceContext)
         while now() < deadline {
             try checkCancellation()
             let began = now()
+            guard began < deadline else { break }
             state.attempts += 1
             let frame: CapturedObservation
             do { frame = try sample(deadline) } catch let error as IPhoneUseError
-                where ["capture_timeout", "input_preflight_timeout", "coredevice_timeout"].contains(error.code) {
-                state.lastError = "capture_deadline_exceeded"
+                where captureTimeouts.contains(error.code)
+                    || (policy == .adjacentTap && now() >= deadline && permitsFallback(error.code)) {
+                state.lastError = policy == .adjacentTap ? error.code : "capture_deadline_exceeded"
                 state.lastCaptureDiagnostics = error.diagnostics
                 state.captureSamples.append([
                     "attempt": state.attempts, "elapsedMs": (now() - began) * 1000, "errorCode": error.code
@@ -62,12 +82,7 @@ enum NativePostActionStability {
                 state.captureSamples.append([
                     "attempt": state.attempts, "elapsedMs": (now() - began) * 1000, "errorCode": error.code
                 ])
-                state.anchor = nil
-                state.anchorContext = nil
-                state.anchorIdentity = nil
-                state.consecutive = 0
-                state.exclusionInvalidated = true
-                state.geometrySamples = 0
+                state.invalidateContext()
                 pause(min(0.2, max(0, deadline - now())))
                 continue
             }
@@ -77,17 +92,17 @@ enum NativePostActionStability {
                 "captureTimingsMs": frame.metadata["captureTimingsMs"] ?? [:]
             ])
             try state.record(frame, ignoring: ignoring, now: now)
-            if state.stable
-                || (state.geometrySamples >= requiredFrames && state.lastSampleAt - started >= minimumDuration) {
-                break
-            }
-            pause(min(max(0, 0.2 - (now() - began)), max(0, deadline - now())))
+            let conventionalLimit = state.geometrySamples >= requiredFrames
+                && state.lastSampleAt - started >= minimumDuration
+            if state.stable || (policy == .conventional && conventionalLimit) { break }
+            if policy == .conventional { pause(min(max(0, 0.2 - (now() - began)), max(0, deadline - now()))) }
         }
         try checkCancellation()
         return try state.result(now: now)
     }
 
     private struct SamplingState {
+        let policy: Policy
         let started: TimeInterval
         let deadline: TimeInterval
         var anchor: FrameFingerprint?, anchorContext: ScreenContext?, anchorIdentity: Data?
@@ -105,7 +120,8 @@ enum NativePostActionStability {
         var localBounds: CGRect?
         var localChangeComparisons = 0
 
-        init(started: TimeInterval, deadline: TimeInterval, sourceContext: ScreenContext?) {
+        init(policy: Policy, started: TimeInterval, deadline: TimeInterval, sourceContext: ScreenContext?) {
+            self.policy = policy
             self.started = started
             self.deadline = deadline
             unchangedSince = started
@@ -113,22 +129,34 @@ enum NativePostActionStability {
             exclusionContext = sourceContext
         }
 
-        mutating func record(_ frame: CapturedObservation, ignoring: ScreenRect?, now: () -> TimeInterval) throws {
+        mutating func invalidateContext() {
+            if policy == .adjacentTap { latest = nil }
+            anchor = nil
+            anchorContext = nil
+            anchorIdentity = nil
+            consecutive = 0
+            exclusionInvalidated = true
+            geometrySamples = 0
+        }
+
+        mutating func record(
+            _ frame: CapturedObservation, ignoring: ScreenRect?, now: () -> TimeInterval
+        ) throws {
             let context = try decodeContext(frame)
             let identity = try jsonData(
                 frame.metadata.filter {
-                    ["deviceID", "sessionGeneration", "displayID", "displayRotation", "nativeRotation",
-                     "captureSource"].contains($0.key)
+                    ["deviceID", "sessionGeneration", "displayID", "displayUniqueID", "displayRotation",
+                     "nativeRotation", "captureSource"].contains($0.key)
                 })
-            let fingerprint = try FrameFingerprint(png: frame.screenshot)
+            let fingerprint = try frame.fingerprint()
             latest = frame
             latestHash = fingerprint.hash
             samples += 1
             let mask = try exclusionMask(frame, context: context, ignoring: ignoring)
             let sameGeometry = anchorContext?.matches(context) == true && anchorIdentity == identity
             geometrySamples = sameGeometry ? geometrySamples + 1 : 1
-            let match = anchor.map {
-                FrameComparison(reference: $0, current: fingerprint, ignoredCaret: mask, screen: context.screen)
+            let match = anchor.map { reference in
+                FrameComparison(reference: reference, current: fingerprint, ignoredCaret: mask, screen: context.screen)
             }
             let toleratedBounds =
                 sameGeometry
@@ -161,8 +189,8 @@ enum NativePostActionStability {
                 localChangeComparisons = 0
             }
             stable =
-                finished < deadline && consecutive >= requiredFrames && finished - unchangedSince >= stableDuration
-                && finished - started >= minimumDuration
+                finished < deadline && consecutive >= policy.frames && finished - unchangedSince >= policy.span
+                && finished - started >= policy.minimum
         }
 
         private mutating func exclusionMask(
@@ -206,7 +234,7 @@ enum NativePostActionStability {
                     "Input was not replayed; no valid post-action screenshot was acquired before the deadline",
                     diagnostics: [
                         "reason": "no_valid_sample", "samples": samples, "attempts": attempts,
-                        "elapsedMs": (now() - started) * 1000, "timeoutMs": timeout * 1000,
+                        "elapsedMs": (now() - started) * 1000, "timeoutMs": policy.budget * 1000,
                         "captureSamples": captureSamples, "lastCaptureDiagnostics": lastCaptureDiagnostics
                     ])
             }
@@ -216,16 +244,16 @@ enum NativePostActionStability {
                 reason = "stable"
             } else if comparison?["readinessEquivalent"] as? Bool == false {
                 reason = "dynamic_or_transitioning"
-            } else if consecutive < requiredFrames {
+            } else if consecutive < policy.frames {
                 reason = "insufficient_stable_samples"
             } else {
                 reason = "observation_deadline_exceeded"
             }
             metadata["postActionStability"] = [
-                "stable": stable, "reason": reason, "algorithm": "apple-png-yiq-local-readiness-v2", "samples": samples,
-                "attempts": attempts, "consecutiveFrames": consecutive, "requiredFrames": requiredFrames,
-                "elapsedMs": (now() - started) * 1000, "timeoutMs": timeout * 1000,
-                "minimumObservationMs": minimumDuration * 1000, "requiredStableMs": stableDuration * 1000,
+                "stable": stable, "reason": reason, "algorithm": policy.algorithm, "samples": samples,
+                "attempts": attempts, "consecutiveFrames": consecutive, "requiredFrames": policy.frames,
+                "elapsedMs": (now() - started) * 1000, "timeoutMs": policy.budget * 1000,
+                "minimumObservationMs": policy.minimum * 1000, "requiredStableMs": policy.span * 1000,
                 "stableForMs": consecutive > 0 ? max(0, lastSampleAt - unchangedSince) * 1000 : 0,
                 "frameHash": latestHash as Any? ?? NSNull(), "comparison": comparison as Any? ?? NSNull(),
                 "localizedChange": [
@@ -238,7 +266,22 @@ enum NativePostActionStability {
                 "captureSamples": captureSamples, "exclusionInvalidated": exclusionInvalidated,
                 "automaticReplayAllowed": false
             ]
-            return CapturedObservation(nodes: latest.nodes, metadata: metadata, screenshot: latest.screenshot)
+            return CapturedObservation(nodes: latest.nodes, metadata: metadata, screenshot: latest.screenshot,
+            validatedPixels: latest.validatedPixels)
+        }
+    }
+}
+
+extension NativePostActionStability {
+    enum Policy {
+        case conventional, adjacentTap
+
+        var budget: TimeInterval { self == .adjacentTap ? 1.5 : timeout }
+        var frames: Int { self == .adjacentTap ? 2 : requiredFrames }
+        var minimum: TimeInterval { self == .adjacentTap ? 0 : minimumDuration }
+        var span: TimeInterval { self == .adjacentTap ? 0 : stableDuration }
+        var algorithm: String {
+            self == .adjacentTap ? "apple-png-adjacent-pair-v1" : "apple-png-yiq-local-readiness-v2"
         }
     }
 }

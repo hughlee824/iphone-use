@@ -4,6 +4,7 @@
 @implementation ASObservationCommands {
     NSString *_generation, *_request;
     NSTimeInterval _lastActivity;
+    NSNumber *_screenshotStartDeadline;
 }
 - (instancetype)initWithGeneration:(NSString *)generation {
     if ((self = [super init])) { _generation = [generation copy]; _lastActivity = NSProcessInfo.processInfo.systemUptime; }
@@ -14,6 +15,9 @@
     if (!data || data.length > 48 * 1024 * 1024) ASAXFail(@"Observation response budget exceeded");
     if (fwrite(data.bytes, 1, data.length, stdout) != data.length || fputc('\n', stdout) == EOF || fflush(stdout))
         ASAXFail(@"Observation parent disconnected");
+}
+- (BOOL)canStartScreenshotAt:(NSTimeInterval)uptime {
+    return !_screenshotStartDeadline || uptime < _screenshotStartDeadline.doubleValue;
 }
 - (void)ready { [self write:@{@"event":@"ready", @"generation":_generation}]; }
 - (BOOL)next { return [self nextWithHealthCheck:^{}]; }
@@ -34,6 +38,10 @@
             if ([command[@"op"] isEqual:@"close"]) return NO;
             if (![command[@"op"] isEqual:@"capture"] || ![command[@"id"] isKindOfClass:NSString.class]
                 || ![[NSUUID alloc] initWithUUIDString:command[@"id"]]) ASAXFail(@"Observation command invalid");
+            NSNumber *cutoff = command[@"screenshotStartDeadline"];
+            if (cutoff && (![cutoff isKindOfClass:NSNumber.class] || !isfinite(cutoff.doubleValue) || cutoff.doubleValue <= 0))
+                ASAXFail(@"Invalid screenshot start deadline");
+            _screenshotStartDeadline = cutoff;
             _request = command[@"id"]; return YES;
         }
         [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];

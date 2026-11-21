@@ -55,7 +55,7 @@ final class AppleDeviceCLI {
         prepareDisplay: (NativeDisplay) throws -> Void = { _ in },
         validateDisplay: (NativeDisplay, Double) throws -> [String: Any] = { _, _ in [:] }
     ) throws -> CapturedObservation {
-        try AppleCaptureAttempt(cli: self, generation: generation, budget: budget)
-            .run(prepareDisplay: prepareDisplay, validateDisplay: validateDisplay)
+        let attempt = AppleCaptureAttempt(cli: self, generation: generation, budget: budget)
+        return try attempt.run(prepareDisplay: prepareDisplay, validateDisplay: validateDisplay)
     }
 }

@@ -17,21 +17,51 @@ enum AXPObservation {
         try checkCancellation()
         let reply = task.join()
         try checkCancellation()
-        guard image.metadata["deviceID"] as? String == device,
-              image.metadata["sessionGeneration"] as? String == generation else {
+        return try finish(image, reply: reply, identity: (device, generation),
+            acquisition: ObservationAcquisition.parallel(
+                screenshot: (imageStarted, imageFinished), accessibility: (reply.startedAt, reply.finishedAt)),
+            previous: previous, checkCancellation: checkCancellation)
+    }
+
+    static func captureSelected(
+        _ image: CapturedObservation, device: String, generation: String,
+        read: () throws -> [String: Any], checkCancellation: () throws -> Void
+    ) throws -> CapturedObservation {
+        try checkCancellation()
+        guard let start = image.metadata["captureStartedAt"] as? Double,
+            let end = image.metadata["captureCompletedAt"] as? Double else {
+            throw IPhoneUseError("invalid_action_frame", "Missing selected screenshot acquisition interval")
+        }
+        let started = Date().timeIntervalSince1970
+        let payload = Result { try read() }
+        let reply = AXPParallelRead.Reply(
+            startedAt: started, finishedAt: Date().timeIntervalSince1970, payload: payload)
+        try checkCancellation()
+        let acquisition = ObservationAcquisition.host(strategy: "selected_frame_then_ax",
+            screenshot: (start, end), accessibility: (reply.startedAt, reply.finishedAt))
+        return try finish(image, reply: reply, identity: (device, generation),
+            acquisition: acquisition, checkCancellation: checkCancellation)
+    }
+
+    private static func finish(
+        _ image: CapturedObservation, reply: AXPParallelRead.Reply, identity: (device: String, generation: String),
+        acquisition: [String: Any], previous: CapturedObservation? = nil, checkCancellation: () throws -> Void
+    ) throws -> CapturedObservation {
+        guard image.metadata["deviceID"] as? String == identity.device,
+              image.metadata["sessionGeneration"] as? String == identity.generation else {
             throw IPhoneUseError("capture_context_changed", "Observation device or session changed during acquisition")
         }
         var metadata = image.metadata
         metadata.merge([
             "snapshotSource": "axp_native_snapshot_v1", "axScope": "application", "axAtomic": false,
             "axElementActions": false, "axCoverage": "unknown", "sourceTruncated": false,
-            "observationAcquisition": ObservationAcquisition.parallel(
-                screenshot: (imageStarted, imageFinished), accessibility: (reply.startedAt, reply.finishedAt))
+            "observationAcquisition": acquisition
         ]) { _, new in new }
-        let nodes = associate(reply, image: image, device: device, metadata: &metadata)
+        let nodes = associate(reply, image: image, device: identity.device, metadata: &metadata)
         try updateReadiness(previous, image: image, metadata: &metadata)
         try checkCancellation()
-        return CapturedObservation(nodes: nodes, metadata: metadata, screenshot: image.screenshot)
+        return CapturedObservation(nodes: nodes, metadata: metadata, screenshot: image.screenshot,
+            validatedPixels: image.validatedPixels)
     }
 
     private static func associate(

@@ -1,7 +1,7 @@
 import Foundation
 
-// These two reads are independent. Both must finish successfully before the
-// screenshot (and both run again after it); neither result is cached.
+// Legacy media admission checks. Standard screenshot capture uses associated
+// display geometry instead; it does not gate observation on lock or backlight.
 enum NativeCaptureChecks {
     static func requireHealthyMedia(_ health: [String: Any]) throws {
         let connection = health["displayConnection"] as? [String: Any]
@@ -135,7 +135,8 @@ enum NativeCaptureChecks {
         let revalidated = error.code == "native_snapshot_freshness_unavailable" && !geometryChanged
         metadata[revalidated ? "orientationRevalidated" : "orientationResynchronized"] = true
         metadata["orientationResynchronizationReason"] = error.code
-        return CapturedObservation(nodes: frame.nodes, metadata: metadata, screenshot: frame.screenshot)
+        return CapturedObservation(nodes: frame.nodes, metadata: metadata, screenshot: frame.screenshot,
+            validatedPixels: frame.validatedPixels)
     }
 
     static func needsOrientationRecovery(_ error: IPhoneUseError) -> Bool {
@@ -175,7 +176,7 @@ enum NativeCaptureChecks {
         var replies: [String: Result<[String: Any], Error>] = [:]
         var timings: [String: Double] = [:]
     }
-    // Preview validates video separately; screenshot/input callers keep the strict default.
+    // Legacy media consumers select their backlight requirement explicitly.
     static func read(requireBacklight: Bool = true, _ operation: @escaping ([String]) throws -> [String: Any])
         throws
         -> (display: NativeDisplay, timings: [String: Double]) {

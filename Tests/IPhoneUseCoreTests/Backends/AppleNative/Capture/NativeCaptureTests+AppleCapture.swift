@@ -51,7 +51,7 @@ extension NativeCaptureTests {
         XCTAssertEqual(result.display.pixelWidth, 12)
         XCTAssertEqual(Set(result.timings.keys), ["lock", "display"])
     }
-    func testMissingLockedOrInactiveChecksCannotYieldObservation() throws {
+    func testLegacyMediaChecksRejectMissingLockedOrInactiveState() throws {
         for state: [String: Any] in [[:], ["passcodeRequired": true]] {
             XCTAssertThrowsError(
                 try NativeCaptureChecks.read { $0.last == "lockState" ? state : self.display() })
@@ -66,7 +66,7 @@ extension NativeCaptureTests {
                 return ["passcodeRequired": false]
             })
     }
-    func testPreviewChecksIgnoreBacklightButRetainLockAndGeometryRequirements() throws {
+    func testLegacyMediaCanIgnoreBacklightButRetainsLockAndGeometryRequirements() throws {
         for state: String? in ["activeOn", "activeDimmed", "off", "inactive", "futureState", nil] {
             var facts = display()
             facts["backlightState"] = state
@@ -79,7 +79,7 @@ extension NativeCaptureTests {
                 XCTAssertThrowsError(
                     try NativeCaptureChecks.read {
                         $0.last == "lockState" ? ["passcodeRequired": false] : reply
-                    }, "Screenshot/input checks must still reject \(state ?? "missing")")
+                    }, "Legacy media checks still reject \(state ?? "missing")")
             }
         }
         for lock: [String: Any] in [[:], ["passcodeRequired": true]] {
@@ -127,7 +127,7 @@ extension NativeCaptureTests {
                 ($0 as? IPhoneUseError)?.code, "coredevice_timeout", "Capture itself must remain strict")
         }
     }
-    func testAppleRetainsPostCaptureLockGeometryAndCancellationGuards() throws {
+    func testAppleRetainsGeometryAndCancellationWithoutLockOrBacklightGates() throws {
         let png = try screenPNG(width: 12, height: 18)
         for changed in ["locked", "rotated", "off", "cancelled", "none"] {
             let state = State(), cancellation = NativeCancellation()
@@ -156,7 +156,7 @@ extension NativeCaptureTests {
                         return [:]
                     })
             }
-            if changed == "none" {
+            if ["none", "locked", "off"].contains(changed) {
                 let result = try capture()
                 XCTAssertEqual(result.metadata["captureSource"] as? String, "coredevice_screenshot")
                 XCTAssertEqual(result.screenshot, png)

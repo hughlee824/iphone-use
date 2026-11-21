@@ -10,7 +10,7 @@ extension AppleDeviceBackend {
         try cancellation.check()
         try budget?.check()
         // Input independently checks fresh Apple screenshots, display identity,
-        // lock state and screen guards. Media health never grants input readiness.
+        // orientation and screen guards. Media health never grants input readiness.
     }
     func checkInputCanContinue() throws { try cancellation.check() }
 }

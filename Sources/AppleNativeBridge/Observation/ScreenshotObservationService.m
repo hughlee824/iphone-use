@@ -37,15 +37,34 @@ NSDictionary *ASRunScreenshotObservation(NSString *device, ASObservationCommands
         [commands ready];
         while ([commands next]) { @autoreleasepool {
             NSTimeInterval began = NSDate.date.timeIntervalSince1970;
+            double displayBeforeStarted = Now();
+            NSDictionary *displayBefore = ASReadDisplayInfo(deviceInfo);
+            double requestStarted = Now();
+            if (![commands canStartScreenshotAt:requestStarted]) {
+                [commands publish:@{@"deviceID":device, @"samplingEnded":@YES, @"displayBefore":displayBefore}];
+                continue;
+            }
             id value = ASDTXReadOnlyRequest(channel, @"takeScreenshot", 4, connectionState, @"Screenshot");
+            double requestFinished = Now();
             if (![value isKindOfClass:NSData.class] || [value length] < 8 || [value length] > 32 * 1024 * 1024)
                 Fail(@"Invalid screenshot payload");
             NSData *png = value;
             const unsigned char magic[] = {137,80,78,71,13,10,26,10};
             if (memcmp(png.bytes, magic, 8)) Fail(@"Screenshot is not PNG");
+            double displayStarted = Now();
             NSDictionary *display = ASReadDisplayInfo(deviceInfo);
-            [commands publish:@{@"deviceID":device, @"png":[png base64EncodedStringWithOptions:0],
-                @"display":display, @"startedAt":@(began), @"finishedAt":@(NSDate.date.timeIntervalSince1970)}];
+            double displayFinished = Now();
+            NSString *encoded = [png base64EncodedStringWithOptions:0];
+            double encodedAt = Now();
+            NSDictionary *timings = @{@"takeScreenshotMs":@((requestFinished-requestStarted)*1000),
+                @"displayBeforeQueryMs":@((requestStarted-displayBeforeStarted)*1000),
+                @"displayQueryMs":@((displayFinished-displayStarted)*1000),
+                @"base64EncodeMs":@((encodedAt-displayFinished)*1000),
+                @"beforePublishMs":@((encodedAt-displayBeforeStarted)*1000),
+                @"requestStartedUptime":@(requestStarted), @"requestFinishedUptime":@(requestFinished)};
+            [commands publish:@{@"deviceID":device, @"png":encoded, @"screenshotTimings":timings,
+                @"displayBefore":displayBefore, @"display":display,
+                @"startedAt":@(began), @"finishedAt":@(NSDate.date.timeIntervalSince1970)}];
         }}
     } @catch (NSException *exception) { failure = exception; }
     @finally {

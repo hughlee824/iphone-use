@@ -33,15 +33,19 @@ final class NativeObservationWorker {
         transaction.lock(); defer { transaction.unlock() }
         do { _ = try open(deadline: uptime + 12, cancelled: cancelled) } catch { retire(); throw error }
     }
-    func read(cancelled: () -> Bool) throws -> [String: Any] {
+    func read(startBefore: TimeInterval? = nil, cancelled: () -> Bool) throws -> [String: Any] {
         transaction.lock(); defer { transaction.unlock() }
         let deadline = uptime + requestTimeout
         // Only read-only acquisitions are retried, on a NEW generation, within the original deadline.
         for attempt in 0..<2 {
+            if let startBefore, uptime >= startBefore { throw samplingEnded }
             do {
                 let current = try open(deadline: deadline, cancelled: cancelled)
                 let identifier = UUID().uuidString
-                try send(["op": "capture", "id": identifier, "generation": current.generation], to: current)
+                if let startBefore, uptime >= startBefore { throw samplingEnded }
+                var command: [String: Any] = ["op": "capture", "id": identifier, "generation": current.generation]
+                command["screenshotStartDeadline"] = startBefore
+                try send(command, to: current)
                 let response = try wait(current, deadline: deadline, cancelled: cancelled)
                 guard response["event"] as? String == "result", response["id"] as? String == identifier,
                     let payload = response["value"] as? [String: Any], payload["deviceID"] as? String == device,
@@ -54,9 +58,12 @@ final class NativeObservationWorker {
                     "generation": current.generation, "requestID": identifier, "state": "current"
                 ]
                 return result
+            } catch let error as IPhoneUseError where error.code == "capture_timeout" {
+                throw error // An idle, healthy connection may outlive the sampling window.
             } catch {
                 retire()
                 if attempt == 1 || revoked.isCancelled || cancelled() || uptime >= deadline
+                    || startBefore.map({ uptime >= $0 }) == true
                     || (error as? IPhoneUseError)?.code == "observation_service_failed" { throw error }
             }
         }
@@ -67,6 +74,9 @@ final class NativeObservationWorker {
         transaction.lock(); defer { transaction.unlock() }
         retire()
         return cleanup
+    }
+    private var samplingEnded: IPhoneUseError {
+        IPhoneUseError("capture_timeout", "Tap screenshot sampling has ended")
     }
     private var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
     private func open(deadline: TimeInterval, cancelled: () -> Bool) throws -> Connection {
