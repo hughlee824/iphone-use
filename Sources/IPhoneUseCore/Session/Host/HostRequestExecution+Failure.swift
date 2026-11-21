@@ -49,29 +49,4 @@ extension HostRequestExecution {
             NativeRecovery.enrich(&response, control: try? backend.status())
         }
     }
-
-    func recordEvent() {
-        if config.backend == "apple-native",
-            appAction || action != nil || operation == "text-finish" || operation == "text-prepare" {
-            var result = response["result"] as? [String: Any] ?? [:]
-            result["actionID"] = id
-            result["sourceObservationID"] = action?.reference.observation ?? reference?.observation
-            response["result"] = result
-            do {
-                let eventURL = paths.directory.appendingPathComponent("native-events.jsonl")
-                if !FileManager.default.fileExists(atPath: eventURL.path) {
-                    FileManager.default.createFile(
-                        atPath: eventURL.path, contents: nil, attributes: [.posixPermissions: 0o600])
-                }
-                let file = try FileHandle(forWritingTo: eventURL)
-                defer { try? file.close() }
-                try file.seekToEnd()
-                var data = try jsonData([
-                    "request": request, "response": response, "hostRecordedAt": Date().timeIntervalSince1970
-                ])
-                data.append(10)
-                try file.write(contentsOf: data)
-            } catch { response["eventRecordingError"] = String(describing: error) }
-        }
-    }
 }

@@ -15,7 +15,7 @@
 
 iPhone-use is an open-source macOS CLI that lets Codex, Claude Code and other AI agents operate a real iPhone. It provides device observations and actions; your agent interprets the task, plans actions and checks the result.
 
-Your agent needs local command execution on the Mac and the ability to read PNG images. Device control runs locally; the client may still send screenshots and UI text to its model. See [privacy and data flow](docs/privacy.md).
+Your agent needs local command execution on the Mac and the ability to read PNG images. Device control runs locally; the client may still send screenshots and UI text to its model. See [privacy and data flow](docs/privacy.md). Key screens and AX are temporarily retained on this Mac by default. See [diagnostic settings and offline export](docs/diagnostics.md).
 
 [Website](https://iphone-use.com) · [First iPhone task](docs/first-task.md) · [Client plugins](docs/plugins.md) · [Commands](#commands) · [Documentation](#documentation)
 

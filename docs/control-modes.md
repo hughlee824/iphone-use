@@ -51,6 +51,8 @@ User configuration is `~/.iphone-use/config.json`:
 }
 ```
 
+The optional [diagnostics settings](diagnostics.md) share this file and its write lock. Omitting the entire section or individual settings uses the corresponding defaults.
+
 For isolated local acceptance, `IPHONE_USE_CONFIG_DIR=/absolute/private/directory` selects a separate `config.json`. The override disables inference from existing iPhone-use Runner preparation, so an empty directory starts with standard mode. It must be an absolute path. It does not relocate session locks, device pairing, signing credentials or Runner preparation; explicitly choosing Runner still uses the normal Runner setup workflow. Leave it unset for ordinary use. The override applies to config/connect commands, not already-running sessions.
 
 The directory is private (0700), and files written by the CLI are 0600. Updates are atomic and serialized with a local configuration lock. Unknown versions/fields, invalid modes, malformed JSON and non-regular configuration files are errors; they do not select an alternate backend. Repair invalid files before setting preferences. `config get mode` is read-only: it reports the effective default, its source, the path and whether a configuration file is saved. It neither connects to a phone nor creates configuration.
@@ -59,7 +61,7 @@ Selection order:
 
 1. Explicit connection options. `--mode standard|runner` is the preferred interface. Existing `--backend apple-native|xctest` remains compatible. An explicit `--xctestrun` implies runner; the diagnostic `--native-endpoint-inventory` implies standard. Compatible options can coexist; contradictory options fail before any host/device operation. Explicit selection neither reads nor changes the user default.
 2. Saved `mode` in `~/.iphone-use/config.json`.
-3. One-time initialization at the first connection without explicit options: migrate an intact, unexpired Runner setup compatible with the installed package to runner; otherwise a fresh installation uses standard. The selected default is saved before starting the host and remains even if connection fails.
+3. One-time initialization when the first connection without explicit options or a diagnostic preference update creates the file: migrate an intact, unexpired Runner setup compatible with the installed package to runner; otherwise a fresh installation uses standard. The selected default is saved before starting the host and remains even if connection fails.
 
 Migration examines only local Runner preparation records and validates the prepared files using the existing package validation. The presence of Xcode, certificates or an unregistered Runner alone is insufficient. Existing JSON setup records that cannot be validated produce `mode_selection_required`; choose with `config set mode runner` or `config set mode standard`. Expired or broken setup must not silently redirect an old workflow. Migrating runner does not establish that the phone or signing environment is currently ready; normal Runner connection checks still run.
 

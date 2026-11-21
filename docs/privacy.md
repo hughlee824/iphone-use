@@ -17,6 +17,8 @@ Both control modes can supply phone content to the client. The client configurat
 
 ## What can remain on the Mac?
 
+Both modes retain key screenshots and AX locally by default for short-term troubleshooting. To disable this for new sessions, run `iphone-use diagnostics config --evidence off`. A feedback ZIP includes images and AX only when explicitly selected. See [diagnostic history and cleanup](diagnostics.md).
+
 Session artifacts default to `/private/tmp/iphone-use-<uid>`; `IPHONE_USE_STATE_DIR` can select another location. Configuration is stored in `~/.iphone-use/config.json`, and packaged Runner preparation in `~/Library/Application Support/iphone-use`. Preview access credentials are stored in `~/.iphone-use/previews/<port>/`, subject to `IPHONE_USE_CONFIG_DIR`; signing private keys stay in Keychain. See [architecture](architecture.md) and [mode configuration](control-modes.md).
 
 Treat screenshots, recordings, device identifiers and logs as potentially private. Disconnecting a session is not a promise to erase saved recordings, copied files, client history or provider-side records. The read-only local preview is for viewing; closing its browser tab does not stop the preview service or disconnect the device. Disconnect stops the picture but does not invalidate the preview URL: it can access a later preview explicitly enabled for the same device. To invalidate an old link, follow [preview access revocation](local-preview.md#稳定入口与原标签页重连).

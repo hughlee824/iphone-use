@@ -129,11 +129,11 @@ struct ContactFaultHost {
         try saveJSON(identity, to: evidence.appendingPathComponent("session.json"))
         print(String(data: try jsonData(identity), encoding: .utf8)!); fflush(stdout)
         defer {
-            for name in ["exit.json", "native-events.jsonl", "fault-events.jsonl", "startup-error.json"] {
+            let archive = evidence.appendingPathComponent("history.zip")
+            _ = try? DiagnosticHistory.export(session: session, destination: archive, selection: .init())
+            for name in ["exit.json", "fault-events.jsonl", "startup-error.json"] {
                 let source = directory.appendingPathComponent(name)
-                if FileManager.default.fileExists(atPath: source.path) {
-                    try? FileManager.default.copyItem(at: source, to: evidence.appendingPathComponent(name))
-                }
+                try? FileManager.default.copyItem(at: source, to: evidence.appendingPathComponent(name))
             }
         }
         let log = directory.appendingPathComponent("fault-events.jsonl")

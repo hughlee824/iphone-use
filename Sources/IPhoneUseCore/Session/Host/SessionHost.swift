@@ -3,6 +3,7 @@ import Darwin
 
 final class SessionHost {
     let paths: SessionPaths
+    let diagnostics: SessionDiagnostics?
     let config: HostConfiguration
     let backend: SessionBackend
     let touchPaste: TouchPasteSession
@@ -20,8 +21,12 @@ final class SessionHost {
 
     init(
         config: HostConfiguration, paths: SessionPaths, backend: SessionBackend,
-        touchPaste: TouchPasteSession? = nil
+        touchPaste: TouchPasteSession? = nil, diagnosticPreferences: DiagnosticPreferences? = nil
     ) {
+        diagnostics = try? SessionDiagnostics(
+            root: paths.directory.deletingLastPathComponent(), session: config.session,
+            mode: config.modeSelection.mode.rawValue,
+            preferences: diagnosticPreferences ?? DiagnosticPreferences.configured())
         self.config = config
         self.paths = paths
         self.backend = backend
@@ -32,6 +37,7 @@ final class SessionHost {
     }
 
     func run() throws {
+        try? diagnostics?.lifecycle("connect", level: .info)
         do {
             let server = try JSONServer(path: paths.socket)
             self.server = server
@@ -105,7 +111,10 @@ final class SessionHost {
 
     private func receive(_ request: [String: Any], reply originalReply: @escaping JSONServer.Reply) {
         let admission = HostRequest(request, config: config, reply: originalReply)
-        guard admission.validate() else { return }
+        guard admission.validate() else {
+            recordRejection(admission)
+            return
+        }
         let operation = admission.operation
         let id = admission.id
         let reply = admission.reply
@@ -117,6 +126,7 @@ final class SessionHost {
         let pendingAtAdmission = lifecycle.pending
         guard lifecycle.accept(at: ProcessInfo.processInfo.systemUptime) else {
             admission.reject("session_closed", "Session has expired or is closing; connect again")
+            recordRejection(admission)
             if lifecycle.isExpired(at: ProcessInfo.processInfo.systemUptime) { close(reason: "idle_timeout") }
             return
         }
@@ -142,6 +152,18 @@ final class SessionHost {
                 reply(response, {})
             }
         }
+    }
+
+    private func recordRejection(_ admission: HostRequest) {
+        guard lifecycle.phase != .closing, admission.request["session"] as? String == config.session,
+            let code = admission.rejectionCode, let diagnostics else { return }
+        let operation = admission.operation
+        guard admission.appAction || DeviceAction.operations.contains(operation)
+            || ["observe", "text-prepare", "text-finish"].contains(operation) else { return }
+        let facts: [String: Any] = ["operation": operation, "phase": "rejected", "outcome": "not_dispatched",
+                                    "requestID": UUID(uuidString: admission.id)?.uuidString ?? UUID().uuidString,
+                                    "errorCode": code]
+        work.async { try? diagnostics.event(facts, level: .warn) }
     }
 
     private func close(reason: String, requestID: String? = nil, reply: JSONServer.Reply? = nil) {
@@ -171,12 +193,19 @@ final class SessionHost {
                 && touchPasteCleanup["connectionsClosed"] as? Bool == true
                 && cleanup["shutdownAcknowledged"] as? Bool == true
                 && cleanup["observationCacheRemoved"] as? Bool == true
-            let result: [String: Any] = [
+            var result: [String: Any] = [
                 "session": config.session, "reason": reason,
                 "hostPid": ProcessInfo.processInfo.processIdentifier, "backend": finalBackendInfo,
                 "cleanup": cleanup, "endedAt": Date().timeIntervalSince1970
             ]
-            try? saveJSON(result, to: paths.exit)
+            do {
+                try saveJSON(result, to: paths.exit)
+                try diagnostics?.lifecycle(reason.hasPrefix("ipc_failed") ? "ipc_failed" : reason,
+                                           level: clean && ["idle_timeout", "disconnect"].contains(reason)
+                                               ? .info : .error, clean: clean, cleanup: cleanup)
+            } catch {
+                result["diagnosticPersistenceError"] = true
+            }
             if let reply, let requestID {
                 reply(
                     ["id": requestID, "session": config.session, "ok": clean, "result": result],

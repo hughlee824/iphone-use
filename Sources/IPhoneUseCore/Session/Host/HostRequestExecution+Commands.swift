@@ -4,6 +4,11 @@ extension HostRequestExecution {
     func status() throws {
         var status = try backend.status()
         status.merge(config.modeSelection.result) { _, selected in selected }
+        status["diagnostics"] = [
+            "available": host.diagnostics != nil,
+            "level": host.diagnostics?.preferences.level.rawValue ?? "unavailable",
+            "localScreenAndAXHistory": host.diagnostics?.preferences.captureEvidence ?? false
+        ] as [String: Any]
         status["support"] = config.modeSelection.mode.support
         status["touchPaste"] = touchPaste.status
         status["textMethodSelection"] = config.modeSelection.mode.support["textMethods"]

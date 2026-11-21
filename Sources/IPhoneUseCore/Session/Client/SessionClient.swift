@@ -6,7 +6,9 @@ public enum SessionClient {
     /// Compose existing host operations without replaying input or requiring a newer host protocol.
     public static func observing(session: String, action: [String: Any]) -> [String: Any] {
         observing(session: session, action: action) {
-            try call(session: session, operation: "observe")
+            let parent = action["session"] as? String == session ? action["id"] as? String : nil
+            let fields = parent.map { ["followingAction": $0] } ?? [:]
+            return try call(session: session, operation: "observe", fields: fields)
         }
     }
 

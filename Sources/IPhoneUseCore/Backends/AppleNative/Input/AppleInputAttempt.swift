@@ -147,7 +147,9 @@ final class AppleInputAttempt {
             },
             capture: {
                 try backend.checkInputAvailability(budget: budget)
-                return try backend.capture(budget: budget)
+                let frame = try backend.capture(budget: budget)
+                backend.diagnosticGuardFrame?(frame.screenshot)
+                return frame
             })
         captures += count
         return value

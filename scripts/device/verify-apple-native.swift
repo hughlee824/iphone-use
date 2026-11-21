@@ -151,6 +151,9 @@ final class AcceptanceRun {
         try save(response, to: output.appendingPathComponent("cycle-\(cycle)-disconnect.json"))
         let result = response["result"] as? Object ?? [:], facts = result["cleanup"] as? Object ?? [:]
         let directory = URL(fileURLWithPath: validatedValue(info["directory"], as: String.self))
+        // New CLIs export a redacted timeline. Older CLIs may only have a per-session journal.
+        let archive = output.appendingPathComponent("cycle-\(cycle)-history.zip")
+        _ = try? call(["diagnostics", "export", "--session", session, "--output-file", archive.path])
         for name in ["config.json", "exit.json", "host.log", "native-control.json", "native-events.jsonl"] {
             let source = directory.appendingPathComponent(name)
             if files.fileExists(atPath: source.path) {

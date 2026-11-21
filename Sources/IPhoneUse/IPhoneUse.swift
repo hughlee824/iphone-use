@@ -18,7 +18,8 @@ struct IPhoneUse: ParsableCommand {
         commandName: "iphone-use", abstract: "Eyes and hands for agents operating a real iPhone.",
         version: RunnerSetup.releaseVersion,
         subcommands: [
-            Configuration.self, Setup.self, BuildRunner.self, Devices.self, Sessions.self, Connect.self,
+            Diagnostics.self, Configuration.self, Setup.self, BuildRunner.self, Devices.self, Sessions.self,
+            Connect.self,
             Status.self,
             Apps.self, Open.self, Terminate.self, Relaunch.self, Observe.self, Inspect.self, Tap.self,
             DoubleTap.self,

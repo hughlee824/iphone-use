@@ -213,8 +213,19 @@ extension HostTests {
         let stale = try call(paths, session: session, op: "tap", fields: ["reference": "o1", "x": 100, "y": 200])
         XCTAssertEqual(stale["outcome"] as? String, "not_dispatched")
         XCTAssertEqual(backend.actionCount, 1)
-        XCTAssertTrue(
-            FileManager.default.fileExists(
-                atPath: paths.directory.appendingPathComponent("native-events.jsonl").path))
+        let legacyLog = paths.directory.appendingPathComponent("native-events.jsonl")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacyLog.path))
+        let database = try DiagnosticDatabase(root: paths.directory.deletingLastPathComponent())
+        var events: [[String: Any]] = []
+        try database.query("SELECT json FROM events ORDER BY seq") {
+            events.append(try jsonObject(XCTUnwrap(DiagnosticDatabase.data($0, 0))))
+        }
+        let tap = try XCTUnwrap(events.first {
+            $0["requestID"] as? String == response["id"] as? String && $0["phase"] as? String == "finished"
+        })
+        XCTAssertEqual(tap["sourceObservation"] as? String, "o1")
+        XCTAssertEqual(tap["observation"] as? String, "o2")
+        XCTAssertEqual(tap["transportStatus"] as? String, "sent")
+        XCTAssertEqual(tap["outcome"] as? String, "unknown")
     }
 }
