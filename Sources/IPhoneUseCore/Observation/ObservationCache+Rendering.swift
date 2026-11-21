@@ -184,6 +184,9 @@ extension ObservationCache {
         }
         if let collection = capture.metadata["axCollection"] as? [String: Any],
             collection["visibilityCoverage"] as? String == "semantic_candidates" {
+            if let omitted = collection["omittedSupplementalCandidateCount"] as? Int, omitted > 0 {
+                lines.append("ax_omitted_supplemental_candidates=\(omitted); use the screenshot for missing controls")
+            }
             lines.append("ax_visibility=semantic_candidates; unqueried_visible=unknown; "
                 + "supplemental_nodes=\(collection["supplementalNodeCount"] ?? 0) hierarchy=unknown")
         }

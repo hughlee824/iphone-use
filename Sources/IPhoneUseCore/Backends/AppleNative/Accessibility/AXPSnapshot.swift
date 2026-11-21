@@ -62,10 +62,34 @@ struct AXPSnapshot {
         }
         var collection = try appendSupplements(payload, pid: pid, nodes: &nodes)
         collection["receiveBudget"] = payload["receiveBudget"]
+        appendTimingFacts(payload, to: &collection)
         return AXPSnapshot(
             nodes: nodes, bundle: bundle, screen: screen, displayID: numericDisplayID,
             displayUniqueID: display["displayUniqueID"] as? String, started: started, finished: finished,
             cleanup: cleanup, collection: collection)
+    }
+
+    private static func appendTimingFacts(_ payload: [String: Any], to collection: inout [String: Any]) {
+        collection["stageTimingsMs"] = timingFacts(payload["stageTimingsMs"], allowed: [
+            "ax.display_before", "ax.hit_before", "ax.root_before", "ax.tree",
+            "ax.frontmost_before", "ax.frontmost_after", "ax.root_after", "ax.hit_after", "ax.display_after",
+            "ax.structure_ack", "ax.structure_wait", "ax.structure_unpack"
+        ])
+        collection["collectionTimingsMs"] = timingFacts(payload["collectionTimingsMs"], allowed: [
+            "ax.structure", "ax.structure_read", "ax.structure_export", "ax.candidates",
+            "ax.keyboard_visibility", "ax.candidate_visibility"
+        ])
+    }
+
+    static func timingFacts(_ value: Any?, allowed: [String]) -> [String: Double] {
+        guard let values = value as? [String: Any] else { return [:] }
+        var result: [String: Double] = [:]
+        for key in allowed {
+            guard let number = values[key] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                number.doubleValue.isFinite, (0...120_000).contains(number.doubleValue) else { continue }
+            result[key] = number.doubleValue
+        }
+        return result
     }
 
     private static func connectionEvidence(_ payload: [String: Any]) -> [String: Any]? {
@@ -91,7 +115,9 @@ struct AXPSnapshot {
             guard value is NSNull || value is String || value is NSNumber else { throw invalid() }
             fields["value"] = value
         }
-        if let value = native["2025"] {
+        if native["2025"] is NSNull {
+            fields["candidateVisibilityUnknown"] = true
+        } else if let value = native["2025"] {
             guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
                 throw invalid()
             }

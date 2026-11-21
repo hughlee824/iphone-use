@@ -63,7 +63,7 @@ final class PresentedChildControlsTests: XCTestCase {
     func testChildHintsCannotPromoteHiddenUnknownForeignOrIncompleteNodes() throws {
         let original = try capture("wlan")
         let target = try XCTUnwrap(original.nodes.first { $0.label == "More Info" && $0.parent == 51 })
-        for mutation in 0..<10 {
+        for mutation in 0..<11 {
             var nodes = original.nodes
             var fields = target.attributes
             var parentFields = nodes[51].attributes
@@ -80,14 +80,14 @@ final class PresentedChildControlsTests: XCTestCase {
     private func mutate(_ mutation: Int, fields: inout [String: Any], parent: inout [String: Any]) {
         switch mutation {
         case 0: fields["visible"] = false
-        case 1: parent.removeValue(forKey: "visible")
-        case 2: parent["visible"] = false
+        case 1, 2: parent["visible"] = mutation == 1 ? nil : false
         case 3: fields["nativeElement"] = parent["nativeElement"]
         case 4: fields["externalProcessReference"] = true
         case 5: fields["reportedChildCount"] = 1
         case 6: fields["frame"] = ["x": 330, "y": 800, "width": 25, "height": 25]
         case 7: fields["frame"] = NSNull()
         case 8: fields["nativeAttributes"] = ["2004": 0]
+        case 9: fields["candidateVisibilityUnknown"] = true
         default: fields["label"] = ""; fields["identifier"] = ""
         }
     }

@@ -14,3 +14,9 @@ static inline NSTimeInterval ASNativeTimingMark(NSString *stage, NSTimeInterval 
     // Logging is excluded from the next stage, without changing any operation deadline.
     return NSProcessInfo.processInfo.systemUptime;
 }
+
+// Bounded, caller-owned per-observation summaries; stage names are source constants.
+static inline NSTimeInterval ASNativeTimingCollect(NSMutableDictionary *timings, NSString *stage, NSTimeInterval started) {
+    timings[stage] = @((NSProcessInfo.processInfo.systemUptime - started) * 1000);
+    return ASNativeTimingMark(stage, started);
+}

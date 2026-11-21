@@ -11,7 +11,8 @@ extension PresentedAX {
         var result: Set<Int> = []
         let parents = Set(nodes.compactMap(\.parent))
         for node in nodes {
-            guard !(node.attributes["visible"] is Bool), !parents.contains(node.index),
+            guard node.attributes["candidateVisibilityUnknown"] as? Bool != true,
+                  !(node.attributes["visible"] is Bool), !parents.contains(node.index),
                   !["key", "keyboard"].contains(node.role),
                   node.attributes["reportedChildCount"] as? Int == 0,
                   let parentIndex = node.parent, selected.contains(parentIndex),

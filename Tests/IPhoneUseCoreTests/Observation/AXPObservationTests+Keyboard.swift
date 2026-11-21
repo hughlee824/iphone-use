@@ -74,6 +74,66 @@ extension AXPObservationTests {
         }
     }
 
+    func testUnknownCandidateStaysInspectableWithoutAVisibleTarget() throws {
+        var payload = keyboardPayload()
+        var supplements = try XCTUnwrap(payload["supplementalElements"] as? [[String: Any]])
+        var native = try XCTUnwrap(supplements[0]["attributes"] as? [String: Any])
+        native["2025"] = NSNull()
+        supplements[0]["attributes"] = native
+        payload["supplementalElements"] = supplements
+        let initial = try screenshot()
+        let capture = try AXPObservation.capture(
+            device: "device", generation: "generation", read: { _ in payload },
+            screenshot: { initial }, checkCancellation: {})
+        let collection = try XCTUnwrap(capture.metadata["axCollection"] as? [String: Any])
+        XCTAssertEqual(collection["unknownVisibilityCandidateCount"] as? Int, 1)
+        let node = try XCTUnwrap(capture.nodes.last)
+        XCTAssertNil(node.attributes["visible"])
+        XCTAssertEqual(node.attributes["candidateVisibilityUnknown"] as? Bool, true)
+        XCTAssertFalse(PresentedAX.project(capture).indices.contains(node.index))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = ObservationCache(directory: directory)
+        _ = try cache.store(capture)
+        let ref = try ObservationReference("o1:e6")
+        let detail = try cache.inspect(ref, offset: 0)
+        XCTAssertTrue((detail["text"] as? String)?.contains("Security, WPA2") == true)
+        XCTAssertEqual(try cache.resolveCurrent(ref).label, "Security, WPA2")
+        let action = try DeviceAction(operation: "tap", request: ["reference": "o1:e6"])
+        XCTAssertThrowsError(try cache.resolveTarget(for: action)) {
+            XCTAssertEqual(($0 as? IPhoneUseError)?.code, "native_action_unsupported")
+        }
+    }
+
+    func testOmittedSupplementReportsPartialSourceAndPreservesCollectedControls() throws {
+        var value = keyboardPayload()
+        value["candidateCount"] = 5
+        value["keyboardWindowProbed"] = true
+        value["omittedSupplementalCandidateCount"] = 1
+        value["keyboardWindowMatchedCount"] = 0
+        let initial = try screenshot()
+        let capture = try AXPObservation.capture(
+            device: "device", generation: "generation", read: { _ in value },
+            screenshot: { initial }, checkCancellation: {})
+        XCTAssertEqual(capture.metadata["axStatus"] as? String, "available")
+        XCTAssertEqual(capture.metadata["sourceTruncated"] as? Bool, true)
+        XCTAssertEqual(capture.nodes.count, 6)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = try ObservationCache(directory: directory).store(capture)
+        let text = try XCTUnwrap(output["text"] as? String)
+        XCTAssertTrue(text.contains("ax_omitted_supplemental_candidates=1"))
+        XCTAssertTrue(text.contains("source_missing=true"))
+        XCTAssertTrue(text.contains("Security, WPA2"))
+        for malformed in [0, -1, 2, 6] {
+            value["omittedSupplementalCandidateCount"] = malformed
+            let bad = try AXPObservation.capture(
+                device: "device", generation: "generation", read: { _ in value },
+                screenshot: { initial }, checkCancellation: {})
+            XCTAssertEqual(bad.metadata["axErrorCode"] as? String, "axp_invalid_snapshot")
+        }
+    }
+
     func testInvalidSupplementCannotPublishPartialAX() throws {
         for mutation in 0..<7 {
             var value = keyboardPayload()

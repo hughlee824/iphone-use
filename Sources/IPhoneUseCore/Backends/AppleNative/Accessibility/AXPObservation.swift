@@ -50,6 +50,9 @@ enum AXPObservation {
             metadata["snapshotFinishedAt"] = snapshot.finished
             metadata["axCleanup"] = snapshot.cleanup
             metadata["axCollection"] = snapshot.collection
+            if (snapshot.collection["omittedSupplementalCandidateCount"] as? Int ?? 0) > 0 {
+                metadata["sourceTruncated"] = true
+            }
             metadata["axApplicationBundleId"] = snapshot.bundle // Not verified foreground identity.
             metadata.removeValue(forKey: "axError")
             metadata.removeValue(forKey: "axErrorCode")
