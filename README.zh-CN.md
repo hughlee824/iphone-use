@@ -48,9 +48,7 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 把下面的提示词发给这台 Mac 上的 Agent：
 
 ```text
-帮我在这台 Mac 上配置 iPhone-use。如果已指定 IPHONE_USE_CLI，就使用该路径。否则先用 `command -v iphone-use` 查找，再检查 `"$HOME/.local/bin/iphone-use"`。
-复用兼容的 CLI。如果两处都没有，运行 `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`。在当前会话用选定的可执行文件运行 `--version`，后续调用也用它的绝对路径，并把该路径作为 IPHONE_USE_CLI 传给插件预检。
-按 https://iphone-use.com/zh/docs/plugins/ 为当前 Agent 配置插件或技能。报告 CLI 路径、版本和插件或技能状态。仅当客户端需要新会话才能加载插件或技能时再提醒我。请在连接 iPhone 前停下。
+按 https://iphone-use.com/setup.md 安装并验证 iPhone-use。
 ```
 
 ### 手动安装

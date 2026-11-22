@@ -48,9 +48,7 @@ On an Apple Silicon Mac, choose one installation method. Once the CLI and your a
 Paste this prompt into your agent’s chat on this Mac:
 
 ```text
-Set up iPhone-use on this Mac. Honor any explicit IPHONE_USE_CLI. Otherwise check `command -v iphone-use`, then `"$HOME/.local/bin/iphone-use"`.
-Reuse a compatible CLI. If neither location has it, run `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`. In this chat, run the selected executable with `--version` and use its absolute path for subsequent calls. Pass that path as IPHONE_USE_CLI to plugin preflight.
-Follow https://iphone-use.com/docs/plugins/ for this agent. Report the CLI path, version and plugin or skill status. Ask for a new chat only if the client needs one to load the integration. Stop before connecting to my iPhone.
+Set up and verify iPhone-use using https://iphone-use.com/setup.md
 ```
 
 ### Install manually
