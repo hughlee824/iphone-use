@@ -34,8 +34,10 @@ class PluginPackageTests(unittest.TestCase):
         for manifest in manifests:
             self.assertEqual(manifest["name"], PLUGIN.name)
             self.assertEqual(manifest["skills"], "./skills/")
-            self.assertNotIn("mcpServers", manifest)
             self.assertNotIn("hooks", manifest)
+        self.assertEqual(manifests[0]["mcpServers"], "./codex/mcp.json")
+        self.assertNotIn("mcpServers", manifests[1])
+        self.assertFalse((PLUGIN / ".mcp.json").exists())
         self.assertIn(f'Workflow version: **{manifests[0]["version"]}**',
                       (PLUGIN / "skills/iphone-use/SKILL.md").read_text())
         sync_plugin.sync(check=True)
@@ -76,11 +78,20 @@ class PluginPackageTests(unittest.TestCase):
                              deepseek["exports"]["./icon"], "locale/en.json", "locale/zh.json"]:
                 self.assertTrue((relocated / relative).is_file(), relative)
             self.assertTrue((relocated / "skills/iphone-use/scripts/preflight.sh").is_file())
+            manifest = json.loads((relocated / ".codex-plugin/plugin.json").read_text())
+            config = json.loads((relocated / manifest["mcpServers"]).read_text())
+            server = config["mcpServers"]["iphone-use"]
+            self.assertTrue((relocated / server["cwd"] / server["args"][-1]).is_file())
+            self.assertFalse((relocated / "codex/observation.html").exists())
             interface = json.loads((relocated / ".codex-plugin/plugin.json").read_text())["interface"]
-            for field in ("logo", "logoDark", "composerIcon", "composerIconDark"):
-                icon = (relocated / interface[field]).resolve()
-                self.assertTrue(icon.is_relative_to(relocated))
-                self.assertEqual(icon.read_bytes(), (ROOT / "assets/brand" / icon.name).read_bytes())
+            # Single-asset rows use the adaptive SVG; theme-aware rows can select the inverse.
+            self.assertNotIn("composerIcon", interface)
+            adaptive = (relocated / interface["logo"]).read_text()
+            self.assertIn("prefers-color-scheme: dark", adaptive)
+            self.assertEqual(re.sub(r"<style>.*?</style>", "", adaptive, flags=re.DOTALL),
+                             (ROOT / "assets/brand/iphone-use-mark.svg").read_text())
+            self.assertEqual((relocated / interface["logoDark"]).read_bytes(),
+                             (ROOT / "assets/brand/iphone-use-mark-dark.svg").read_bytes())
             skill = relocated / "skills/iphone-use"
             metadata = (skill / "agents/openai.yaml").read_text()
             icons = re.findall(r'^\s+icon_(?:small|large): "([^"]+)"$', metadata, re.MULTILINE)

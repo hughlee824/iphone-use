@@ -1,4 +1,16 @@
-# Codex: call the CLI directly
+# Codex phone actions
+
+With the Codex plugin, discover its named iPhone-use tools and call one tool per user-visible phone action. Pass the absolute `cli_path` from preflight and the session returned by this task's connection. The server resolves its installed CLI independently and checks these paths match. Use the same host, state/config directories and device permissions throughout. Honor tool approvals; do not change transports after a denial.
+
+Use the named, read-only `observe` once for each fresh observation explicitly requested in the task, even when the preceding action returned an attached observation. Use `open`, `tap`, `double_tap`, `long_press`, `swipe`, `pinch`, `home`, `type`, `press`, `focus` and `clear` for the corresponding CLI operations. Schema fields match CLI options with underscores. Pass text literally. Each action includes the CLI's attached observation and its PNG in the **same tool result**, including a usable observation on a failed action. Inspect that image and the action facts there before deciding whether the task succeeded. Do not issue another observe or file read merely to display or verify an image already returned. If only image delivery fails, read just that observation's existing screenshot. An unknown, cancelled, partial or timed-out call must never trigger a replay through either transport.
+
+When tools are exposed through `functions.exec`, forward the content **inside that same call**: for each returned block use `image(block)` for its PNG or `text(block.text)` for text. Do not stringify an image block. Make exactly one plugin call per action. Use the host wait handle for pending results.
+
+Use `connect` for a normal reuse-enabled connection with streamed progress. Keep the streaming shell path below for custom connection/setup options or a client without progress delivery. Use `record_start`, `record_stop` and `disconnect` for owned resources, preserving borrowed sessions. `text_prepare` and `text_finish` are for the keyboard/clipboard workflows that require them. Preflight, device discovery, cached AX inspection, preview browser and local file operations keep their existing tools.
+
+Choose the shell route **before dispatch** for a manually copied skill without plugin tools, an older CLI without the flags needed by the tool (`--observe` and `--agent-output` for actions), or an explicitly requested archive on a CLI without native evidence. For native evidence pass the requested absolute `evidence_dir` to the plugin tool. A missing/incompatible CLI must be resolved before input; do not substitute another installed CLI. When the server's environment needs a custom executable, configure the host's `IPHONE_USE_CLI` to match preflight.
+
+## Shell operations and compatibility
 
 Use the CLI path returned by preflight. Choose each command from the current device evidence. Call the shell tool directly; when it is exposed through `functions.exec`, a thin invocation is enough:
 

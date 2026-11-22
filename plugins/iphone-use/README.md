@@ -21,7 +21,7 @@ claude plugin marketplace add HughLee824/iphone-use
 claude plugin install iphone-use@iphone-use
 ```
 
-Enable only one copy of the skill to avoid duplicate device instructions. CLI and plugin versions are independent. Start a new client session. Invoke `$iphone-use:iphone-use` in Codex or `/iphone-use:iphone-use` in Claude Code, followed by:
+Enable only one copy of the skill to avoid duplicate device instructions. CLI and plugin versions are independent. Start a new client session. Codex registers the bundled local iPhone-use action tools and returns each action with its observation and PNG. Invoke `$iphone-use:iphone-use` in Codex or `/iphone-use:iphone-use` in Claude Code, followed by:
 
 > Open Settings on my iPhone, navigate to General, read the screenshot to verify the page, then disconnect. Do not change any settings.
 

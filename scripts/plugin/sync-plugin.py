@@ -77,6 +77,7 @@ def archive(output):
     target = output / f"iphone-use-plugin-{version}.zip"
     # Explicit public package roots. Never archive the source checkout or local evidence.
     files = [PLUGIN / path for path in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json",
+                                       "codex/mcp.json", "codex/server.py",
                                        "package.json", "deepseek.js", "cordis.patch.yml", "README.md", "LICENSE")]
     files.extend(sorted((PLUGIN / "locale").glob("*.json")))
     files.extend(sorted(path for path in (PLUGIN / "skills").rglob("*") if path.is_file()))

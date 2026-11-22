@@ -161,8 +161,8 @@ public enum AgentOutput {
                 summary["recoveryHint"] =
                     """
                     The returned image did not settle; this does not mean input failed. Inspect it for the\
-                     actual result, a dialog or continuous motion before choosing the next action. Do not\
-                     resend input or keep capturing in the hope that a playing video becomes static.
+                     actual result. A separately requested observe captures a fresh read-only snapshot. Do not\
+                     resend the preceding input or automatically repeat captures until the image settles.
                     """
             }
         } else if observation?["ok"] as? Bool == true {

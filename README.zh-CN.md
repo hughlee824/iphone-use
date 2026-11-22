@@ -157,7 +157,7 @@ claude plugin marketplace add hughlee824/iphone-use
 claude plugin install iphone-use@iphone-use
 ```
 
-在新会话中分别调用 Codex 的 `$iphone-use:iphone-use` 或 Claude Code 的 `/iphone-use:iphone-use`。插件共用设备规则，包含只读前置检查、[Codex 模板](skills/iphone-use/references/codex-calls.md)及 [Claude Code Bash/Read 指引](skills/iphone-use/references/claude-code.md)。它不安装 CLI 或准备签名。Xcode、setup、首个任务和升级步骤见[插件指南](docs/plugins.md)与[完整首次任务路径](docs/first-task.md)。自有 marketplace 分发不代表已进入官方目录。
+在新会话中分别调用 Codex 的 `$iphone-use:iphone-use` 或 Claude Code 的 `/iphone-use:iphone-use`。插件共用设备规则，包含只读前置检查、[Codex 动作工具和终端兼容路径](skills/iphone-use/references/codex-calls.md)及 [Claude Code Bash/Read 指引](skills/iphone-use/references/claude-code.md)。它不安装 CLI 或准备签名。Xcode、setup、首个任务和升级步骤见[插件指南](docs/plugins.md)与[完整首次任务路径](docs/first-task.md)。自有 marketplace 分发不代表已进入官方目录。
 
 DeepSeek Harness 可通过同目录中的 `dsh-iphone-use` bundle 接入，复用上述 skill。在 Add plugin 中填写 `dsh-iphone-use` 或 `https://github.com/hughlee824/iphone-use` 即可选择安装来源，验证范围见[DeepSeek Harness 安装](docs/plugins.md#deepseek-harness-安装)。
 

@@ -5,7 +5,9 @@
 
 [公开网站](https://iphone-use.com) → [安装 CLI](install.md) → 安装本页插件 → [选择模式并连接](first-task.md#connect-in-standard-mode) → 首个真机任务。完整英文路径见 [First task](first-task.md)。
 
-插件是 **CLI + skill** 封装，共用设备操作契约，分别适配 Codex 的命令执行、后台续读和图片工具，Claude Code 的 Bash、TaskOutput 和 Read，以及 DeepSeek Harness 的 bash、job_output 和 read_image。它不含 CLI、不创建开发签名、不自动接入手机，也不要求 MCP 服务。
+插件是 **CLI + skill** 封装，共用设备操作契约，在 Codex 中以插件自带的本地 MCP 工具执行点击、输入、主动观察等动作，每次返回 CLI 回执及对应截图。预检和兼容路径仍使用终端。其他客户端分别使用 Claude Code 的 Bash、TaskOutput 和 Read，以及 DeepSeek Harness 的 bash、job_output 和 read_image。它不含 CLI、不创建开发签名、不自动接入手机，Codex 工具通过 Mac 上的 `/usr/bin/python3`（Xcode 环境）启动，无需另行部署服务。
+
+Codex 将普通 `observe` 作为工具执行记录展示。Agent 在同一次调用中收到原始 PNG 和完整 Compact AX。
 
 ## 插件与包名
 
@@ -148,13 +150,13 @@ OpenCode 使用 `--agent opencode`。默认安装到当前项目 `.cursor/skills
 
 当前工作流在 CLI 支持时默认使用 `connect --device UDID --reuse`。新聊天可发现同一设备的健康连接，无需 handoff 或手工 session ID；已有预览保持原 URL，短任务结束后保留借用的连接。准备阶段需明确保留连接与预览，两次任务顺序执行，并使用相同的 `IPHONE_USE_STATE_DIR`（或默认状态目录）。模式冲突、多个候选、未完成的剪贴板事务或不可用连接会拒绝复用，可用 `sessions --device UDID` 诊断；不会自动关闭旧连接或延长其空闲超时。
 
-三个客户端共用同一份生命周期：任务所属会话连接成功后，在首次操作前默认启动一次预览。**Codex 执行 `preview --no-open`，再在内置浏览器打开返回的 URL；Claude Code 和 DeepSeek Harness 执行 `preview`，由 CLI 打开 Mac 默认浏览器。**不改变 CLI `connect` 本身，standard 和 runner 行为一致。
+三个客户端共用同一份生命周期：任务所属会话连接成功后，在首次操作前默认启动一次预览。指定浏览器或内嵌面板时，所有客户端都用 `--no-open`，只向指定目标交付同一链接。目标不可用或开页结果不确定时，在聊天里发链接。**未指定时，Codex 执行 `preview --no-open`，再优先用内置浏览器打开返回的 URL；Claude Code 和 DeepSeek Harness 执行 `preview`，由 CLI 打开 Mac 默认浏览器。**不改变 CLI `connect` 本身，standard 和 runner 行为一致。
 
 - 明确说“不要预览”“不要打开浏览器”即可跳过服务启动和开页，该选择在本任务重连后仍有效；不会写入全局偏好。
 - 按 session ID 记录启动尝试和 URL，后台命令只续读、不重跑。复用会话时若已有预览，直接复用；后续操作或新一轮对话不再次开页。用户关闭页面后也不自动重开。
 - 预检仅用 `preview --help` 检测能力。通过版本预检后，若该可执行文件未提供预览能力则跳过；这不表示支持低于最低版本的 CLI。启动失败只检查一次状态，必要时提供 URL，不反复重试、不自动升级或切模式。默认预览不是独立后台 hook，而是 Agent 执行的技能步骤。
-- Codex 没有内置浏览器工具时（例如纯终端环境），提供 URL，不擅自改开系统浏览器。记录开页尝试和已返回的标签 ID，失败或结果不确定时不再开第二页。
-- 用户指定浏览器时使用 `--no-open` 后只打开一次 URL。预览用于用户观看；Agent 仍读取原始截图、使用新引用操作。启动/停止预览后重新观察。
+- 未指定浏览器且 Codex 内置浏览器明确不可用时，用 Mac 默认浏览器打开同一预览链接一次。开页超时、结果不确定，或系统浏览器打开失败时，立即在聊天里发链接供手动打开。用户指定浏览器或关闭预览的选择优先。
+- 预览用于用户观看；Agent 仍读取原始截图、使用新引用操作。启动/停止预览后重新观察。
 - 任务结束或取消时断开自己新建的会话，核对预览、媒体与控制资源清理；复用已有连接时保留连接和预览，除非用户明确要求断开。有准确的任务自建标签句柄时可关闭该标签；没有浏览器工具时，失效页面可能留在浏览器中。关闭标签不等于停止服务，也不应退出整个浏览器。
 
 示例：“用 runner 打开设置并进入通用，让我在电脑上看操作过程”；或“打开设置并进入通用，不要预览”。首次默认开页无需再问一次偏好，但仍遵守客户端命令权限。
@@ -195,7 +197,7 @@ python3 -m unittest discover -s scripts/tests -v
 node --test scripts/tests/test_dsh_plugin.mjs scripts/tests/test_agent_templates.mjs
 ```
 
-`--check` 在副本有遗漏或漂移时失败。Codex/Claude 的 Git 插件安装不需要额外的 Python 或 Node；DeepSeek 使用 Harness 自带的 JavaScript runtime。生成独立 ZIP 和校验文件：
+`--check` 在副本有遗漏或漂移时失败。Codex 的本地动作工具使用 Xcode 环境中的 Python 3 标准库；Claude Code 的 Git 插件安装不需要额外的 Python 或 Node；DeepSeek 使用 Harness 自带的 JavaScript runtime。生成独立 ZIP 和校验文件：
 
 ```sh
 python3 scripts/plugin/sync-plugin.py --archive .build/plugins
@@ -216,6 +218,6 @@ DSH_RUNTIME_MODULES='/Applications/DeepSeek Harness.app/Contents/Resources/app.a
 
 对通过公开渠道安装的包，使用同一个真实 runtime 运行 `scripts/plugin/verify-dsh-install.mjs /absolute/path/to/profile/node_modules/dsh-iphone-use`，验证已安装文件而非 checkout。分别为 npm 与 GitHub 来源创建隔离的 `DSH_HOME`/profile，安装后用 `--dump-config` 核对 bundle 层，再执行该脚本，最后通过 CLI 卸载并确认配置层与包目录消失。若安装时指定了 `--store-dir`，卸载时也传入同一个目录。
 
-独立 ZIP 包含 Codex/Claude 清单、DeepSeek 的 package.json、patch、注册入口与中英文显示元数据、README、MIT LICENSE 和完整 skill。不要将插件目录外的共享文件或软链接当成已打包依赖。正式发布验收必须覆盖各客户端的实际分发渠道、任务和升级，不能用本地加载成功代替公开分发验收。
+独立 ZIP 包含 Codex/Claude 清单、Codex 本地动作服务、DeepSeek 的 package.json、patch、注册入口与中英文显示元数据、README、MIT LICENSE 和完整 skill。不要将插件目录外的共享文件或软链接当成已打包依赖。正式发布验收必须覆盖各客户端的实际分发渠道、任务和升级，不能用本地加载成功代替公开分发验收。
 
 本阶段使用项目自有公开 Git marketplace；没有宣称已进入 Codex 或 Claude 官方目录。目录提交是另外的发布事项。

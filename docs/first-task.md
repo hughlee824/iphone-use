@@ -79,7 +79,7 @@ Runner observations also include available elements; actions can use current ref
 
 ## Use Codex or Claude Code
 
-After preparing the CLI and phone, follow the [Codex](plugins.md#codex-安装) or [Claude Code](plugins.md#claude-code-安装) installation steps. The client needs local Mac command execution and PNG-reading tools. The plugin calls the CLI directly; no MCP server is required. It does not install the CLI or grant device access.
+After preparing the CLI and phone, follow the [Codex](plugins.md#codex-安装) or [Claude Code](plugins.md#claude-code-安装) installation steps. The client needs local Mac command execution and PNG-reading tools. The Codex plugin bundles local MCP action tools that call the CLI and return each action with its observation. Other clients use the CLI directly. It does not install the CLI or grant device access.
 
 The current plugin and portable skill require stable **CLI 0.4.0 or later**, with its matching Runner when using runner mode. CLI and plugin updates are separate; install from an available distribution channel and start a new client session after updating the plugin.
 
