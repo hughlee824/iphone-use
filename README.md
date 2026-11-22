@@ -48,9 +48,7 @@ On an Apple Silicon Mac, choose one installation method. Once the CLI and your a
 Paste this prompt into your agent’s chat on this Mac:
 
 ```text
-Set up iPhone-use on this Mac. Reuse a compatible CLI or install it with `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`.
-Follow the plugin guide at https://iphone-use.com/docs/plugins/ to set up this agent’s plugin or skill.
-Verify the CLI path, version and integration. Tell me if I need a new session. Stop before connecting to my iPhone.
+Set up and verify iPhone-use using https://iphone-use.com/setup.md
 ```
 
 ### Install manually

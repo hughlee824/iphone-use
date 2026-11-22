@@ -48,9 +48,7 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 把下面的提示词发给这台 Mac 上的 Agent：
 
 ```text
-帮我在这台 Mac 上配置 iPhone-use。已有兼容的 CLI 就复用，否则运行 `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`。
-按 https://iphone-use.com/zh/docs/plugins/ 的指南为当前 Agent 配好插件或技能。
-检查 CLI 路径、版本和插件或技能是否可用，告诉我是否需要新开会话。请在连接 iPhone 前停下。
+按 https://iphone-use.com/setup.md 安装并验证 iPhone-use。
 ```
 
 ### 手动安装

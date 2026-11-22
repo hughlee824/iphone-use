@@ -3,11 +3,13 @@ import base64
 import json
 import os
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins/iphone-use"
@@ -34,6 +36,23 @@ if command in ("disconnect", "record-stop") and (root / "cleanup-reply").exists(
 print((root / "stdout").read_text(), end="")
 sys.exit(int((root / "exit").read_text()))
 """
+
+
+class CodexCliResolutionTests(unittest.TestCase):
+    def test_curl_install_matches_preflight_with_original_server_path(self):
+        server = runpy.run_path(str(PLUGIN / "codex/server.py"))
+        with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {"HOME": home, "PATH": "/usr/bin:/bin",
+                                                                            "IPHONE_USE_CLI": ""}):
+            cli = Path(home) / ".local/bin/iphone-use"
+            cli.parent.mkdir(parents=True)
+            cli.symlink_to(sys.executable)
+            args = {"session": SESSION, "cli_path": str(cli)}
+            self.assertEqual(server["validate"]("observe", args), str(cli.resolve()))
+            with self.assertRaises(server["NotDispatched"]):
+                server["validate"]("observe", {**args, "cli_path": "/bin/sh"})
+            with patch.dict(os.environ, {"IPHONE_USE_CLI": str(Path(home) / "missing")}):
+                with self.assertRaises(server["NotDispatched"]):
+                    server["validate"]("observe", args)
 
 
 class CodexActionTests(unittest.TestCase):

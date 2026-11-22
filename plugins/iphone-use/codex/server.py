@@ -97,9 +97,12 @@ def validate(name, args):
             raise NotDispatched(f"Invalid {key}")
     if "evidence_dir" in args and not os.path.isabs(args["evidence_dir"]):
         raise NotDispatched("evidence_dir must be absolute")
-    configured = shutil.which(os.getenv("IPHONE_USE_CLI") or "iphone-use")
+    override = os.getenv("IPHONE_USE_CLI")
+    configured = shutil.which(override or "iphone-use")
+    if not configured and not override and os.getenv("HOME"):
+        configured = shutil.which(str(Path(os.environ["HOME"]) / ".local/bin/iphone-use"))
     if not configured or not os.path.isabs(args["cli_path"]) or not os.path.isabs(configured):
-        raise NotDispatched("The server needs the installed CLI on PATH or an absolute IPHONE_USE_CLI")
+        raise NotDispatched("Supply an absolute IPHONE_USE_CLI or install iphone-use on PATH or in ~/.local/bin")
     executable = Path(configured).resolve()
     if executable != Path(args["cli_path"]).resolve():
         raise NotDispatched("Server CLI differs from preflight. Configure the same CLI before starting.")
