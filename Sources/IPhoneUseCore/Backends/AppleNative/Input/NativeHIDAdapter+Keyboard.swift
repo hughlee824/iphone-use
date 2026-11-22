@@ -23,19 +23,26 @@ extension NativeHIDAdapter {
         }
         if keyboardReady { return }
         do {
-            // Borrow the advertised CoreDevice keyboard. Registering a new HID keyboard
-            // changes iOS hardware-keyboard state and can hide an app's entire composer.
-            keyboardID = try NativeKeyboard.builtInService(in: keyboardInventory())
+            if let registeredKeyboard {
+                keyboardID = try registeredKeyboard.prepare()
+            } else {
+                // The default borrows the iOS keyboard to preserve the current composer layout.
+                keyboardID = try NativeKeyboard.builtInService(in: keyboardInventory())
+            }
             keyboardReady = true
             keyboardCleanup = nil
         } catch {
             throw ActionFailure(
                 code: "native_keyboard_unavailable", description: String(describing: error),
-                possiblyExecuted: false,
+                possiblyExecuted: registeredKeyboard?.registrationMayExist == true,
                 requiresObservation: true, result: ["recovery": NativeRecovery.resolveError.result])
         }
     }
     func sendKeys(_ keys: [UInt8]) throws {
+        if let registeredKeyboard {
+            try registeredKeyboard.send(NativeKeyboard.report(keys, timestamp: clock()))
+            return
+        }
         guard let keyboardID else {
             throw IPhoneUseError("native_keyboard_unavailable", "CoreDevice keyboard has not been discovered")
         }
@@ -175,6 +182,11 @@ extension NativeHIDAdapter {
     }
     func closeKeyboard() -> [String: Any] {
         if let keyboardCleanup { return keyboardCleanup }
+        if let registeredKeyboard {
+            let facts = registeredKeyboard.close()
+            keyboardReady = false; keyboardID = nil; keyboardCleanup = facts
+            return facts
+        }
         // This service belongs to iOS, not this session. Never remove it. The caller
         // releases our pending keys first; retain its ID for uncertain-release cleanup.
         let result: [String: Any] = [

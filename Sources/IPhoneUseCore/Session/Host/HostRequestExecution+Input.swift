@@ -3,11 +3,18 @@ import Foundation
 
 extension HostRequestExecution {
     func prepareText() throws {
-        // Bind preparation to a fresh observation, even when the borrowed
-        // CoreDevice keyboard is already ready. Preparation does not focus a field.
+        // Bind preparation to a fresh observation, even when the selected
+        // keyboard is already ready. Preparation does not focus a field.
         previousObservation = observations.beginAction()
         effective = true
-        response["result"] = try backend.prepareText()
+        if admission.requestedOperation == "text-prepare-rsd" {
+            guard let native = backend as? AppleDeviceBackend else {
+                throw IPhoneUseError("native_action_unsupported", "RSD keyboard requires standard mode")
+            }
+            response["result"] = try native.prepareText(registerRSDKeyboard: true)
+        } else {
+            response["result"] = try backend.prepareText()
+        }
         observations.finishAction(previous: previousObservation, dispatched: true)
         response["outcome"] = "completed"
         response["requiresObservation"] = true

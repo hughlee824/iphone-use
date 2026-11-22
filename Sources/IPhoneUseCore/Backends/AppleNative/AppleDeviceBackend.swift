@@ -12,7 +12,7 @@ final class AppleDeviceBackend: SessionBackend {
     let tapFrames = NativeTapFrameWorker()
     var cli: AppleDeviceCLI?
     let axpReader: AXPReader?
-    private var deviceLock: SessionDeviceLock?
+    private(set) var deviceLock: SessionDeviceLock?
     var axAutomation: AXAutomation?
     var pasteboardTransport: NativeTransport?
     var pasteboard: NativeTextPasteboard?
@@ -21,6 +21,7 @@ final class AppleDeviceBackend: SessionBackend {
     var buttonError: String?
     private var hidTransport: NativeTransport?
     var hid: NativeHIDAdapter?
+    var keyboardTunnel: KeyboardTunnel?
     var tunnel: ASPairedTunnel?
     var controlError: String?
     var controlErrorCode: String?
@@ -130,7 +131,8 @@ final class AppleDeviceBackend: SessionBackend {
                 "unicodePasteboard": control.available && hid?.canType == true && pasteboardError == nil
                     && (pasteboard?.available ?? true)
             ], "textMethodSelection": ["auto", "keys", "paste"], "textModes": ["insert", "replace", "append"],
-            "textFinishSupported": true, "textPrepareSupported": true, "textCaretConfirmationSupported": true,
+            "textFinishSupported": true, "textPrepareSupported": true,
+            "rsdKeyboardSupported": true, "textCaretConfirmationSupported": true,
             "pressKeys": NativePressKey.allCases.map(\.rawValue),
             "pasteboard": pasteboard?.status ?? ["restorePending": false], "sessionClosing": closing,
             "hidState": hidState?.rawValue ?? "unprepared", "runnerStarted": false,
@@ -202,6 +204,8 @@ final class AppleDeviceBackend: SessionBackend {
         result.merge(pasteboard?.close() ?? ["pasteboardRestoreAcknowledged": true]) { _, new in new }
         pasteboardTransport?.cancel()
         pasteboardTransport = nil
+        if let keyboardTunnel { result["keyboardTunnelClosed"] = keyboardTunnel.close() }
+        keyboardTunnel = nil
         result.merge(cleanupFacts) { _, new in new }
         hidTransport?.cancel()
         buttonTransport?.cancel()
@@ -217,6 +221,7 @@ final class AppleDeviceBackend: SessionBackend {
         result["shutdownAcknowledged"] =
             result["releaseUncertain"] as? Bool != true
             && result["tunnelReleaseAcknowledged"] as? Bool == true
+            && result["keyboardTunnelClosed"] as? Bool != false
             && result["keyboardRemoveAcknowledged"] as? Bool == true
             && result["pasteboardRestoreAcknowledged"] as? Bool == true
             && result["recordingCleanupAcknowledged"] as? Bool == true

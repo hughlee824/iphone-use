@@ -103,6 +103,7 @@ final class NativeHIDAdapter {
     var pinchContacts: [(UInt16, UInt16)]?
     var releaseUncertain = false
     var inputUncertain = false
+    var registeredKeyboard: RegisteredKeyboard?
     var keyboardID: UInt64?
     var keyboardReady = false
     var buttonTransport: NativeTransport?
@@ -111,11 +112,18 @@ final class NativeHIDAdapter {
     var keyboardCleanup: [String: Any]?
     var canType: Bool { isAvailable }
     var keyboardStatus: [String: Any] {
-        [
+        var result: [String: Any] = [
             "prepared": keyboardReady, "keysMayBeDown": keysDown,
-            "serviceMayExist": false, "serviceSource": "coredevice_builtin",
+            "serviceMayExist": registeredKeyboard?.registrationMayExist ?? false,
+            "serviceSource": registeredKeyboard == nil ? "coredevice_builtin" : "rsd_registered",
             "layout": "US usage mapping; active device layout unverified"
         ]
+        if let registeredKeyboard {
+            result["requestedServiceID"] = RegisteredKeyboard.requestedID
+            result["serviceID"] = registeredKeyboard.serviceID
+            result["transport"] = "usb_userspace_rsd"
+        }
+        return result
     }
     var state: State {
         if releaseUncertain { return .releaseUncertain }

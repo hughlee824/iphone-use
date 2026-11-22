@@ -1,0 +1,94 @@
+#import "DeviceServiceTransport.h"
+#import <sys/socket.h>
+#import <poll.h>
+#import <fcntl.h>
+#import <unistd.h>
+
+// Only connected HID and pasteboard streams cross this private socketpair. The
+// helper holds the discovery channel and USB packet pump until its parent closes.
+static BOOL PassPort(int control, int port) {
+    char byte = 'K';
+    struct iovec io = { &byte, 1 };
+    union { struct cmsghdr alignment; char bytes[CMSG_SPACE(sizeof(int))]; } storage = {0};
+    struct msghdr message = { .msg_iov = &io, .msg_iovlen = 1,
+        .msg_control = storage.bytes, .msg_controllen = sizeof(storage.bytes) };
+    struct cmsghdr *header = CMSG_FIRSTHDR(&message);
+    header->cmsg_level = SOL_SOCKET; header->cmsg_type = SCM_RIGHTS; header->cmsg_len = CMSG_LEN(sizeof(int));
+    memcpy(CMSG_DATA(header), &port, sizeof(port));
+    return sendmsg(control, &message, 0) == 1;
+}
+
+static void ReportOpenFailure(NSException *exception) {
+    NSData *reason = [(exception.reason ?: @"RSD keyboard service unavailable") dataUsingEncoding:NSUTF8StringEncoding];
+    write(STDOUT_FILENO, reason.bytes, MIN(reason.length, 512));
+}
+
+BOOL ASProvideKeyboardPort(NSString *udid) {
+    ASDeviceServiceTransport *provider;
+    BOOL orderly = NO, released = NO;
+    @try {
+        provider = [[ASDeviceServiceTransport alloc] initWithUDID:udid sessionLifetime:YES];
+        BOOL openedHID = NO, openedPasteboard = NO;
+        while (YES) {
+            char command;
+            ssize_t count = read(STDOUT_FILENO, &command, 1);
+            if (count < 0 && errno == EINTR) continue;
+            if (count != 1) { orderly = count == 0; break; }
+            if ((command == 'H' && !openedHID) || (command == 'P' && openedHID && !openedPasteboard)) {
+                alarm(16);
+                int port;
+                @try {
+                    port = [provider openKeyboardService:command == 'P'];
+                } @catch (NSException *exception) {
+                    if (command != 'P') @throw;
+                    // Failure to open the second port must leave the original HID stream
+                    // available to release keys and remove the session's keyboard.
+                    openedPasteboard = YES;
+                    ReportOpenFailure(exception);
+                    alarm(0);
+                    continue;
+                }
+                BOOL sent = PassPort(STDOUT_FILENO, port);
+                close(port);
+                if (!sent) break;
+                if (command == 'H') openedHID = YES; else openedPasteboard = YES;
+                alarm(0);
+            } else break;
+        }
+    } @catch (NSException *exception) {
+        ReportOpenFailure(exception);
+    } @finally {
+        alarm(4);
+        released = [provider close];
+    }
+    return orderly && released;
+}
+
+int ASReceiveKeyboardPort(int control, NSError **error) {
+    char bytes[512] = {0};
+    struct iovec io = { bytes, sizeof(bytes) };
+    union { struct cmsghdr alignment; char bytes[CMSG_SPACE(sizeof(int))]; } storage = {0};
+    struct msghdr message = { .msg_iov = &io, .msg_iovlen = 1,
+        .msg_control = storage.bytes, .msg_controllen = sizeof(storage.bytes) };
+    ssize_t count = -1;
+    struct pollfd poller = {control, POLLIN, 0};
+    NSTimeInterval deadline = NSProcessInfo.processInfo.systemUptime + 16;
+    while (NSProcessInfo.processInfo.systemUptime < deadline) {
+        int ready = poll(&poller, 1, (int)MAX(0, (deadline - NSProcessInfo.processInfo.systemUptime) * 1000));
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready > 0) count = recvmsg(control, &message, 0);
+        break;
+    }
+    struct cmsghdr *header = count > 0 ? CMSG_FIRSTHDR(&message) : NULL;
+    if (header && header->cmsg_level == SOL_SOCKET && header->cmsg_type == SCM_RIGHTS
+        && header->cmsg_len == CMSG_LEN(sizeof(int))) {
+        int port; memcpy(&port, CMSG_DATA(header), sizeof(port));
+        if (count == 1 && bytes[0] == 'K' && !(message.msg_flags & MSG_CTRUNC)
+            && fcntl(port, F_SETFD, FD_CLOEXEC) == 0) return port;
+        close(port);
+    }
+    NSString *reason = count > 0 && !header ? [[NSString alloc] initWithBytes:bytes length:count encoding:NSUTF8StringEncoding] : nil;
+    if (error) *error = [NSError errorWithDomain:@"iPhone-use.Keyboard" code:1
+        userInfo:@{NSLocalizedDescriptionKey:reason ?: @"USB/RSD keyboard tunnel failed or expired"}];
+    return -1;
+}

@@ -181,6 +181,7 @@ public enum SessionClient {
             ]
             if [
                 "open", "terminate", "relaunch", "text-finish", "text-prepare", "text-prepare-scoped",
+                "text-prepare-rsd",
                 "type-with-method", "record-start", "record-stop", "preview-start", "preview-stop"
             ].contains(operation) || DeviceAction.operations.contains(operation) {
                 response["outcome"] = uncertain ? "unknown" : "not_dispatched"

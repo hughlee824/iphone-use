@@ -26,7 +26,8 @@ struct IPhoneUse: ParsableCommand {
             Pinch.self, LongPress.self, Swipe.self, Home.self, Focus.self, Clear.self, TypeText.self, TextPrepare.self,
             TextFinish.self,
             Press.self, RecordStart.self, RecordStop.self, Preview.self, Disconnect.self, Host.self,
-            AuthorizationMonitor.self, AXPObserveHost.self, ObservationWorkerHost.self, AXAutomationCommand.self,
+            AuthorizationMonitor.self, AXPObserveHost.self, ObservationWorkerHost.self,
+            KeyboardTunnelCommand.self, AXAutomationCommand.self,
             PreviewServiceHost.self, PreviewCaptureHostCommand.self,
             PreviewRevoke.self, PreviewServiceStop.self
         ])

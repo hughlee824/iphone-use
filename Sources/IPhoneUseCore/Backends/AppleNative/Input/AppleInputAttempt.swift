@@ -101,7 +101,7 @@ final class AppleInputAttempt {
             guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
                 throw ScreenGuard.Failure.invalidGuard
             }
-            // Discover the built-in keyboard, then capture/guard before any key.
+            // Reuse the selected keyboard, then validate the current field before any key.
             try hid.prepareKeyboard()
         }
         if homeAction {
@@ -193,11 +193,15 @@ final class AppleInputAttempt {
                 throw IPhoneUseError("native_pasteboard_unavailable", pasteboardError)
             }
             if backend.pasteboard == nil {
-                guard let tunnel = backend.tunnel else {
+                let transport: NativeTransport
+                if let direct = backend.keyboardTunnel {
+                    transport = try direct.open(pasteboard: true)
+                } else if let tunnel = backend.tunnel {
+                    transport = try AppleServiceTransport(
+                        tunnel: tunnel, service: "com.apple.coredevice.pasteboardservice")
+                } else {
                     throw IPhoneUseError("native_pasteboard_unavailable", "Native tunnel is unavailable")
                 }
-                let transport = try AppleServiceTransport(
-                    tunnel: tunnel, service: "com.apple.coredevice.pasteboardservice")
                 backend.pasteboardTransport = transport
                 backend.pasteboard = NativeTextPasteboard(
                     pasteboardIO: AppleTextPasteboardIO(

@@ -51,6 +51,9 @@ FOUNDATION_EXPORT BOOL ASReadDeviceLog(NSString *udid, void (^ready)(void),
 // Runs only in the bounded native AX subprocess; never sends input or starts Runner.
 FOUNDATION_EXPORT NSDictionary * _Nullable ASReadAXSnapshot(NSString *udid, NSError **error);
 FOUNDATION_EXPORT NSDictionary * _Nullable ASAXDisplayGeometry(NSDictionary *info, NSError **error);
+// Session-owned USB/RSD keyboard tunnel. The caller owns the received service descriptor.
+FOUNDATION_EXPORT BOOL ASProvideKeyboardPort(NSString *udid);
+FOUNDATION_EXPORT int ASReceiveKeyboardPort(int control, NSError * _Nullable * _Nullable error) __attribute__((swift_error(none)));
 NS_ASSUME_NONNULL_END
 
 FOUNDATION_EXPORT BOOL ASRunObservationWorker(NSString * _Nonnull device, NSString * _Nonnull kind, NSString * _Nonnull generation, NSError * _Nullable * _Nullable error);

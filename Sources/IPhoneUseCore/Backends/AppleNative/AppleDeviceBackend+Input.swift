@@ -33,7 +33,9 @@ extension AppleDeviceBackend {
         return try AppleInputAttempt(backend: self, action: action, target: target, textInput: textInput)
             .run(onInputStarted: onInputStarted)
     }
-    func prepareText() throws -> [String: Any] {
+    func prepareText() throws -> [String: Any] { try prepareText(registerRSDKeyboard: false) }
+
+    func prepareText(registerRSDKeyboard: Bool) throws -> [String: Any] {
         try cancellation.check()
         let control = controlStatus()
         guard control.available, let hid else {
@@ -43,12 +45,25 @@ extension AppleDeviceBackend {
                 possiblyExecuted: false, requiresObservation: false, result: control.result)
         }
         let alreadyPrepared = hid.keyboardStatus["prepared"] as? Bool == true
+        if registerRSDKeyboard && hid.registeredKeyboard == nil {
+            guard !alreadyPrepared, let device = cli?.device, let ownership = deviceLock else {
+                throw IPhoneUseError(
+                    "native_keyboard_route_conflict", "Select RSD keyboard before preparing any keyboard")
+            }
+            hid.registeredKeyboard = RegisteredKeyboard { [weak self] in
+                guard let self else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
+                let tunnel = try KeyboardTunnel(device: device, ownership: ownership)
+                self.keyboardTunnel = tunnel
+                return try tunnel.open(pasteboard: false)
+            }
+        }
         do { try hid.prepareKeyboard() } catch {
-            // Discovery is read-only: failure cannot have sent input or created a service.
+            if !alreadyPrepared, hid.registeredKeyboard != nil { keyboardTunnel?.close() }
             throw ActionFailure(
                 code: (error as? ActionFailure)?.code ?? (error as? IPhoneUseError)?.code
                     ?? "native_keyboard_unavailable",
-                description: String(describing: error), possiblyExecuted: false,
+                description: String(describing: error),
+                possiblyExecuted: hid.registeredKeyboard?.registrationMayExist == true,
                 requiresObservation: true,
                 result: [
                     "keyboardPrepared": false, "keyboard": hid.keyboardStatus,

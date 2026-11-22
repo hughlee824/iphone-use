@@ -7,6 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithUDID:(NSString *)udid sessionLifetime:(BOOL)sessionLifetime;
 @property(nonatomic, readonly) uint64_t versionFlags;
 - (int)openService:(NSString *)name; // caller owns the returned connected byte stream
+- (int)openKeyboardService:(BOOL)pasteboard;
 - (BOOL)close;
 @end
 NS_ASSUME_NONNULL_END

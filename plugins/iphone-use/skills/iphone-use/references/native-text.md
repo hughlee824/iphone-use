@@ -2,6 +2,12 @@
 
 Read this once before native text input. Reuse the established executable, execution context, session, keyboard readiness, latest inspected observation and any pending clipboard transaction. Runner uses element references instead.
 
+For an explicit request to register an RSD keyboard, use `text-prepare --rsd-keyboard` on a
+fresh standard USB session before preparing the built-in keyboard. Check for
+`keyboard.serviceSource=rsd_registered`, inspect the resulting layout and use the same
+session for `type`, `press` and `text-finish`. This route opens no media stream. Verify the
+visible text and preserve uncertain input outcomes.
+
 ## Normal path
 
 1. Before the first input in this session, run `text-prepare --agent-output` if the keyboard is not already prepared. Current builds discover the existing CoreDevice keyboard (`keyboard.serviceSource=coredevice_builtin`) without attaching a hardware keyboard. Inspect the returned Apple PNG; `keyboardPrepared=true` does not confirm focus. Do not prepare keyboards on connections that do not need text.

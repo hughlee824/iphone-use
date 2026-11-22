@@ -24,6 +24,23 @@ On devices advertising multiple built-in touchscreens, standard mode matches the
 
 `text-prepare` discovers one device-advertised CoreDevice keyboard. It does not create or remove a hardware keyboard service, change the input method or focus a field. Cleanup releases this session's keys and connections. Use the returned fresh image to confirm the editor and focus.
 
+To select a session-owned virtual keyboard, run `text-prepare --rsd-keyboard` before the
+first keyboard preparation or text action in a standard USB session. Registration can change
+the visible editor or software keyboard. Inspect the returned screenshot and focus the field
+before typing. Status reports `keyboard.serviceSource=rsd_registered` and the assigned service ID.
+
+This path holds a dedicated USB CoreDeviceProxy userspace tunnel, verifies the RSD device identity
+and opens the advertised HID port. The host performs the service RemoteXPC handshake, reads replies
+and requests service ID `0x100002001`. It verifies its unique keyboard in the inventory before use.
+For Chinese or explicit paste, a second RemoteXPC socket on the same tunnel writes the general
+pasteboard under the usual backup and restoration rules. Modifier-down, Command-V and key release
+all use the original HID socket. Disconnect removes only the verified session keyboard.
+A lost registration reply or unconfirmed removal is reported as uncertain.
+
+The RSD keyboard route currently opens no media stream. Check the actual editor after dispatch:
+the device can accept the connection and reports while the focused app receives no text.
+The initial standard session and its observation checks still use the regular standard backend.
+
 Standard `type` supports ASCII key reports and literal clipboard paste. Editing shortcuts request selection or caret movement; the host cannot prove their app-specific effect. Unicode/multiline paste uses a transaction that preserves the original clipboard in memory. `text-finish` restores it only while ownership still matches. Process crashes, lost replies and concurrent clipboard writers limit restoration guarantees.
 
 Each pre-input stage takes one fresh Apple PNG against the original observation. A request-relative dispatch budget prevents stale in-flight work; it does not expire an unchanged baseline merely because the agent spent time reasoning. Explicit caret exclusions are narrow, bound to the original observation, and never inferred from later differences. See [text commands](actions.md#实验性原生文字输入) and the [native text guard](native-text-phase-matching.md).

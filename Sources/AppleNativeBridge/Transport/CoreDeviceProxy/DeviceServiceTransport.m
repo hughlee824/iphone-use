@@ -33,6 +33,17 @@
     }
     return self;
 }
+- (int)openKeyboardService:(BOOL)pasteboard {
+    NSString *name = pasteboard ? @"com.apple.coredevice.pasteboardservice" : @"com.apple.coredevice.hid.universalhidservice";
+    NSDictionary *entry = _services[name];
+    if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"Properties"] isKindOfClass:NSDictionary.class])
+        ASDeviceTransportFail(@"Requested keyboard or pasteboard service absent from RSD inventory");
+    NSDictionary *properties = entry[@"Properties"];
+    if ([entry[@"Entitlement"] isEqual:@"AppleInternal"] || ![properties[@"UsesRemoteXPC"] boolValue]
+        || [properties[@"ServiceVersion"] integerValue] != 1)
+        ASDeviceTransportFail(@"Device did not advertise an eligible RemoteXPC keyboard or pasteboard service");
+    return [self openService:name];
+}
 - (int)openService:(NSString *)name {
     id service = _services[name];
     if (![service isKindOfClass:NSDictionary.class]) ASDeviceTransportFail(@"Device service not advertised");

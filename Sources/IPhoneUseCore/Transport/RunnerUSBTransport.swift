@@ -133,10 +133,14 @@ struct RunnerUSBTransport {
 // Nonblocking sockets avoid a slow peer extending a per-read timeout forever.
 final class RunnerSocket {
     private var descriptor: Int32
-    private let deadline: TimeInterval
+    var deadline: TimeInterval
+    private let name: String
+    private let errorPrefix: String
     private var lineBuffer = Data()
 
-    init(ownedDescriptor: Int32, deadline: TimeInterval) throws {
+    init(ownedDescriptor: Int32, deadline: TimeInterval, keyboardService: Bool = false) throws {
+        name = keyboardService ? "RSD keyboard" : "Runner USB"
+        errorPrefix = keyboardService ? "native_keyboard_socket" : "runner_socket"
         descriptor = ownedDescriptor
         self.deadline = deadline
         var one: Int32 = 1
@@ -146,7 +150,7 @@ final class RunnerSocket {
                 == 0
         else {
             close()
-            throw IPhoneUseError("runner_socket_failed", "Cannot configure Runner socket")
+            throw IPhoneUseError(errorPrefix + "_failed", "Cannot configure \(name) socket")
         }
     }
 
@@ -182,7 +186,7 @@ final class RunnerSocket {
 
     private func failure() -> IPhoneUseError {
         IPhoneUseError(
-            "runner_socket_failed", "Runner USB socket failed (errno \(errno)); no automatic replay")
+            errorPrefix + "_failed", "\(name) socket failed (errno \(errno)); no automatic replay")
     }
 
     private func wait(_ events: Int32) throws {
@@ -190,7 +194,7 @@ final class RunnerSocket {
             let remaining = deadline - ProcessInfo.processInfo.systemUptime
             guard remaining > 0 else {
                 throw IPhoneUseError(
-                    "runner_socket_timeout", "Runner USB response timeout; no automatic replay")
+                    errorPrefix + "_timeout", "\(name) response timeout; no automatic replay")
             }
             var descriptor = pollfd(fd: descriptor, events: Int16(events), revents: 0)
             let result = poll(&descriptor, 1, Int32(min(remaining * 1000 + 1, Double(Int32.max))))
@@ -224,10 +228,15 @@ final class RunnerSocket {
             if count > 0 { return Data(buffer.prefix(count)) }
             if count < 0, [EAGAIN, EINTR].contains(errno) { continue }
             if count == 0 {
-                throw IPhoneUseError("runner_socket_closed", "Runner USB connection closed before response")
+                throw IPhoneUseError(errorPrefix + "_closed", "\(name) connection closed before response")
             }
             throw failure()
         }
+    }
+
+    var hasPendingInput: Bool {
+        var descriptor = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+        return poll(&descriptor, 1, 0) > 0
     }
 
     func read(count: Int) throws -> Data {
