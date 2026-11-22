@@ -147,9 +147,10 @@ class PluginPreflightTests(unittest.TestCase):
         help_text = "--observe --agent-output" if observe else "tap REF"
         self.write_command("iphone-use", f"case \"$1\" in --version) printf '%s\\n' '{version}';; tap) printf '%s\\n' '{help_text}';; connect) printf '%s\\n' '--mode';; *) exit 99;; esac")
 
-    def run_check(self, *args):
+    def run_check(self, *args, override=""):
         return subprocess.run(["/bin/sh", str(ROOT / "skills/iphone-use/scripts/preflight.sh"), *args],
-                              env={**os.environ, "PATH": f"{self.bin}:/usr/bin:/bin"},
+                              env={**os.environ, "HOME": str(self.root), "IPHONE_USE_CLI": override,
+                                   "PATH": f"{self.bin}:/usr/bin:/bin"},
                               text=True, capture_output=True)
 
     def test_valid_package_and_optional_observe_capability(self):
@@ -233,12 +234,24 @@ fi
         (self.bin / "iphone-use").unlink()
         result = self.run_check()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("brew install", result.stderr)
+        self.assertIn("https://iphone-use.com/install.sh", result.stderr)
         for version in ("0.0.9", "0.3.9", "0.1.0-rc.1", "bad", "0.1", "1.0.0\nmalformed"):
             self.write_cli(version)
             result = self.run_check()
             self.assertNotEqual(result.returncode, 0, version)
             self.assertIn("Unsupported CLI version", result.stderr)
+
+    def test_curl_entry_outside_path_respects_existing_selections(self):
+        curl_cli = self.root / ".local/bin/iphone-use"
+        curl_cli.parent.mkdir(parents=True)
+        (self.bin / "iphone-use").rename(curl_cli)
+        result = self.run_check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"CLI path: {curl_cli}\n", result.stdout)
+        self.assertNotEqual(self.run_check(override=str(self.root / "missing")).returncode, 0)
+        self.write_cli("0.3.0")
+        self.assertIn("Unsupported CLI version: 0.3.0", self.run_check().stderr)
+        self.assertEqual(self.run_check(override=str(curl_cli)).returncode, 0)
 
     def test_command_line_tools_and_non_mac_are_not_ready(self):
         (self.xcode / "Platforms/iPhoneOS.platform").rmdir()

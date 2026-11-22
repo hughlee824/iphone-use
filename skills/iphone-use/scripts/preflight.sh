@@ -20,9 +20,15 @@ if [ "$(uname -s)" != Darwin ]; then
   exit 1
 fi
 if ! command -v "$cli" >/dev/null 2>&1; then
-  echo 'iPhone-use CLI is missing from PATH. Install: brew install HughLee824/tap/iphone-use' >&2
-  echo 'Restart your client after changing PATH; installing the plugin alone does not install the CLI.' >&2
-  exit 1
+  if [ -n "${IPHONE_USE_CLI:-}" ]; then
+    printf 'Cannot run the configured IPHONE_USE_CLI: %s\n' "$cli" >&2
+    exit 1
+  fi
+  cli="${HOME:-}/.local/bin/iphone-use"
+  if [ -z "${HOME:-}" ] || [ ! -f "$cli" ] || [ ! -x "$cli" ]; then
+    echo 'iPhone-use CLI not found. Install with: curl -fsSL https://iphone-use.com/install.sh | /bin/sh' >&2
+    exit 1
+  fi
 fi
 if ! version=$("$cli" --version); then
   echo 'iPhone-use could not start. Check the complete CLI/Runner installation.' >&2

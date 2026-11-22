@@ -36,7 +36,7 @@ iphone-use --version
 
 本地候选包不在 PATH 时，通过 `IPHONE_USE_CLI=/absolute/path/to/bin/iphone-use sh /absolute/path/to/skill/scripts/preflight.sh --candidate` 检查；源码 `development` 版本使用 `--source`。设备调用继续使用同一个可执行文件。不要为了通过版本检查切到另一个已安装版本。这些开发选项不会改变正式分发的最低版本要求；实际能力仍以所用 CLI 的帮助和会话返回值为准。
 
-安装后重启原本已打开的客户端，使其取得更新的 PATH。插件安装成功不等于 signing/setup 成功。免费 Personal Team 和全新 Mac 配置仍未验收；详见[前置条件和签名](first-task.md#before-you-start)。
+当前会话可以直接使用预检报告的 CLI 路径。若通过 curl 安装后运行的是较旧的插件，可给预检传入 `IPHONE_USE_CLI="$HOME/.local/bin/iphone-use"`。新安装的插件或技能何时加载取决于客户端，见下方对应说明。免费 Personal Team 和全新 Mac 配置仍未验收；详见[前置条件和签名](first-task.md#before-you-start)。
 
 ## Codex 安装
 

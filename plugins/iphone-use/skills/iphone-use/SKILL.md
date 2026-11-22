@@ -5,7 +5,7 @@ description: Operate apps on a connected physical iPhone using the iPhone-use CL
 
 # iPhone-use
 
-Use the local CLI to observe and act on the iPhone. The agent chooses actions and verifies results; execution receipts alone do not prove task success. Workflow version: **0.4.10**; requires CLI **0.4.0+**.
+Use the local CLI to observe and act on the iPhone. The agent chooses actions and verifies results; execution receipts alone do not prove task success. Workflow version: **0.4.11**; requires CLI **0.4.0+**.
 
 ## Start
 
