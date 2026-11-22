@@ -41,7 +41,21 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 ## 快速开始
 
-通过 Homebrew 或 Release 归档安装正式 CLI，然后从标准模式开始；Runner 签名是独立的可选流程。完整安装与升级步骤见[首次任务](docs/first-task.md)和[安装说明](docs/install.md)。当前插件与通用 skill 要求稳定版 **CLI 0.4.0 或更高版本**，需单独更新；详见[客户端兼容说明](docs/plugins.md#先检查环境)。
+**在 Apple Silicon Mac 上安装 CLI**
+
+```sh
+curl -fsSL https://iphone-use.com/install.sh | /bin/sh
+```
+
+**也可以把这段提示词复制给当前 agent**
+
+```text
+帮我在这台 Mac 上安装 iPhone-use。已有兼容 CLI 就复用，首次安装请运行 `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`。
+按公开项目 hughlee824/iphone-use 的插件指南，为当前 agent 配好对应的插件或 skill。
+检查并告诉我 CLI 路径、版本、插件或 skill 的安装结果，以及是否需要新开会话。到连接 iPhone 前停下。
+```
+
+也可以通过 Homebrew 或 Release 归档安装。首次连接建议使用标准模式；Runner 签名是独立的可选流程。完整安装与升级步骤见[首次任务](docs/first-task.md)和[安装说明](docs/install.md)。当前插件与通用 skill 要求稳定版 **CLI 0.4.0 或更高版本**，需单独更新；详见[客户端兼容说明](docs/plugins.md#先检查环境)。
 
 ### 1. 准备并连接
 

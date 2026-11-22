@@ -41,7 +41,21 @@ Start with standard for screenshot-based operation without Runner setup. Choose 
 
 ## Quick start
 
-Install the published CLI through Homebrew or the Release archive, then start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md) for installation and upgrades. The current plugin and portable skill require stable **CLI 0.4.0 or later** and update separately; see [client compatibility](docs/plugins.md#先检查环境).
+**Install the CLI on an Apple Silicon Mac**
+
+```sh
+curl -fsSL https://iphone-use.com/install.sh | /bin/sh
+```
+
+**Or copy this prompt into your agent chat**
+
+```text
+Install iPhone-use on this Mac. Reuse a compatible CLI if present. For a fresh install, run `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`.
+Follow the public hughlee824/iphone-use plugin guide for this agent and install its plugin or skill if needed.
+Verify the CLI path, version and integration, tell me if I need a new session, and stop before connecting to an iPhone.
+```
+
+Homebrew and manual Release downloads are also available. Start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md) for installation and upgrades. The current plugin and portable skill require stable **CLI 0.4.0 or later** and update separately; see [client compatibility](docs/plugins.md#先检查环境).
 
 ### 1. Prepare and connect
 
