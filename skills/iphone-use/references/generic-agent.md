@@ -24,6 +24,6 @@ Follow the client's normal permission flow. Keep the working executable, host, e
 
 ## Preview and cleanup
 
-For a local Mac client, use `iphone-use --session SESSION preview` once: the CLI opens the Mac's default browser. Do not add another browser-open call. Follow the shared [preview lifecycle](live-preview.md), including the user's opt-out and task record. If the user explicitly chooses an in-client browser, use `--no-open` and that actual browser capability instead. A browser is optional for the agent; image reading is not.
+For a local Mac client, follow the shared [preview lifecycle](live-preview.md), including the user's opt-out and task record. Apply its [browser selection rules](live-preview.md#choose-the-preview-browser) before starting preview. A browser is optional for the agent; image reading is not.
 
 Disconnect only this task's session and verify the cleanup response. Do not stop a session owned by another agent. If the device is busy, report it rather than taking over. Keep acceptance PNGs and receipts private and copy relevant evidence before subsequent actions rotate the observation cache.

@@ -162,7 +162,7 @@ claude plugin marketplace add hughlee824/iphone-use
 claude plugin install iphone-use@iphone-use
 ```
 
-Start a new client session and invoke `$iphone-use:iphone-use` in Codex or `/iphone-use:iphone-use` in Claude Code. Follow [the first-task guide](docs/first-task.md) for Xcode, signing, setup, verification, and upgrades. The plugin contains shared device rules, a read-only prerequisite check, [Codex call templates](skills/iphone-use/references/codex-calls.md), and [Claude Code Bash/Read instructions](skills/iphone-use/references/claude-code.md). It does not install the CLI or prepare signing. Distribution through this project's marketplace is separate from an official-directory listing.
+Start a new client session and invoke `$iphone-use:iphone-use` in Codex or `/iphone-use:iphone-use` in Claude Code. Follow [the first-task guide](docs/first-task.md) for Xcode, signing, setup, verification, and upgrades. The plugin contains shared device rules, a read-only prerequisite check, [Codex action tools and shell fallback](skills/iphone-use/references/codex-calls.md), and [Claude Code Bash/Read instructions](skills/iphone-use/references/claude-code.md). It does not install the CLI or prepare signing. Distribution through this project's marketplace is separate from an official-directory listing.
 
 DeepSeek Harness can use the `dsh-iphone-use` bundle in the same package, reusing this skill. In Add plugin, enter `dsh-iphone-use` or `https://github.com/hughlee824/iphone-use`; see [Harness installation and validation scope](docs/plugins.md#deepseek-harness-安装).
 

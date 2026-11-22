@@ -1,6 +1,6 @@
 {
   "name": "iphone-use",
-  "version": "0.3.1",
+  "version": "0.4.10",
   "description": "Observe and operate a connected physical iPhone with the iPhone-use CLI.",
   "author": {
     "name": "iPhone-use contributors",
@@ -10,6 +10,7 @@
   "repository": "https://github.com/HughLee824/iphone-use",
   "license": "MIT",
   "keywords": ["iphone", "ios", "automation", "xctest"],
+  "mcpServers": "./codex/mcp.json",
   "skills": "./skills/",
   "interface": {
     "displayName": "iPhone-use",
@@ -18,10 +19,8 @@
     "developerName": "iPhone-use contributors",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
-    "logo": "./skills/iphone-use/assets/iphone-use-mark.svg",
+    "logo": "./skills/iphone-use/assets/iphone-use-mark-adaptive.svg",
     "logoDark": "./skills/iphone-use/assets/iphone-use-mark-dark.svg",
-    "composerIcon": "./skills/iphone-use/assets/iphone-use-mark.svg",
-    "composerIconDark": "./skills/iphone-use/assets/iphone-use-mark-dark.svg",
     "websiteURL": "https://iphone-use.com",
     "defaultPrompt": ["Open Settings on my iPhone, navigate to General, verify the screen, then disconnect."]
   }

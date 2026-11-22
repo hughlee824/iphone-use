@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "iphone-use": {
+      "command": "/usr/bin/python3",
+      "args": ["-I", "-B", "codex/server.py"],
+      "cwd": ".",
+      "env_vars": ["IPHONE_USE_CLI", "IPHONE_USE_STATE_DIR", "IPHONE_USE_CONFIG_DIR", "DEVELOPER_DIR"],
+      "default_tools_approval_mode": "prompt",
+      "tool_timeout_sec": 300
+    }
+  }
+}

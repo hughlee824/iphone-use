@@ -1,6 +1,6 @@
 {
   "name": "dsh-iphone-use",
-  "version": "0.3.1",
+  "version": "0.4.10",
   "description": "Observe and operate a connected physical iPhone with the iPhone-use CLI.",
   "type": "module",
   "main": "deepseek.js",

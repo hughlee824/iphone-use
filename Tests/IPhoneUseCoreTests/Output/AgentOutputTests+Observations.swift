@@ -11,8 +11,10 @@ extension AgentOutputTests {
         let compact = AgentOutput.summarize(source)
         let summary = (try XCTUnwrap(compact["agentSummary"] as? [String: Any]))
         XCTAssertEqual(summary["nextStep"] as? String, "inspect_unstable_observation_do_not_replay")
-        XCTAssertTrue(
-            try XCTUnwrap(summary["recoveryHint"] as? String).contains("does not mean input failed"))
+        let hint = try XCTUnwrap(summary["recoveryHint"] as? String)
+        XCTAssertTrue(hint.contains("does not mean input failed"))
+        XCTAssertTrue(hint.contains("read-only snapshot"))
+        XCTAssertEqual(summary["automaticReplayAllowed"] as? Bool, false)
         XCTAssertEqual(summary["outcome"] as? String, "unknown")
         XCTAssertEqual(
             try jsonData((try XCTUnwrap(compact["observation"] as? [String: Any]))), try jsonData(frame))

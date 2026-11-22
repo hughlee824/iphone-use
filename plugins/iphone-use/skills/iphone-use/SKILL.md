@@ -5,12 +5,12 @@ description: Operate apps on a connected physical iPhone using the iPhone-use CL
 
 # iPhone-use
 
-Use the local CLI to observe and act on the iPhone. The agent chooses actions and verifies results; execution receipts alone do not prove task success. Workflow version: **0.3.1**; requires CLI **0.4.0+**.
+Use the local CLI to observe and act on the iPhone. The agent chooses actions and verifies results; execution receipts alone do not prove task success. Workflow version: **0.4.10**; requires CLI **0.4.0+**.
 
 ## Start
 
 1. Run `sh scripts/preflight.sh` relative to this skill's absolute directory. Read the relevant adapter in the same tool invocation when possible: [Codex](references/codex-calls.md), [Claude Code](references/claude-code.md), [DeepSeek Harness](references/deepseek-harness.md), or [other clients](references/generic-agent.md). Preflight checks local capabilities, not phone readiness. Honor an explicitly supplied `IPHONE_USE_CLI`; use `--candidate` for prereleases or `--source` for development builds. Keep the same executable throughout.
-2. Run `devices`, then `connect --device DEVICE_ID --reuse --progress` with the returned physical UDID and supported flags. A successful connection already includes status. Record `session`, `mode`, `modeSource`, `reused` and `lifecycle`. Never obtain a session ID from another task's files. A conflict needs diagnosis, not killing another host.
+2. On Codex, follow the [Codex adapter](references/codex-calls.md) to use the plugin’s named tools for actions and active observations. Read the returned action and PNG together. Run `devices`, then `connect --device DEVICE_ID --reuse --progress` with the returned physical UDID and supported flags. A successful connection already includes status. Record `session`, `mode`, `modeSource`, `reused` and `lifecycle`. Never obtain a session ID from another task's files. A conflict needs diagnosis, not killing another host.
 3. Keep the saved control mode. Do not add a mode override, change configuration, or automatically switch backends. Runner uses XCTest/AX; standard uses screenshots/HID with read-only AX when available. Standard AX element references are for `inspect`, not element actions; use screenshot-bound coordinates and the standard text workflow.
 4. Default to [live preview](references/live-preview.md) before the first observation, unless the user declined it. **When preview is declined, skip its startup and reference entirely.** Preview is separate from control; keep its ownership record if started.
 
@@ -31,7 +31,7 @@ Commands below follow `--session SESSION`:
 | Search the captured AX tree | `inspect oN --query TEXT` |
 | Release an owned session | `disconnect` |
 
-Use `--agent-output` only where preflight advertises it; it is not a global flag. `--observe` returns separate action and observation facts. **Read the attached PNG before selecting the next action**, including after a nonzero exit. Do not add another capture when the returned observation is usable. `inspect` searches cached data and cannot revive stale references.
+Use `--agent-output` only where preflight advertises it; it is not a global flag. `--observe` returns separate action and observation facts. **Read the attached PNG before selecting the next action**, including after a nonzero exit. Use a usable attached observation to verify the preceding action. If the user explicitly requested a fresh observation at this point, call read-only `observe` once for that step. An unsettled frame alone does not trigger a capture loop or an input retry. `inspect` searches cached data and cannot revive stale references.
 
 An observation pairs AX and PNG under one ID; it is **not an atomic snapshot**. Standard requests AX and one screenshot in parallel; Runner currently collects them serially. Read both: use AX for labels, structure and known states, and the PNG for layout, overlays and content absent from AX. Acquisition times are request bounds, not device sampling instants; host and device clocks are distinct. Reobserve when conflicting evidence prevents identifying the current target, not for harmless clock or scanning animations. AX failure retains the screenshot. Standard still uses screenshot-bound coordinates; Runner's element actions retain their live checks.
 
@@ -60,7 +60,7 @@ Read [Runner editing](references/runner-actions.md) for replace/append/clear/sel
 
 ## Evidence and finish
 
-When evidence is requested, preserve the returned screenshot, snapshot and receipt together before the next device action; the cache keeps only two observations and disconnect removes it. When preflight advertises native evidence, append `--evidence-dir DIR` to connect and session commands; use returned `artifacts` paths. Older CLIs can use the fixed output helper described in the Codex adapter. Call the CLI directly; do not generate execution wrappers. Retain connection mode evidence from the existing receipt. Archive only to the requested private directory; ordinary tasks need no extra reports.
+When evidence is requested, preserve the returned screenshot, snapshot and receipt together before the next device action; the cache keeps only two observations and disconnect removes it. When preflight advertises native evidence, append `--evidence-dir DIR` to connect and session commands; use returned `artifacts` paths. Older CLIs can use the fixed output helper described in the Codex adapter. Use the selected client adapter; do not generate execution wrappers. Retain connection mode evidence from the existing receipt. Archive only to the requested private directory; ordinary tasks need no extra reports.
 
 Verify requested fields and the resulting saved/sent UI. Continue authorized work; do not impose a fixed route, extra reopening step or cleanup the user did not request. For feed cutoffs, establish the actual date boundary; a relative label alone may be insufficient.
 
