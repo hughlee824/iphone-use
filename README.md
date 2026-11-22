@@ -41,31 +41,48 @@ Start with standard for screenshot-based operation without Runner setup. Choose 
 
 ## Quick start
 
-**Install the CLI on an Apple Silicon Mac**
+On an Apple Silicon Mac, choose one installation method. Once the CLI and your agent are ready, go straight to [After installation](#after-installation).
+
+### Install with your agent
+
+Paste this prompt into your agent’s chat on this Mac:
+
+```text
+Set up iPhone-use on this Mac. Reuse a compatible CLI or install it with `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`.
+Follow the plugin guide at https://iphone-use.com/docs/plugins/ to set up this agent’s plugin or skill.
+Verify the CLI path, version and integration. Tell me if I need a new session. Stop before connecting to my iPhone.
+```
+
+### Install manually
+
+**1. Install the CLI.** Run the installer in Terminal. Follow any PATH instructions it prints, then check the executable and version.
 
 ```sh
 curl -fsSL https://iphone-use.com/install.sh | /bin/sh
 ```
 
-**Or copy this prompt into your agent chat**
-
-```text
-Install iPhone-use on this Mac. Reuse a compatible CLI if present. For a fresh install, run `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`.
-Follow the public hughlee824/iphone-use plugin guide for this agent and install its plugin or skill if needed.
-Verify the CLI path, version and integration, tell me if I need a new session, and stop before connecting to an iPhone.
-```
-
-Homebrew and manual Release downloads are also available. Start with standard mode. Runner signing is a separate optional path. See [first task](docs/first-task.md) and [installation](docs/install.md) for installation and upgrades. The current plugin and portable skill require stable **CLI 0.4.0 or later** and update separately; see [client compatibility](docs/plugins.md#先检查环境).
-
-### 1. Prepare and connect
-
-Standard mode currently targets macOS 27 / iOS 27, tested on Apple Silicon with Xcode 27 and iPhone 12 Pro. It requires full Xcode, device trust, Developer Mode and unlock, **without development signing or Runner setup**. The binary deployment minimum is not a device-compatibility promise.
-
-For source development, run `swift build` and use `.build/debug/iphone-use`. For a local candidate package, retain the complete directory and add its `bin` to PATH; it runs outside the source checkout.
-
 ```sh
 command -v iphone-use
 iphone-use --version
+```
+
+Homebrew and verified release downloads are also available. Source developers can run `swift build` and use `.build/debug/iphone-use`. For a local candidate package, keep the complete directory and add its `bin` to PATH. See the [installation and upgrade guide](docs/install.md).
+
+**2. Set up your agent.** Follow the instructions for your client and start a new session if required. The plugin and portable skill update separately from the CLI and require stable **CLI 0.4.0 or later**. If you use only the CLI, you can skip this step. See [agent integration](#agent-integration) and [client compatibility](docs/plugins.md#先检查环境).
+
+### After installation
+
+For either installation method, connect your iPhone by USB, trust this Mac, enable Developer Mode and keep the phone unlocked. Standard mode requires full Xcode and currently targets macOS 27 / iOS 27. Testing covers Apple Silicon with Xcode 27 and iPhone 12 Pro. Development signing and Runner setup are needed only for Runner mode.
+
+**Try a first task with your agent.** Invoke the iPhone-use skill in your client and send:
+
+> Use standard mode to open Settings on my iPhone and go to General. Read a fresh screenshot to confirm the page, leave all settings as they are, then disconnect the session you opened.
+
+To try device control in Terminal yourself, follow the steps below instead.
+
+#### 1. Prepare and connect
+
+```sh
 xcrun --find devicectl
 iphone-use devices
 export IOS_UDID="DEVICE_ID_FROM_DEVICES"
@@ -76,7 +93,7 @@ iphone-use connect --device "$IOS_UDID" --mode standard
 
 Before input, require `result.controlAvailable=true`; `ok:true` alone can describe an observation-only session. If unavailable, read `controlErrorCode`, `controlError` and `recovery`, disconnect this session and resolve the reported cause before reconnecting. See [first-use checks](docs/install.md) for full Xcode selection, device authorization and media ownership errors. Standard-mode errors do not require Runner setup.
 
-### 2. Observe, act and verify
+#### 2. Observe, act and verify
 
 Open a harmless test page on the phone and retain the session returned by connect:
 
@@ -95,7 +112,7 @@ iphone-use --session "$SESSION" disconnect
 
 A command acknowledgment or screenshot path is not success verification. Use a fresh observation for the next action; observe an unknown result before deciding, never replay automatically. Development acceptance uses the ordinary Probe; controlling other installed apps does not require it.
 
-### Optional: Runner mode
+#### Optional: Runner mode
 
 Developers wanting XCTest and available element references can choose Runner. With a complete package and existing Apple Development credentials plus a matching profile:
 
@@ -106,7 +123,7 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 `setup` does not change the default mode; use `iphone-use config set mode runner` for that. Source developers follow [signing setup](docs/onboarding.md#源码开发入口), run `build-runner`, then connect with its returned `.xctestrun`. Runner starts the installed app independently in the background and uses authenticated USB loopback communication; `connect` does not reinstall it or require WLAN access. Source-built apps must be explicitly installed before connecting. Runner observations allow `oN:eN` references where supported. Consult support fields and [action contracts](docs/actions.md) for mode-specific behavior.
 
-External agent plugins are optional; see [plugin installation](docs/plugins.md). Source validation and physical acceptance are described in the [testing guide](docs/testing.md).
+Source validation and physical acceptance are described in the [testing guide](docs/testing.md).
 
 ## Commands
 
