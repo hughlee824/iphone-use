@@ -41,6 +41,25 @@ final class AXPObservationTests: XCTestCase {
         XCTAssertTrue(compact.allSatisfy { !$0.contains("enabled=") && !$0.contains("disabled") })
     }
 
+    func testOnlyUniqueNativeEditorMatchingAppResponderReportsFocus() throws {
+        var editor = record(2)
+        var attributes = try XCTUnwrap(editor["attributes"] as? [String: Any])
+        attributes["5004"] = "UITextField"
+        editor["attributes"] = attributes
+        for children in [[editor, record(3)], [editor, editor]] {
+            var snapshot = payload(tree: record(1, children: children))
+            for token in [["pid": 123, "objectID": "2"], ["pid": 4, "objectID": "2"],
+                          ["pid": 123, "objectID": "3"]] as [[String: Any]] {
+                snapshot["textResponder"] = token
+                let nodes = try AXPSnapshot.decode(snapshot, device: "device").nodes
+                let focused = nodes.filter { $0.attributes["keyboardFocus"] as? Bool == true }
+                let expected = nodes.last?.role == "text" && token["pid"] as? Int == 123
+                    && token["objectID"] as? String == "2"
+                XCTAssertEqual(focused.map(\.index), expected ? [1] : [])
+            }
+        }
+    }
+
     func testRejectsWrongDeviceIncompleteChildrenAndForeignSubtrees() throws {
         XCTAssertThrowsError(try AXPSnapshot.decode(payload(), device: "another"))
         var root = record(1)

@@ -68,6 +68,7 @@ struct ObservedTarget {
     var textGuard: ScreenGuard?
     var textFieldGuard: NativeTextFieldGuard?
     var textCaretGuard: NativeBoundCaretGuard?
+    var textSource: CapturedObservation?
 }
 
 struct ActionFailure: Error, CustomStringConvertible {

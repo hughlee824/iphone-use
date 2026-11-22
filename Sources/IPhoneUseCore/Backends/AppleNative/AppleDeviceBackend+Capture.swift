@@ -73,6 +73,13 @@ extension AppleDeviceBackend {
         return try captureAXP(textOptions: textOptions, deadline: deadline)
     }
 
+    func keyboardFocusFrame(budget: NativeCaptureBudget) throws -> CapturedObservation {
+        let image = try capture(budget: budget)
+        let frame = try captureAXP(selected: image, textOptions: nil, deadline: budget.deadline)
+        try budget.check()
+        return frame
+    }
+
     private func captureAXP(
         previous: CapturedObservation? = nil, selected: CapturedObservation? = nil,
         textOptions: NativeTextObservationOptions?, deadline: TimeInterval

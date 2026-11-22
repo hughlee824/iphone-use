@@ -1,7 +1,7 @@
 import Foundation
 import IPhoneUseRunnerSupport
 
-// AXP augments observations only; input preflight remains screenshot-only.
+// Read-only AX augments screenshots, including responder checks across keyboard attachment.
 enum AXPObservation {
     static func capture(
         device: String, generation: String, previous: CapturedObservation? = nil,

@@ -60,6 +60,7 @@ struct AXPSnapshot {
             nodes.append(AXNode(index: index, parent: entry.parent, role: role(native), attributes: fields))
             pending += children.reversed().map { Entry(record: $0, parent: index, depth: entry.depth + 1) }
         }
+        markTextResponder(payload, pid: pid, nodes: &nodes)
         var collection = try appendSupplements(payload, pid: pid, nodes: &nodes)
         collection["receiveBudget"] = payload["receiveBudget"]
         appendTimingFacts(payload, to: &collection)
@@ -67,6 +68,21 @@ struct AXPSnapshot {
             nodes: nodes, bundle: bundle, screen: screen, displayID: numericDisplayID,
             displayUniqueID: display["displayUniqueID"] as? String, started: started, finished: finished,
             cleanup: cleanup, collection: collection)
+    }
+
+    private static func markTextResponder(_ payload: [String: Any], pid: Int, nodes: inout [AXNode]) {
+        guard let responder = payload["textResponder"] as? [String: Any], responder["pid"] as? Int == pid,
+            let objectID = responder["objectID"] as? String, let number = UInt64(objectID), number > 0 else { return }
+        let matches = nodes.indices.filter { index in
+            let element = nodes[index].attributes["nativeElement"] as? [String: Any]
+            return element?["pid"] as? Int == pid && element?["objectID"] as? String == objectID
+        }
+        guard matches.count == 1, let index = matches.first else { return }
+        let node = nodes[index]
+        guard ["text_field", "text_view", "search_field"].contains(node.role) else { return }
+        var fields = node.attributes
+        fields["keyboardFocus"] = true
+        nodes[index] = AXNode(index: index, parent: node.parent, role: node.role, attributes: fields)
     }
 
     private static func appendTimingFacts(_ payload: [String: Any], to collection: inout [String: Any]) {

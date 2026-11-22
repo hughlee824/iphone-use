@@ -116,7 +116,7 @@ extension ObservationCache {
         }
         return ObservedTarget(
             context: entry.capture.metadata, path: [], textGuard: guardValue, textFieldGuard: fieldGuard,
-            textCaretGuard: caret)
+            textCaretGuard: caret, textSource: action.kind == "type" ? entry.capture : nil)
     }
 
     private func accessibilityTarget(_ action: DeviceAction, entry: Entry) throws -> ObservedTarget {

@@ -20,7 +20,7 @@ static void Accumulate(NSMutableDictionary *timings, NSString *key, NSTimeInterv
 }
 static id ReadAttribute(id connection, ASAXReaderTarget *target, ASDTXReadConnectionState *state, NSUInteger kind, NSDictionary *parameters, id token, NSUInteger attribute, NSMutableDictionary *timings) {
     if ((kind == 2 && attribute != 52 && attribute != 63) || (kind != 2 && attribute)) ASAXFail(@"AX attribute guard");
-    if (attribute == 63 && ![parameters isEqual:@{@"parameter": @3015}] && ![parameters isEqual:@{@"parameter": @2025}]) ASAXFail(@"AX read-only attribute guard");
+    if (attribute == 63 && ![parameters isEqual:@{@"parameter": @3015}] && ![parameters isEqual:@{@"parameter": @2025}] && ![parameters isEqual:@{@"parameter": @3002}]) ASAXFail(@"AX read-only attribute guard");
     if (kind != 1 && kind != 2 && kind != 4 && kind != 6) ASAXFail(@"AX read-only request guard");
     NSTimeInterval mark = NSProcessInfo.processInfo.systemUptime;
     id request = [NSClassFromString(@"AXPTranslatorRequest") new];
@@ -82,6 +82,28 @@ static id FrontmostApplication(id connection, ASAXReaderTarget *target, ASDTXRea
     if (!ASAXToken(app) || ![[app valueForKey:@"isApplicationElement"] boolValue])
         ASAXFail(@"AX frontmost application unavailable");
     return app;
+}
+
+static BOOL HasTextEditor(NSDictionary *record) {
+    NSString *type = record[@"attributes"][@"5004"];
+    if (type && [@[@"UITextField", @"UITextView", @"UISearchBarTextField"] containsObject:type]) return YES;
+    for (NSDictionary *child in record[@"children"]) if (HasTextEditor(child)) return YES;
+    return NO;
+}
+
+// On the supported iOS AXP version, application attribute 3002 reads the responder element.
+// A refused optional read leaves focus unknown. Transport and correlation failures still retire the read.
+static NSDictionary *TextResponder(id connection, ASAXReaderTarget *target, ASDTXReadConnectionState *state, id root) {
+    @try {
+        id responder = ReadAttribute(connection, target, state, 2, @{@"parameter": @3002}, root, 63, nil);
+        if (!ASAXToken(responder) || ![[responder valueForKey:@"pid"] isEqual:[root valueForKey:@"pid"]]) return nil;
+        id front = Read(connection, target, state, 4, @{}, nil);
+        if (!ASAXSame(front, root) || ![[front valueForKey:@"isApplicationElement"] boolValue]) return nil;
+        return @{@"pid": [responder valueForKey:@"pid"], @"objectID": [[responder valueForKey:@"objectID"] stringValue]};
+    } @catch (NSException *exception) {
+        if ([exception.name isEqual:@"ObservationSemanticFailure"]) return nil;
+        @throw;
+    }
 }
 
 NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^next)(void (^check)(void)), void (^consume)(NSDictionary *)) {
@@ -146,6 +168,7 @@ NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^ne
         if (!ASAXSelectionMatches(root, after, currentFront) || ![screen isEqual:display()]) ASAXFail(@"AX selection changed");
         mark = ASNativeTimingCollect(timings, @"ax.display_after", mark);
         result = [collection mutableCopy]; result[@"stageTimingsMs"] = timings;
+        if (HasTextEditor(collection[@"tree"])) result[@"textResponder"] = TextResponder(connection, target, state, root);
         [result addEntriesFromDictionary:@{@"display": screen, @"rootStable": @YES, @"selectionStable": @YES}];
         result[@"startedAt"] = @(observedAt); result[@"finishedAt"] = @(NSDate.date.timeIntervalSince1970);
         result[@"receiveBudget"] = [target finishObservation];

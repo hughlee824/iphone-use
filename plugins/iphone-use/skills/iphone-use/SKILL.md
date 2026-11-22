@@ -56,7 +56,7 @@ Screenshot dimensions are pixels; input uses `screen_points`. Map against the im
 
 Read [Runner editing](references/runner-actions.md) for replace/append/clear/selection/keys. Runner has no implicit replace or append. Read [touch paste](references/touch-paste.md) only for an explicit request or concrete direct-input incompatibility/no usable AX target. Language, emoji and length alone do not justify fallback; uncertain input never justifies replay via another method.
 
-**Standard:** read [native text](references/native-text.md) before first text input, prepare its keyboard once, then use fresh field evidence. Read [wheels](references/wheels.md) only for picker-wheel work.
+**Standard:** read [native text](references/native-text.md) before first text input, use the current focused field for a first `type`. The session registers its keyboard on demand. Read [wheels](references/wheels.md) only for picker-wheel work.
 
 ## Evidence and finish
 

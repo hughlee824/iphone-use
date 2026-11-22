@@ -24,7 +24,12 @@ On devices advertising multiple built-in touchscreens, standard mode matches the
 
 In standard mode, the first keyboard-backed `type` or `press` opens a USB/RSD tunnel and registers
 a session-owned keyboard. You can also run `text-prepare` before opening the editor, since
-keyboard attachment can change the layout. Subsequent actions reuse the prepared keyboard.
+keyboard attachment can change the layout. A first `type` on an already focused native field
+can continue in the same call when a docked software keyboard disappears. The host checks
+that the foreground app still reports the same responder at the same bounds, waits for
+stable screenshots, and checks the original field pixels. Clipboard input checks focus and the
+settled screen again after staging and before sending Command-V. Missing or changed focus
+stops the call before key dispatch. Subsequent actions reuse the prepared keyboard.
 `text-prepare --rsd-keyboard` remains a compatibility alias. A connection used only for
 observation or touch leaves the keyboard media stream unopened. After preparation, status
 reports `keyboard.serviceSource=rsd_registered`, `prepared=true` and the assigned service ID.

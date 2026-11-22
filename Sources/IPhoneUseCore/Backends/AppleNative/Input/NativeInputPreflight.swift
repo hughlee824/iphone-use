@@ -21,24 +21,25 @@ struct NativeInputPreflight {
         fieldGuard: NativeTextFieldGuard? = nil, caretGuard: NativeBoundCaretGuard? = nil,
         budget: NativeCaptureBudget? = nil, gestureValidation: NativeGestureValidation? = nil,
         now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        record: ([String: Any]) -> Void = { _ in }, capture: () throws -> CapturedObservation
+        startedAt: TimeInterval? = nil, record: ([String: Any]) -> Void = { _ in },
+        capture: () throws -> CapturedObservation
     ) throws -> (ScreenGuard.Check, Int) {
         try Self(
             screenGuard: screenGuard, displayID: displayID, displayUniqueID: displayUniqueID,
             displayRotation: displayRotation,
             captureSource: captureSource, deadline: deadline, maximumCaptures: maximumCaptures, fieldGuard: fieldGuard,
             caretGuard: caretGuard, budget: budget, gestureValidation: gestureValidation
-        ).run(now: now, record: record, capture: capture)
+        ).run(started: startedAt ?? now(), now: now, record: record, capture: capture)
     }
 
     private func run(
-        now: () -> TimeInterval, record: ([String: Any]) -> Void, capture: () throws -> CapturedObservation
+        started: TimeInterval, now: () -> TimeInterval, record: ([String: Any]) -> Void,
+        capture: () throws -> CapturedObservation
     ) throws -> (ScreenGuard.Check, Int) {
         guard (1...6).contains(maximumCaptures), deadline.isFinite else { throw ScreenGuard.Failure.invalidGuard }
         if gestureValidation != nil, fieldGuard != nil || caretGuard != nil {
             throw ScreenGuard.Failure.invalidGuard
         }
-        let started = now()
         let capturesLimit = fieldGuard == nil ? maximumCaptures : 1
         var actualCaptures = 0
         for attempt in 1...capturesLimit {

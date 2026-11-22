@@ -10,7 +10,8 @@ final class AppleInputAttempt {
     let target: ObservedTarget
     let textInput: NativeTextInput?
     let hid: NativeHIDAdapter
-    let screenGuard: ScreenGuard
+    var screenGuard: ScreenGuard
+    var attachment: NativeKeyboardAttachment?
     let rotation: String
     let swipe: NativeSwipePlan?
     let pinch: NativePinchPlan?
@@ -97,12 +98,7 @@ final class AppleInputAttempt {
             try hid.prepare(displayUniqueID: target.context["displayUniqueID"] as? String)
         }
         if keyboardAction {
-            try screenGuard.validate()
-            guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
-                throw ScreenGuard.Failure.invalidGuard
-            }
-            // Reuse the selected keyboard, then validate the current field before any key.
-            _ = try backend.prepareText()
+            try prepareKeyboardForInput()
         }
         if homeAction {
             try screenGuard.validate()
@@ -130,24 +126,27 @@ final class AppleInputAttempt {
         let budget = try timing.captureBudget(now: ProcessInfo.processInfo.systemUptime)
         inputBudget = budget
         let deadline = budget.requestDeadline
+        let phaseStarted = ProcessInfo.processInfo.systemUptime
+        let focusedFrame = try attachmentFrame(stage: stage, budget: budget)
         let (value, count) = try NativeInputPreflight.check(
             guard: screenGuard,
             displayID: target.context["displayID"] as? UInt64, displayRotation: rotation,
             displayUniqueID: target.context["displayUniqueID"] as? String,
             captureSource: target.context["captureSource"] as? String,
             deadline: deadline,
-            maximumCaptures: 1, fieldGuard: keyboardAction ? target.textFieldGuard : nil,
+            maximumCaptures: 1, fieldGuard: attachment?.fieldGuard ?? (keyboardAction ? target.textFieldGuard : nil),
             caretGuard: keyboardAction ? target.textCaretGuard : nil, budget: budget,
             gestureValidation: try target.gesture.map {
                 try NativeGestureValidation(action: action, gesture: $0)
             },
-            record: { sample in
+            startedAt: phaseStarted, record: { sample in
                 var sample = sample; sample["stage"] = stage
+                if attachment != nil { sample["sameTextResponderConfirmed"] = true }
                 preInputChecks.append(sample)
             },
             capture: {
                 try backend.checkInputAvailability(budget: budget)
-                let frame = try backend.capture(budget: budget)
+                let frame = try focusedFrame ?? backend.capture(budget: budget)
                 backend.diagnosticGuardFrame?(frame.screenshot)
                 return frame
             })
