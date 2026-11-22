@@ -33,9 +33,16 @@ extension AppleDeviceBackend {
         return try AppleInputAttempt(backend: self, action: action, target: target, textInput: textInput)
             .run(onInputStarted: onInputStarted)
     }
-    func prepareText() throws -> [String: Any] { try prepareText(registerRSDKeyboard: false) }
+    func openKeyboardConnection(identifier: String) throws -> NativeTransport {
+        guard let cli, let deviceLock else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
+        let display = try NativeDisplay(cli.read(["device", "info", "displays"]))
+        let tunnel = try KeyboardTunnel(
+            device: cli.device, identifier: identifier, display: display.id, ownership: deviceLock)
+        keyboardTunnel = tunnel
+        return try tunnel.open(pasteboard: false)
+    }
 
-    func prepareText(registerRSDKeyboard: Bool) throws -> [String: Any] {
+    func prepareText() throws -> [String: Any] {
         try cancellation.check()
         let control = controlStatus()
         guard control.available, let hid else {
@@ -45,20 +52,6 @@ extension AppleDeviceBackend {
                 possiblyExecuted: false, requiresObservation: false, result: control.result)
         }
         let alreadyPrepared = hid.keyboardStatus["prepared"] as? Bool == true
-        if registerRSDKeyboard && hid.registeredKeyboard == nil {
-            guard !alreadyPrepared, let cli, let identifier = coreDeviceIdentifier, let ownership = deviceLock else {
-                throw IPhoneUseError(
-                    "native_keyboard_route_conflict", "Select RSD keyboard before preparing any keyboard")
-            }
-            hid.registeredKeyboard = RegisteredKeyboard { [weak self] in
-                guard let self else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
-                let display = try NativeDisplay(cli.read(["device", "info", "displays"]))
-                let tunnel = try KeyboardTunnel(
-                    device: cli.device, identifier: identifier, display: display.id, ownership: ownership)
-                self.keyboardTunnel = tunnel
-                return try tunnel.open(pasteboard: false)
-            }
-        }
         do { try hid.prepareKeyboard() } catch {
             if !alreadyPrepared, hid.registeredKeyboard != nil { keyboardTunnel?.close() }
             throw ActionFailure(

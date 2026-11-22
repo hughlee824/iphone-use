@@ -22,12 +22,12 @@ On devices advertising multiple built-in touchscreens, standard mode matches the
 
 ## Keyboard and clipboard
 
-`text-prepare` discovers one device-advertised CoreDevice keyboard. It does not create or remove a hardware keyboard service, change the input method or focus a field. Cleanup releases this session's keys and connections. Use the returned fresh image to confirm the editor and focus.
-
-To select a session-owned virtual keyboard, run `text-prepare --rsd-keyboard` before the
-first keyboard preparation or text action in a standard USB session. Registration can change
-the visible editor or software keyboard. Inspect the returned screenshot and focus the field
-before typing. Status reports `keyboard.serviceSource=rsd_registered` and the assigned service ID.
+In standard mode, the first keyboard-backed `type` or `press` opens a USB/RSD tunnel and registers
+a session-owned keyboard. You can also run `text-prepare` before opening the editor, since
+keyboard attachment can change the layout. Subsequent actions reuse the prepared keyboard.
+`text-prepare --rsd-keyboard` remains a compatibility alias. A connection used only for
+observation or touch leaves the keyboard media stream unopened. After preparation, status
+reports `keyboard.serviceSource=rsd_registered`, `prepared=true` and the assigned service ID.
 
 This path holds a dedicated USB CoreDeviceProxy userspace tunnel, verifies the RSD device identity
 and starts an owned display stream on that tunnel. The receiver drains video without storing

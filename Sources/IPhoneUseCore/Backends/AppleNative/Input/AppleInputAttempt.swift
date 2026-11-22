@@ -102,7 +102,7 @@ final class AppleInputAttempt {
                 throw ScreenGuard.Failure.invalidGuard
             }
             // Reuse the selected keyboard, then validate the current field before any key.
-            try hid.prepareKeyboard()
+            _ = try backend.prepareText()
         }
         if homeAction {
             try screenGuard.validate()

@@ -113,7 +113,7 @@ struct TextPrepare: ParsableCommand {
              screenshot. Inspect it before typing or Return.
             """
     )
-    @Flag(help: "Register a virtual keyboard through a session-owned USB/RSD connection (standard only).")
+    @Flag(help: "Compatibility option. Standard mode registers its USB/RSD keyboard by default.")
     var rsdKeyboard = false
     @OptionGroup var options: SessionOptions
     @OptionGroup var presentation: AgentOutputOptions

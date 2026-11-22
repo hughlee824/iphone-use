@@ -21,7 +21,6 @@ final class AppleDeviceBackend: SessionBackend {
     var buttonError: String?
     private var hidTransport: NativeTransport?
     var hid: NativeHIDAdapter?
-    private(set) var coreDeviceIdentifier: String?
     var keyboardTunnel: KeyboardTunnel?
     var tunnel: ASPairedTunnel?
     var controlError: String?
@@ -57,7 +56,6 @@ final class AppleDeviceBackend: SessionBackend {
             connection["pairingState"] as? String == "paired", let address = connection["tunnelIPAddress"] as? String,
             let identifier = details["identifier"] as? String
         else { throw CoreDevice.nativeDeviceUnavailable(details) }
-        coreDeviceIdentifier = identifier
         deviceLock = try SessionDeviceLock(root: paths.directory.deletingLastPathComponent(), device: udid)
         cli = AppleDeviceCLI(device: udid, cancellation: cancellation)
         independentMedia = try PreviewCaptureClient(device: udid)
@@ -82,6 +80,10 @@ final class AppleDeviceBackend: SessionBackend {
             let input = makeHID(inputTransport, cancellation)
             let display = try NativeDisplay(cli!.read(["device", "info", "displays"]))
             try input.prepare(displayUniqueID: display.uniqueID)
+            input.registeredKeyboard = RegisteredKeyboard { [weak self] in
+                guard let self else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
+                return try self.openKeyboardConnection(identifier: identifier)
+            }
             hid = input
         } catch { try recordStartupFailure(error) }
         if axpReader != nil {

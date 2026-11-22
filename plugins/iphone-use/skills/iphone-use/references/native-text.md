@@ -2,15 +2,14 @@
 
 Read this once before native text input. Reuse the established executable, execution context, session, keyboard readiness, latest inspected observation and any pending clipboard transaction. Runner uses element references instead.
 
-For an explicit request to register an RSD keyboard, use `text-prepare --rsd-keyboard` on a
-fresh standard USB session before preparing the built-in keyboard. Check for
-`keyboard.serviceSource=rsd_registered`, inspect the resulting layout and use the same
-session for `type`, `press` and `text-finish`. This route holds its own display stream until disconnect and requires an available media session. Verify the
-visible text and preserve uncertain input outcomes.
+Standard mode registers its USB/RSD keyboard on the first keyboard-backed `type`, `press` or
+`text-prepare`. The keyboard holds its own display stream until disconnect and requires an
+available media session. The prepared keyboard handles printable single-line ASCII as key
+reports and Unicode or multiline text as a clipboard paste. Inspect the resulting field.
 
 ## Normal path
 
-1. Before the first input in this session, run `text-prepare --agent-output` if the keyboard is not already prepared. Current builds discover the existing CoreDevice keyboard (`keyboard.serviceSource=coredevice_builtin`) without attaching a hardware keyboard. Inspect the returned Apple PNG; `keyboardPrepared=true` does not confirm focus. Do not prepare keyboards on connections that do not need text.
+1. When keyboard attachment could change the layout, use `text-prepare --agent-output` before opening the editor. Check `keyboard.prepared=true` and `keyboard.serviceSource=rsd_registered`, then inspect the returned Apple PNG. An already focused field can use `type` directly with the current observation and field bounds.
 2. From that new image, open the intended editor or tap the intended field as needed, using `--observe`. Verify the visible field and focus. Use the visible caret/editor state to assess focus, not keyboard visibility alone. Native type does not focus a field for you.
 3. Select the **complete focused field**, in screen points, from the latest image. Map both edges using the returned screen rectangle and the dimensions of the image actually viewed; round outward if necessary. Never crop away text or the caret to pass guards. Use this action's observation directly; no second `text-prepare` is required to bind the field.
 4. If a visible caret can be identified, confirm its narrow bounds with `--caret-rect X,Y,WIDTH,HEIGHT` on this same `oN`, inside the complete `--field-rect` (width <=4, height 8...80 screen points). Include faint/antialiased tips, not adjacent text. This is your visual assertion; iPhone-use constrains it but cannot prove focus. Never invent a box for a hidden caret or cover an ambiguous text stroke. Execute one selected text operation with that observation and `--field-rect`. Standard observations and pre-input checks use Apple PNG. Inspect the attached image even after a nonzero exit or `unknown`; establish the visible result, never repeat text merely because it is unknown.
@@ -35,7 +34,7 @@ For another input, reuse the keyboard and latest inspected observation; re-selec
 
 ## Recover from evidence, once
 
-Older builds that do not report `keyboard.serviceSource=coredevice_builtin` register a hardware keyboard and can hide an app's composer even when prepared before opening it. If preparation leaves the entire editor invisible, stop text input and report the limitation. Do not invent a field rectangle, reuse the old layout, type blindly or repeat preparation. Current builds fail explicitly if no unique built-in keyboard is available; they do not fall back to hardware keyboard registration.
+Registering a hardware keyboard can hide an app's composer. If the editor disappears, inspect the new layout and re-establish focus and field bounds before typing.
 
 - `not_dispatched` means input was not sent. A successful `observation.phase=pre_input_rejection` is the actual rejection frame with a new ID; inspect it instead of capturing again.
 - `agentSummary.comparison.fieldMatch=pixels`, `appearance`, or `caret` means the field matched, not that the whole screen or deadline passed. Read `error`, `mismatches`, `preInputDeadlineExceeded` and stage summaries together. A direct pixel match needs no caret exception.

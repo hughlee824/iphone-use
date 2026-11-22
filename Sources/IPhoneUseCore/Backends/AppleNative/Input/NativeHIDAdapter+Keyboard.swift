@@ -26,7 +26,6 @@ extension NativeHIDAdapter {
             if let registeredKeyboard {
                 keyboardID = try registeredKeyboard.prepare()
             } else {
-                // The default borrows the iOS keyboard to preserve the current composer layout.
                 keyboardID = try NativeKeyboard.builtInService(in: keyboardInventory())
             }
             keyboardReady = true
