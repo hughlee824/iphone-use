@@ -41,31 +41,48 @@ CLI 与插件独立更新。文档描述当前源码；具体版本支持范围�
 
 ## 快速开始
 
-**在 Apple Silicon Mac 上安装 CLI**
+在 Apple Silicon Mac 上任选一种安装方式。CLI 和 Agent 配置好后，直接跳到[安装后首次使用](#安装后首次使用)。
+
+### 让 Agent 安装
+
+把下面的提示词发给这台 Mac 上的 Agent：
+
+```text
+帮我在这台 Mac 上配置 iPhone-use。已有兼容的 CLI 就复用，否则运行 `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`。
+按 https://iphone-use.com/zh/docs/plugins/ 的指南为当前 Agent 配好插件或技能。
+检查 CLI 路径、版本和插件或技能是否可用，告诉我是否需要新开会话。请在连接 iPhone 前停下。
+```
+
+### 手动安装
+
+**1. 安装 CLI。** 在终端运行安装命令。如果安装器提示设置 PATH，先按提示操作，再检查 CLI 的路径和版本。
 
 ```sh
 curl -fsSL https://iphone-use.com/install.sh | /bin/sh
 ```
 
-**也可以把这段提示词复制给当前 agent**
-
-```text
-帮我在这台 Mac 上安装 iPhone-use。已有兼容 CLI 就复用，首次安装请运行 `curl -fsSL https://iphone-use.com/install.sh | /bin/sh`。
-按公开项目 hughlee824/iphone-use 的插件指南，为当前 agent 配好对应的插件或 skill。
-检查并告诉我 CLI 路径、版本、插件或 skill 的安装结果，以及是否需要新开会话。到连接 iPhone 前停下。
-```
-
-也可以通过 Homebrew 或 Release 归档安装。首次连接建议使用标准模式；Runner 签名是独立的可选流程。完整安装与升级步骤见[首次任务](docs/first-task.md)和[安装说明](docs/install.md)。当前插件与通用 skill 要求稳定版 **CLI 0.4.0 或更高版本**，需单独更新；详见[客户端兼容说明](docs/plugins.md#先检查环境)。
-
-### 1. 准备并连接
-
-当前标准模式适配 macOS 27 / iOS 27，已测 Apple Silicon、Xcode 27、iPhone 12 Pro。需要完整 Xcode、设备信任、Developer Mode 和解锁，**不需要开发签名或 Runner setup**。包的最低编译版本不代表完整链路兼容范围。
-
-源码开发运行 `swift build` 后使用 `.build/debug/iphone-use`；本地候选包保留完整目录，将 `bin` 加入 PATH，可在源码目录外使用。
-
 ```sh
 command -v iphone-use
 iphone-use --version
+```
+
+也可以用 Homebrew 安装，或下载并校验 Release 安装包。源码开发者可运行 `swift build` 并使用 `.build/debug/iphone-use`。使用本地候选包时，保留完整目录并将 `bin` 加入 PATH。详见[安装与升级说明](docs/install.md)。
+
+**2. 配置 Agent。** 按所用客户端的说明安装插件或技能，需要时新开会话。插件和通用技能独立于 CLI 更新，要求稳定版 **CLI 0.4.0 或更高版本**。只用命令行时可以跳过这一步。详见 [Agent 接入约定](#agent-接入约定)和[客户端兼容说明](docs/plugins.md#先检查环境)。
+
+### 安装后首次使用
+
+任选一种方式完成安装后，用 USB 连接 iPhone，在手机上信任这台 Mac，开启开发者模式并保持解锁。标准模式需要完整 Xcode，当前适配 macOS 27 / iOS 27，已在 Apple Silicon、Xcode 27 和 iPhone 12 Pro 上测试。只有 Runner 模式需要开发签名和 Runner setup。
+
+**让 Agent 跑第一个任务。** 在客户端调用 iPhone-use 技能，然后发送：
+
+> 请用标准模式打开我 iPhone 上的“设置”，进入“通用”。读取一张新截图，确认已经到达该页面，保持所有设置不变，然后断开你创建的会话。
+
+如果更想在终端亲自操作 iPhone，可以直接使用下面的命令。
+
+#### 1. 准备并连接
+
+```sh
 xcrun --find devicectl
 iphone-use devices
 export IOS_UDID="DEVICE_ID_FROM_DEVICES"
@@ -76,7 +93,7 @@ iphone-use connect --device "$IOS_UDID" --mode standard
 
 发送输入前必须确认 `result.controlAvailable=true`；只有 `ok:true` 可能只是观察会话。不可控时读取 `controlErrorCode`、`controlError` 和 `recovery`，关闭本次会话，解决原因后再显式连接。完整 Xcode 选择、设备授权和媒体占用的处理见[首次检查](docs/install.md)。标准模式的这些问题不需要 Runner setup。
 
-### 2. 观察、操作、验证
+#### 2. 观察、操作、验证
 
 在手机上打开一个适合测试的无害页面，保存 connect 返回的会话：
 
@@ -85,7 +102,7 @@ export SESSION="SESSION_FROM_CONNECT"
 iphone-use --session "$SESSION" observe
 ```
 
-用读图工具打开返回的 PNG。标准模式只有截图观察 ID，例如 `o1`，没有元素引用。根据当前图片选择可见按钮，命令接收**屏幕点坐标**：将原 PNG 中的选点按本次观察的 `screen_points` 矩形换算。例如 `x = screen.x + pixelX × screen.width / imageWidth`，y 同理；不能直接传截图像素或缩放预览坐标，也不能固定除以 3。下方占位符必须替换：
+用读图工具打开返回的 PNG。标准模式会返回截图观察 ID（例如 `o1`）；如果观察结果中有 AX 引用，可用它们查看元素信息。根据当前图片选择可见按钮，命令接收**屏幕点坐标**：将原 PNG 中的选点按本次观察的 `screen_points` 矩形换算。例如 `x = screen.x + pixelX × screen.width / imageWidth`，y 同理；不能直接传截图像素或缩放预览坐标，也不能固定除以 3。下方占位符必须替换：
 
 ```sh
 iphone-use --session "$SESSION" tap OBSERVATION_ID --x POINT_X --y POINT_Y --observe
@@ -95,7 +112,7 @@ iphone-use --session "$SESSION" disconnect
 
 动作回执和截图路径不是成功证明。下一次动作使用新观察；结果 unknown 时先观察，禁止自动重放。开发验收使用普通 Probe，控制其他已安装 App 不要求安装 Probe。
 
-### 可选：使用 Runner
+#### 可选：使用 Runner
 
 需要 XCTest 与可用元素引用的开发者可以选择 Runner。完整发布包使用已有 Apple Development 证书和匹配 profile 重签：
 
@@ -106,7 +123,7 @@ iphone-use connect --device "$IOS_UDID" --mode runner
 
 `setup` 不改默认模式；需要持久使用 Runner 时运行 `iphone-use config set mode runner`。源码开发者按[签名入口](docs/onboarding.md#源码开发入口)运行 `build-runner`，显式安装返回的已签名 Runner App 后，再使用返回的 `.xctestrun` 连接。普通 connect 不会自动安装。Runner 观察可在支持的动作中使用 `oN:eN`；两种模式的操作及文字语义以支持字段和[动作契约](docs/actions.md)为准。
 
-外部 Agent 插件为可选，安装方法见[插件指南](docs/plugins.md)。源码检查与真机验收范围见[测试指南](docs/testing.md)。
+源码检查与真机验收范围见[测试指南](docs/testing.md)。
 
 ## 命令概览
 
@@ -174,6 +191,15 @@ claude plugin install iphone-use@iphone-use
 在新会话中分别调用 Codex 的 `$iphone-use:iphone-use` 或 Claude Code 的 `/iphone-use:iphone-use`。插件共用设备规则，包含只读前置检查、[Codex 动作工具和终端兼容路径](skills/iphone-use/references/codex-calls.md)及 [Claude Code Bash/Read 指引](skills/iphone-use/references/claude-code.md)。它不安装 CLI 或准备签名。Xcode、setup、首个任务和升级步骤见[插件指南](docs/plugins.md)与[完整首次任务路径](docs/first-task.md)。自有 marketplace 分发不代表已进入官方目录。
 
 DeepSeek Harness 可通过同目录中的 `dsh-iphone-use` bundle 接入，复用上述 skill。在 Add plugin 中填写 `dsh-iphone-use` 或 `https://github.com/hughlee824/iphone-use` 即可选择安装来源，验证范围见[DeepSeek Harness 安装](docs/plugins.md#deepseek-harness-安装)。
+
+**通用 skill（Cursor / OpenCode）**
+
+```sh
+npx iphone-use-skill install --agent cursor
+npx iphone-use-skill check --agent cursor
+```
+
+OpenCode 将 `cursor` 换成 `opencode`。默认安装到当前项目的客户端专用目录，重复安装及升级前会检查冲突。Codex、Claude Code 和 DeepSeek Harness 继续使用现有插件。详见[安装范围、更新与冲突处理](docs/plugins.md#通用-skillcursor--opencode)。
 
 仍支持手动将完整 `skills/iphone-use` 复制到客户端 skill 目录（Codex 为 `$CODEX_HOME/skills`，未设置时为 `~/.codex/skills`），在新任务中调用 `$iphone-use`。同时安装了两种形式时，用插件的命名空间调用避免混淆。明确选择源码流程时，前置检查支持 `--source`，连接使用已提供的签名 `.xctestrun`。
 
@@ -283,12 +309,3 @@ CI 没有真实 iPhone。涉及设备行为的改动还需重新构建 Runner，
 ## 许可证
 
 [MIT](LICENSE) © iPhone-use contributors。
-
-### 通用 skill（Cursor / OpenCode）
-
-```sh
-npx iphone-use-skill install --agent cursor
-npx iphone-use-skill check --agent cursor
-```
-
-OpenCode 将 `cursor` 换成 `opencode`。默认安装到当前项目的客户端专用目录，重复安装及升级前会检查冲突。Codex、Claude Code 和 DeepSeek Harness 继续使用现有插件。详见[安装范围、更新与冲突处理](docs/plugins.md#通用-skillcursor--opencode)。
