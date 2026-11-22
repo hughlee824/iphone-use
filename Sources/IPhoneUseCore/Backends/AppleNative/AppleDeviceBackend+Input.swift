@@ -46,13 +46,15 @@ extension AppleDeviceBackend {
         }
         let alreadyPrepared = hid.keyboardStatus["prepared"] as? Bool == true
         if registerRSDKeyboard && hid.registeredKeyboard == nil {
-            guard !alreadyPrepared, let device = cli?.device, let ownership = deviceLock else {
+            guard !alreadyPrepared, let cli, let identifier = coreDeviceIdentifier, let ownership = deviceLock else {
                 throw IPhoneUseError(
                     "native_keyboard_route_conflict", "Select RSD keyboard before preparing any keyboard")
             }
             hid.registeredKeyboard = RegisteredKeyboard { [weak self] in
                 guard let self else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
-                let tunnel = try KeyboardTunnel(device: device, ownership: ownership)
+                let display = try NativeDisplay(cli.read(["device", "info", "displays"]))
+                let tunnel = try KeyboardTunnel(
+                    device: cli.device, identifier: identifier, display: display.id, ownership: ownership)
                 self.keyboardTunnel = tunnel
                 return try tunnel.open(pasteboard: false)
             }

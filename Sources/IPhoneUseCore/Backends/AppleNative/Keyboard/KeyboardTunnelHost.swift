@@ -5,11 +5,14 @@ import AppleNativeBridge
 // MobileDevice can block inside its C ABI. The child owns only USB/RSD and hands the
 // connected HID descriptor to the session. The parent does all service I/O itself.
 public enum KeyboardTunnelHost {
-    public static func run(device: String) throws {
+    public static func run(device: String, identifier: String, display: UInt64) throws {
         try InheritedDeviceLock.validate(device: device)
         signal(SIGPIPE, SIG_IGN)
         alarm(16)
-        guard ASProvideKeyboardPort(device) else {
+        let media = KeyboardMediaSession(identifier: identifier, display: display)
+        guard ASProvideKeyboardPort(device, { endpoint in
+            do { try media.start(endpoint); return nil } catch { return String(describing: error) }
+        }, { media.close() }) else {
             throw IPhoneUseError("native_keyboard_tunnel", "RSD keyboard tunnel did not close cleanly")
         }
     }
@@ -21,7 +24,7 @@ final class KeyboardTunnel {
     private var launched = false
     private var closed = false
 
-    init(device: String, ownership: SessionDeviceLock) throws {
+    init(device: String, identifier: String, display: UInt64, ownership: SessionDeviceLock) throws {
         var descriptors: [Int32] = [-1, -1]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0 else {
             throw IPhoneUseError("native_keyboard_tunnel", "Cannot open keyboard helper socket")
@@ -32,7 +35,9 @@ final class KeyboardTunnel {
         else { throw IPhoneUseError("native_keyboard_tunnel", "Cannot isolate keyboard helper descriptors") }
         let lease = try ownership.inheritedLease(for: device)
         process.executableURL = Bundle.main.executableURL
-        process.arguments = ["_keyboard-tunnel", "--device", device]
+        process.arguments = [
+            "_keyboard-tunnel", "--device", device, "--identifier", identifier, "--display", String(display)
+        ]
         process.standardInput = lease
         process.standardOutput = child
         process.standardError = FileHandle.nullDevice
@@ -48,7 +53,7 @@ final class KeyboardTunnel {
         guard !closed else { return exitedCleanly }
         closed = true
         try? parent.close()
-        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        let deadline = ProcessInfo.processInfo.systemUptime + 32
         while process.isRunning && ProcessInfo.processInfo.systemUptime < deadline {
             Thread.sleep(forTimeInterval: 0.01)
         }

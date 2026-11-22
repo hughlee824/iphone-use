@@ -30,14 +30,17 @@ the visible editor or software keyboard. Inspect the returned screenshot and foc
 before typing. Status reports `keyboard.serviceSource=rsd_registered` and the assigned service ID.
 
 This path holds a dedicated USB CoreDeviceProxy userspace tunnel, verifies the RSD device identity
-and opens the advertised HID port. The host performs the service RemoteXPC handshake, reads replies
-and requests service ID `0x100002001`. It verifies its unique keyboard in the inventory before use.
+and starts an owned display stream on that tunnel. The receiver drains video without storing
+frames. After a settling interval and receipt of RTP from the negotiated source, it opens
+the advertised HID port. The host performs the service RemoteXPC handshake, reads replies
+and requests service ID `0x100002001`. It verifies its keyboard by its unique name or by matching the assigned ID in the create reply to the sole new inventory entry.
 For Chinese or explicit paste, a second RemoteXPC socket on the same tunnel writes the general
 pasteboard under the usual backup and restoration rules. Modifier-down, Command-V and key release
 all use the original HID socket. Disconnect removes only the verified session keyboard.
 A lost registration reply or unconfirmed removal is reported as uncertain.
 
-The RSD keyboard route currently opens no media stream. Check the actual editor after dispatch:
+Disconnect also stops the display stream by its verified session identity. An existing media
+session prevents preparation. Check the actual editor after dispatch:
 the device can accept the connection and reports while the focused app receives no text.
 The initial standard session and its observation checks still use the regular standard backend.
 

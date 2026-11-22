@@ -21,6 +21,7 @@ final class AppleDeviceBackend: SessionBackend {
     var buttonError: String?
     private var hidTransport: NativeTransport?
     var hid: NativeHIDAdapter?
+    private(set) var coreDeviceIdentifier: String?
     var keyboardTunnel: KeyboardTunnel?
     var tunnel: ASPairedTunnel?
     var controlError: String?
@@ -56,6 +57,7 @@ final class AppleDeviceBackend: SessionBackend {
             connection["pairingState"] as? String == "paired", let address = connection["tunnelIPAddress"] as? String,
             let identifier = details["identifier"] as? String
         else { throw CoreDevice.nativeDeviceUnavailable(details) }
+        coreDeviceIdentifier = identifier
         deviceLock = try SessionDeviceLock(root: paths.directory.deletingLastPathComponent(), device: udid)
         cli = AppleDeviceCLI(device: udid, cancellation: cancellation)
         independentMedia = try PreviewCaptureClient(device: udid)

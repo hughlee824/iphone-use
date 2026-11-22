@@ -36,7 +36,7 @@ struct Flow {
     uint8_t tx[TX], rx[RX], present[RX];
 };
 struct Fragment {
-    bool used, last;
+    bool used, last; uint8_t protocol;
     uint32_t id;
     uint64_t born;
     size_t total, have, high;
@@ -46,6 +46,7 @@ struct RejectedFragment { bool used; uint32_t id; uint64_t until; };
 struct DeviceIP {
     uint8_t local[16], remote[16];
     DeviceIPOutput output; void *context;
+    uint16_t udpPort; DeviceIPDatagram datagram;
     bool failed; size_t count; uint64_t flowLifetime;
     unsigned packets, fragmented, reassembled, retransmits;
     struct Flow flows[FLOWS];
@@ -63,8 +64,8 @@ static uint32_t r32(const uint8_t *p) { return (uint32_t)r16(p)*65536+r16(p+2); 
 static void w16(uint8_t *p,uint16_t v) { p[0]=v>>8;p[1]=v; }
 static void w32(uint8_t *p,uint32_t v) { w16(p,v>>16);w16(p+2,v); }
 static bool before(uint32_t a,uint32_t b) { return (int32_t)(a-b)<0; }
-static uint16_t checksum(const uint8_t *src,const uint8_t *dst,const uint8_t *tcp,size_t n) {
-    uint32_t s=(uint32_t)n+6;
+static uint16_t checksum(const uint8_t *src,const uint8_t *dst,const uint8_t *tcp,size_t n,uint8_t protocol) {
+    uint32_t s=(uint32_t)n+protocol;
     for(size_t i=0;i<16;i+=2) s+=r16(src+i)+r16(dst+i);
     for(size_t i=0;i<n;i+=2) s+=(uint16_t)tcp[i]*256+(i+1<n?tcp[i+1]:0);
     while(s>>16) s=(s&65535)+(s>>16);
@@ -80,7 +81,7 @@ static bool emit(DeviceIP *s,struct Flow *f,uint32_t seq,uint8_t flags,const uin
     p[52]=(h/4)<<4;p[53]=flags;w16(p+54,(uint16_t)(65535-(f->rnext-f->base)));
     if(flags&SYN) {p[60]=2;p[61]=4;w16(p+62,1200);}
     if(n) { memcpy(p+40+h,data,n); f->lastDataAt=now(); }
-    w16(p+56,checksum(s->local,s->remote,p+40,h+n));
+    w16(p+56,checksum(s->local,s->remote,p+40,h+n,6));
     #ifdef TRACE_TCP
     fprintf(stderr,"TX seq=%u ack=%u flags=%u len=%zu win=%u base=%u\n",seq,f->rnext,flags,n,r16(p+54),f->base);
 #endif
@@ -129,7 +130,7 @@ static void retransmit(DeviceIP *s,struct Flow *f) {
     else if(f->fin&&!f->finacked) emit(s,f,f->finseq,ACK|FIN,NULL,0);
 }
 static void tcp_input(DeviceIP *s,const uint8_t *p,size_t n) {
-    if(n<20||checksum(s->remote,s->local,p,n)) return;
+    if(n<20||checksum(s->remote,s->local,p,n,6)) return;
     size_t h=(p[12]>>4)*4; if(h<20||h>n) return;
     uint8_t flags=p[13];uint32_t seq=r32(p+4),a=r32(p+8);size_t len=n-h;
     struct Flow *f=NULL;
@@ -206,11 +207,20 @@ static void reject_fragment(DeviceIP *s,struct Fragment *f) {
     // Never forget a live denial to admit potentially overlapping bytes.
     s->failed=true;
 }
+void device_ip_receive_udp(DeviceIP *s,uint16_t port,DeviceIPDatagram receive) {
+    s->udpPort=port; s->datagram=receive;
+}
+static void transport_input(DeviceIP *s,uint8_t protocol,const uint8_t *p,size_t n) {
+    if(protocol==6) {tcp_input(s,p,n);return;}
+    if(protocol==17 && s->datagram && n>=8 && r16(p+2)==s->udpPort && r16(p+4)==n
+        && r16(p+6) && !checksum(s->remote,s->local,p,n,17))
+        s->datagram(s->context,r16(p),p+8,n-8);
+}
 static void fragment_input(DeviceIP *s,const uint8_t *p,size_t n) {
-    if(n<8||p[0]!=6)return;
+    if(n<8||(p[0]!=6 && !(p[0]==17 && s->datagram)))return;
     size_t off=r16(p+2)&0xfff8, len=n-8;bool more=p[3]&1;
     if(!len||off+len>65535||(more&&len%8))return;
-    if(!off&&!more) {tcp_input(s,p+8,len);return;}
+    if(!off&&!more) {transport_input(s,p[0],p+8,len);return;}
     uint32_t id=r32(p+4);
     for(size_t i=0;i<64;i++)if(s->rejected[i].used&&s->rejected[i].id==id&&now()<s->rejected[i].until)return;
     struct Fragment *f=NULL,*empty=NULL,*oldest=NULL;
@@ -225,14 +235,15 @@ static void fragment_input(DeviceIP *s,const uint8_t *p,size_t n) {
         // Under resource pressure discard the oldest incomplete datagram; TCP may retransmit it.
         // Denied IDs have separate bounded metadata; never reuse them before expiry.
         if(!empty){if(!oldest)return;memset(oldest,0,sizeof(*oldest));empty=oldest;}
-        f=empty;f->used=true;f->id=id;f->born=now();}
+        f=empty;f->used=true;f->id=id;f->protocol=p[0];f->born=now();}
+    if(f->protocol!=p[0]){reject_fragment(s,f);return;}
     if((f->last&&off+len>f->total)||(!more&&((f->last&&f->total!=off+len)||f->high>off+len))) {reject_fragment(s,f);return;}
     // RFC 8200: overlapping IPv6 fragments discard the entire datagram.
     for(size_t i=off;i<off+len;i++)if(f->present[i]){reject_fragment(s,f);return;}
     memcpy(f->bytes+off,p+8,len);memset(f->present+off,1,len);f->have+=len;
     if(off+len>f->high)f->high=off+len;
     if(!more){f->last=true;f->total=off+len;}
-    if(f->last&&f->have==f->total){s->reassembled++;tcp_input(s,f->bytes,f->total);memset(f,0,sizeof(*f));}
+    if(f->last&&f->have==f->total){s->reassembled++;transport_input(s,f->protocol,f->bytes,f->total);memset(f,0,sizeof(*f));}
 }
 bool device_ip_input(DeviceIP *s,const void *raw,size_t n) {
     if(!s||!raw||n<40||n>65535)return false;
@@ -240,9 +251,9 @@ bool device_ip_input(DeviceIP *s,const void *raw,size_t n) {
     if(p[0]>>4!=6||40+(size_t)r16(p+4)!=n)return false;
     if(memcmp(p+8,s->remote,16)||memcmp(p+24,s->local,16))return true;
     s->packets++;
-    if(p[6]==6)tcp_input(s,p+40,n-40);
+    if(p[6]==6||p[6]==17)transport_input(s,p[6],p+40,n-40);
     else if(p[6]==44){s->fragmented++;fragment_input(s,p+40,n-40);}
-    // No routing, IPv4, UDP, ICMP, or extension-header chains in this experiment.
+    // No routing, IPv4, ICMP, or extension-header chains in this experiment.
     return !s->failed;
 }
 bool device_ip_tick(DeviceIP *s) {

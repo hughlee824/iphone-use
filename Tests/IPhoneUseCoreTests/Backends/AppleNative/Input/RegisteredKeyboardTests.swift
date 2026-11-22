@@ -7,6 +7,7 @@ private final class RegistrationTransport: NativeTransport {
     var services: [[String: Any]] = []
     var creations = 0, removals = 0
     var reports: [Data] = []
+    var normalizedProduct: String?
     var loseCreateReply = false
     var closed = false
 
@@ -19,7 +20,8 @@ private final class RegistrationTransport: NativeTransport {
         let id = try XCTUnwrap(service["_ServiceID"] as? ASNativeUnsigned).value
         XCTAssertEqual(id, 0x100002001)
         creations += 1
-        services.append(["_ServiceID": id, "Product": try XCTUnwrap(service["Product"])])
+        let product = try XCTUnwrap(service["Product"] as? String)
+        services.append(["_ServiceID": id, "Product": normalizedProduct ?? product])
         if loseCreateReply { throw KeyboardXPC.invalid }
         return ["serviceID": id]
     }
@@ -75,6 +77,17 @@ final class RegisteredKeyboardTests: XCTestCase {
         secondTransport.services = occupied
         XCTAssertEqual(second.close()["keyboardRemoveAcknowledged"] as? Bool, false)
         XCTAssertEqual(secondTransport.removals, 0)
+    }
+
+    func testNormalizedInventoryBindsNewIDToCreateReceiptAndRechecksBeforeRemoval() throws {
+        let transport = RegistrationTransport()
+        transport.normalizedProduct = "Keyboard"
+        let keyboard = RegisteredKeyboard { transport }
+        XCTAssertEqual(try keyboard.prepare(), RegisteredKeyboard.requestedID)
+        XCTAssertFalse(keyboard.inventoryVerified)
+        transport.services[0]["Product"] = "replacement"
+        XCTAssertEqual(keyboard.close()["keyboardRemoveAcknowledged"] as? Bool, false)
+        XCTAssertEqual(transport.removals, 0)
     }
 
     func testCreateReplyLostNeverRegistersAgainOrSendsKeys() {

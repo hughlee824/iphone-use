@@ -17,6 +17,9 @@ static uint16_t Read16(const uint8_t *p) { return ((uint16_t)p[0] << 8) | p[1]; 
     NSData *_localAddress, *_remoteAddress;
     NSMutableArray<NSDictionary *> *_pending;
     DeviceIP *_stack;
+    uint16_t _rtpSource, _receiverPort;
+    uint32_t _rtpSSRC;
+    NSUInteger _rtpCount;
     NSUInteger _streamCount;
     NSMutableData *_input;
     dispatch_group_t _worker;
@@ -61,6 +64,7 @@ static uint16_t Read16(const uint8_t *p) { return ((uint16_t)p[0] << 8) | p[1]; 
         || [reply[@"serverRSDPort"] integerValue] <= 0 || [reply[@"serverRSDPort"] integerValue] > 65535
         || ![client[@"mtu"] isKindOfClass:NSNumber.class] || [client[@"mtu"] integerValue] < 1280) ASDeviceTransportFail(@"Device USB endpoint invalid");
     _localAddress = [NSData dataWithBytes:&local length:16]; _remoteAddress = [NSData dataWithBytes:&remote length:16];
+    _localIP = [client[@"address"] copy]; _deviceIP = [reply[@"serverAddress"] copy];
     _discoveryPort = [reply[@"serverRSDPort"] unsignedShortValue];
     [_input replaceBytesInRange:NSMakeRange(0, expected) withBytes:NULL length:0];
     ASNativeTimingMark(@"tunnel.handshake", mark);
@@ -84,15 +88,43 @@ static uint16_t Read16(const uint8_t *p) { return ((uint16_t)p[0] << 8) | p[1]; 
 static bool Output(void *context, const void *bytes, size_t count) {
     return [(__bridge ASCoreDeviceTunnel *)context output:[NSData dataWithBytes:bytes length:count]];
 }
+- (uint16_t)openMediaReceiver {
+    @synchronized(self) {
+        if (_closed || _failed || !_sessionLifetime || _receiverPort) ASDeviceTransportFail(@"Media endpoint unavailable");
+        _receiverPort = 49152 + arc4random_uniform(16384);
+        return _receiverPort;
+    }
+}
+- (void)receiveVideo:(const uint8_t *)bytes length:(size_t)count port:(uint16_t)port {
+    if (count < 12 || bytes[0] >> 6 != 2 || (bytes[1] >= 192 && bytes[1] <= 223)) return;
+    uint32_t ssrc; memcpy(&ssrc, bytes + 8, sizeof(ssrc)); ssrc = ntohl(ssrc);
+    @synchronized(self) {
+        if (_rtpSource != port || _rtpSSRC != ssrc) _rtpCount = 0;
+        _rtpSource = port; _rtpSSRC = ssrc; _rtpCount++;
+    }
+}
+- (NSUInteger)receivedFromPort:(uint16_t)port ssrc:(uint32_t)ssrc {
+    @synchronized(self) { return !_closed && !_failed && port == _rtpSource && ssrc == _rtpSSRC ? _rtpCount : 0; }
+}
+static void Datagram(void *context, uint16_t port, const uint8_t *bytes, size_t count) {
+    [(__bridge ASCoreDeviceTunnel *)context receiveVideo:bytes length:count port:port];
+}
 - (void)pump {
     NSTimeInterval deadline = NSProcessInfo.processInfo.systemUptime + (_sessionLifetime ? INFINITY : 22);
     @try {
         _stack = device_ip_create(_localAddress.bytes, _remoteAddress.bytes, Output, (__bridge void *)self);
         if (!_stack) ASDeviceTransportFail(@"Native network stack initialization failed");
         if (_sessionLifetime) device_ip_use_session_lifetime(_stack);
+        BOOL receivingUDP = NO;
         while (NSProcessInfo.processInfo.systemUptime < deadline) {
             @autoreleasepool {
-                @synchronized(self) { if (_closed) break; }
+                @synchronized(self) {
+                    if (_closed) break;
+                    if (_receiverPort && !receivingUDP) {
+                        device_ip_receive_udp(_stack, _receiverPort, Datagram);
+                        receivingUDP = YES;
+                    }
+                }
                 while (YES) {
                     NSDictionary *stream;
                     @synchronized(self) {

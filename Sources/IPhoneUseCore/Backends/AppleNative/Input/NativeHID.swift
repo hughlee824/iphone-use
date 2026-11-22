@@ -122,6 +122,10 @@ final class NativeHIDAdapter {
             result["requestedServiceID"] = RegisteredKeyboard.requestedID
             result["serviceID"] = registeredKeyboard.serviceID
             result["transport"] = "usb_userspace_rsd"
+            if keyboardReady {
+                result["mediaRTPConfirmedAtPrepare"] = true
+                result["registrationVerification"] = registeredKeyboard.inventoryVerified ? "inventory" : "create_reply"
+            }
         }
         return result
     }

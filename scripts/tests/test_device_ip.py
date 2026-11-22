@@ -39,7 +39,7 @@ class DeviceIPTests(unittest.TestCase):
         # This mutation escaped the old self-generated fixtures. Compilation failure is not a pass.
         directory = Path(self.temporary.name)
         source = (SOURCE / "DeviceIP.c").read_text()
-        original = "uint32_t s=(uint32_t)n+6;\n    for(size_t i=0;i<16;i+=2) s+=r16(src+i)+r16(dst+i);"
+        original = "uint32_t s=(uint32_t)n+protocol;\n    for(size_t i=0;i<16;i+=2) s+=r16(src+i)+r16(dst+i);"
         self.assertIn(original, source)
         (directory / "mutant.c").write_text(source.replace(original, "uint32_t s=0; (void)src; (void)dst;"))
         fixture = (ROOT / "Tests/NativeTransport/DeviceIPTests.c").read_text()
@@ -67,7 +67,7 @@ class DeviceIPTests(unittest.TestCase):
                      "persist", "reset", "fin", "closed-drain", "window", "fuzz", "invalid", "timeout",
                      "budget", "slow-rtt", "bulk", "bulk-loss", "multi-flow", "cancel", "fragment-pool", "denial-budget", "idle-window",
                      "state-sequences", "syn-window", "deadline-3-1", "deadline-3-2",
-                     "deadline-4-2", "deadline-8-3", "deadline-16-4", "deadline-16-5", "session-idle-data", "session-fragment-expiry"):
+                     "deadline-4-2", "deadline-8-3", "deadline-16-4", "deadline-16-5", "session-idle-data", "session-fragment-expiry", "session-udp"):
             with self.subTest(mode=mode):
                 result = subprocess.run([str(self.binary), mode], capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -6,7 +6,7 @@
 // The production helper and descriptor receiver run in separate processes. Only
 // the provider that would normally contact MobileDevice/RSD is substituted.
 @implementation ASDeviceServiceTransport {
-    BOOL _refusePasteboard;
+    BOOL _refusePasteboard, _mediaStarted;
     int _hidPeer, _boardPeer;
 }
 - (instancetype)initWithUDID:(NSString *)device sessionLifetime:(BOOL)sessionLifetime {
@@ -17,7 +17,12 @@
     }
     return self;
 }
+- (ASKeyboardMediaEndpoint *)openKeyboardMedia {
+    assert(!_mediaStarted); _mediaStarted = YES;
+    return (ASKeyboardMediaEndpoint *)self;
+}
 - (int)openKeyboardService:(BOOL)pasteboard {
+    assert(_mediaStarted);
     if (pasteboard && _refusePasteboard)
         @throw [NSException exceptionWithName:@"Test" reason:@"Pasteboard unavailable" userInfo:nil];
     int pair[2]; assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
@@ -39,7 +44,9 @@
 int main(int argc, char **argv) { @autoreleasepool {
     assert(argc == 3);
     if (strcmp(argv[1], "provider") == 0)
-        return ASProvideKeyboardPort(@(argv[2])) ? 0 : 1;
+        return ASProvideKeyboardPort(@(argv[2]), ^NSString *(ASKeyboardMediaEndpoint *media) {
+            assert(media != nil); return nil;
+        }, ^BOOL{ return YES; }) ? 0 : 1;
     NSError *error = nil;
     assert(write(STDIN_FILENO, "H", 1) == 1);
     int hid = ASReceiveKeyboardPort(STDIN_FILENO, &error);

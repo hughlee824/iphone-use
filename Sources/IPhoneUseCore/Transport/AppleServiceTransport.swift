@@ -15,6 +15,7 @@ extension NativeChannel { var diagnostics: [String: Any] { [:] } }
 final class AppleRemoteChannel: NativeChannel {
     var diagnostics: [String: Any] { channel.diagnostics as? [String: Any] ?? [:] }
     private let channel: ASNativeChannel
+    init(channel: ASNativeChannel) { self.channel = channel }
     init(tunnel: ASPairedTunnel, service: String) throws { channel = try tunnel.openService(service) }
     func request(_ message: [String: Any], completion: @escaping ([String: Any]?, Error?) -> Void) {
         channel.request(message) { reply, error in completion(reply as? [String: Any], error) }

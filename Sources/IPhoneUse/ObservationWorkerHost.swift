@@ -12,5 +12,7 @@ struct ObservationWorkerHost: ParsableCommand {
 struct KeyboardTunnelCommand: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "_keyboard-tunnel", shouldDisplay: false)
     @Option var device: String
-    mutating func run() throws { try KeyboardTunnelHost.run(device: device) }
+    @Option var identifier: String
+    @Option var display: UInt64
+    mutating func run() throws { try KeyboardTunnelHost.run(device: device, identifier: identifier, display: display) }
 }

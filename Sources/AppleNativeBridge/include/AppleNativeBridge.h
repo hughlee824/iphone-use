@@ -52,7 +52,14 @@ FOUNDATION_EXPORT BOOL ASReadDeviceLog(NSString *udid, void (^ready)(void),
 FOUNDATION_EXPORT NSDictionary * _Nullable ASReadAXSnapshot(NSString *udid, NSError **error);
 FOUNDATION_EXPORT NSDictionary * _Nullable ASAXDisplayGeometry(NSDictionary *info, NSError **error);
 // Session-owned USB/RSD keyboard tunnel. The caller owns the received service descriptor.
-FOUNDATION_EXPORT BOOL ASProvideKeyboardPort(NSString *udid);
+@interface ASKeyboardMediaEndpoint : NSObject
+@property(nonatomic, readonly) ASNativeChannel *channel;
+@property(nonatomic, readonly) NSString *localAddress, *deviceAddress;
+@property(nonatomic, readonly) uint16_t receiverPort;
+- (NSUInteger)receivedFromPort:(uint16_t)port ssrc:(uint32_t)ssrc;
+@end
+FOUNDATION_EXPORT BOOL ASProvideKeyboardPort(NSString *udid,
+    NSString * _Nullable (^startMedia)(ASKeyboardMediaEndpoint *), BOOL (^stopMedia)(void));
 FOUNDATION_EXPORT int ASReceiveKeyboardPort(int control, NSError * _Nullable * _Nullable error) __attribute__((swift_error(none)));
 NS_ASSUME_NONNULL_END
 

@@ -23,7 +23,7 @@ static void ReportOpenFailure(NSException *exception) {
     write(STDOUT_FILENO, reason.bytes, MIN(reason.length, 512));
 }
 
-BOOL ASProvideKeyboardPort(NSString *udid) {
+BOOL ASProvideKeyboardPort(NSString *udid, NSString *(^startMedia)(ASKeyboardMediaEndpoint *), BOOL (^stopMedia)(void)) {
     ASDeviceServiceTransport *provider;
     BOOL orderly = NO, released = NO;
     @try {
@@ -35,7 +35,11 @@ BOOL ASProvideKeyboardPort(NSString *udid) {
             if (count < 0 && errno == EINTR) continue;
             if (count != 1) { orderly = count == 0; break; }
             if ((command == 'H' && !openedHID) || (command == 'P' && openedHID && !openedPasteboard)) {
-                alarm(16);
+                alarm(command == 'H' ? 32 : 16);
+                if (command == 'H') {
+                    NSString *error = startMedia([provider openKeyboardMedia]);
+                    if (error) @throw [NSException exceptionWithName:@"KeyboardMedia" reason:error userInfo:nil];
+                }
                 int port;
                 @try {
                     port = [provider openKeyboardService:command == 'P'];
@@ -58,8 +62,9 @@ BOOL ASProvideKeyboardPort(NSString *udid) {
     } @catch (NSException *exception) {
         ReportOpenFailure(exception);
     } @finally {
-        alarm(4);
-        released = [provider close];
+        alarm(32);
+        BOOL mediaStopped = stopMedia();
+        released = [provider close] && mediaStopped;
     }
     return orderly && released;
 }
@@ -72,7 +77,7 @@ int ASReceiveKeyboardPort(int control, NSError **error) {
         .msg_control = storage.bytes, .msg_controllen = sizeof(storage.bytes) };
     ssize_t count = -1;
     struct pollfd poller = {control, POLLIN, 0};
-    NSTimeInterval deadline = NSProcessInfo.processInfo.systemUptime + 16;
+    NSTimeInterval deadline = NSProcessInfo.processInfo.systemUptime + 32;
     while (NSProcessInfo.processInfo.systemUptime < deadline) {
         int ready = poll(&poller, 1, (int)MAX(0, (deadline - NSProcessInfo.processInfo.systemUptime) * 1000));
         if (ready < 0 && errno == EINTR) continue;

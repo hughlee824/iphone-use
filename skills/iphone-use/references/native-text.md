@@ -5,7 +5,7 @@ Read this once before native text input. Reuse the established executable, execu
 For an explicit request to register an RSD keyboard, use `text-prepare --rsd-keyboard` on a
 fresh standard USB session before preparing the built-in keyboard. Check for
 `keyboard.serviceSource=rsd_registered`, inspect the resulting layout and use the same
-session for `type`, `press` and `text-finish`. This route opens no media stream. Verify the
+session for `type`, `press` and `text-finish`. This route holds its own display stream until disconnect and requires an available media session. Verify the
 visible text and preserve uncertain input outcomes.
 
 ## Normal path

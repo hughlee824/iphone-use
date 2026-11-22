@@ -8,6 +8,8 @@ final class RegisteredKeyboard {
     static let requestedID: UInt64 = 0x100002001
     private let product = "iPhone-use keyboard " + UUID().uuidString
     private var transport: NativeTransport?
+    private var registeredEntry: NSDictionary?
+    private(set) var inventoryVerified = false
     private var attempted = false
     private(set) var registrationMayExist = false
     private(set) var serviceID: UInt64?
@@ -43,9 +45,21 @@ final class RegisteredKeyboard {
             } else { id = Self.requestedID }
             guard !before.contains(where: { identifier($0["_ServiceID"]) == id }) else { throw KeyboardXPC.invalid }
             Thread.sleep(forTimeInterval: 0.3)
-            guard owns(id, in: try inventory(channel)) else {
-                throw IPhoneUseError("native_keyboard_ownership_unknown", "Device did not list the registered keyboard")
+            let after = try inventory(channel)
+            let listed = after.filter { identifier($0["_ServiceID"]) == id }
+            // The device may normalize Product. Bind its explicit create receipt to the
+            // single inventory addition on this same exclusive HID connection.
+            let prior = Set(before.compactMap { identifier($0["_ServiceID"]) })
+            let additions = after.filter { !prior.contains(identifier($0["_ServiceID"]) ?? 0) }
+            let matchedName = owns(id, in: after)
+            let receipt = identifier(response["serviceID"]) == id && listed.count == 1 && additions.count == 1
+                && after.count == before.count + 1
+            guard matchedName || receipt else {
+                throw IPhoneUseError(
+                    "native_keyboard_ownership_unknown", "Cannot bind create reply to a new HID service")
             }
+            inventoryVerified = matchedName
+            registeredEntry = listed.first as NSDictionary?
             serviceID = id
             return id
         } catch { channel.cancel(); throw error }
@@ -63,7 +77,9 @@ final class RegisteredKeyboard {
         if let transport, let serviceID {
             do {
                 let current = try inventory(transport)
-                if owns(serviceID, in: current) {
+                let listed = current.filter { identifier($0["_ServiceID"]) == serviceID }
+                let sameReceipt = !inventoryVerified && listed.count == 1 && registeredEntry?.isEqual(listed[0]) == true
+                if owns(serviceID, in: current) || sameReceipt {
                     try transport.send(envelope(["removeService": ["_0": nativeUInt(serviceID)]]), timeout: 3)
                     let remaining = try inventory(transport)
                     registrationMayExist = remaining.contains { identifier($0["_ServiceID"]) == serviceID }
@@ -89,7 +105,11 @@ final class RegisteredKeyboard {
     }
     private func owns(_ id: UInt64, in inventory: [[String: Any]]) -> Bool {
         let matches = inventory.filter { identifier($0["_ServiceID"]) == id }
-        return matches.count == 1 && matches[0]["Product"] as? String == product
+        guard matches.count == 1 else { return false }
+        let service = matches[0]
+        let storage = service["_CoreDevice_codablePropertyStorage"] as? [String: Any]
+        let name = (storage?["Product"] as? [String: String])?["string"]
+        return (service["Product"] as? String ?? name) == product
     }
 
     private var descriptor: [String: Any] {

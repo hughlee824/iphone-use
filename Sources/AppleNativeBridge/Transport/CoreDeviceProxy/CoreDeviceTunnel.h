@@ -9,6 +9,9 @@ FOUNDATION_EXPORT void ASDeviceTransportFail(NSString *reason);
 - (instancetype)initWithUDID:(NSString *)udid;
 - (instancetype)initWithUDID:(NSString *)udid sessionLifetime:(BOOL)sessionLifetime;
 @property(nonatomic, readonly) uint16_t discoveryPort;
+@property(nonatomic, readonly) NSString *localIP, *deviceIP;
+- (uint16_t)openMediaReceiver;
+- (NSUInteger)receivedFromPort:(uint16_t)port ssrc:(uint32_t)ssrc;
 - (int)connectPort:(uint16_t)port; // returned descriptor is owned by the caller; <= 4 streams total
 - (BOOL)close;
 @end
