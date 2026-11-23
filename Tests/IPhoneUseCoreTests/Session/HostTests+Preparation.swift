@@ -68,6 +68,11 @@ extension HostTests {
             ]
             let response = try call(paths, session: session, op: "type-with-method", fields: fields)
             XCTAssertEqual(response["outcome"] as? String, "unknown")
+            let observation = try XCTUnwrap(response["observation"] as? [String: Any])
+            XCTAssertEqual(observation["ok"] as? Bool, true)
+            XCTAssertNil(observation["stability"])
+            XCTAssertEqual(backend.postActionObserveCount, 0)
+            XCTAssertEqual(backend.observeCount, index + 2)
             XCTAssertEqual(backend.lastTextMode, mode)
             XCTAssertEqual(backend.inputCount, index + 1)
             let stale = try call(paths, session: session, op: "type-with-method", fields: fields)

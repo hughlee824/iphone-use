@@ -4,13 +4,15 @@ import IPhoneUseRunnerSupport
 // Read-only AX augments screenshots, including responder checks across keyboard attachment.
 enum AXPObservation {
     static func capture(
-        device: String, generation: String, previous: CapturedObservation? = nil,
+        device: String, generation: String, previous: CapturedObservation? = nil, axFirst: Bool = false,
         read: @escaping (() -> Bool) throws -> [String: Any], screenshot: () throws -> CapturedObservation,
         checkCancellation: () throws -> Void
     ) throws -> CapturedObservation {
         try checkCancellation()
         let task = AXPParallelRead(read: read)
         defer { task.cancel(); _ = task.join() }
+        // After Paste, an immediately requested PNG can still show the field before the edit.
+        if axFirst { _ = task.join(); try checkCancellation() }
         let imageStarted = Date().timeIntervalSince1970
         let image = try screenshot()
         let imageFinished = Date().timeIntervalSince1970
@@ -18,7 +20,8 @@ enum AXPObservation {
         let reply = task.join()
         try checkCancellation()
         return try finish(image, reply: reply, identity: (device, generation),
-            acquisition: ObservationAcquisition.parallel(
+            acquisition: ObservationAcquisition.host(
+                strategy: axFirst ? "ax_then_screenshot" : "parallel_ax_screenshot",
                 screenshot: (imageStarted, imageFinished), accessibility: (reply.startedAt, reply.finishedAt)),
             previous: previous, checkCancellation: checkCancellation)
     }

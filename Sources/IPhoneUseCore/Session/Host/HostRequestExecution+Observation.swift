@@ -10,7 +10,11 @@ extension HostRequestExecution {
             observations.invalidate("post_action_capture")
             do {
                 let capture: CapturedObservation
-                if operation == "text-finish" || action?.touchPaste == true {
+                let queuedPaste = action?.kind == "type"
+                    && (response["result"] as? [String: Any])?["pasteShortcutQueued"] as? Bool == true
+                if queuedPaste {
+                    capture = try backend.observeAfterPaste(textObservationOptions)
+                } else if operation == "text-finish" || action?.touchPaste == true {
                     capture =
                         try textObservationOptions.map { try backend.observeText($0) } ?? backend.observe()
                 } else {

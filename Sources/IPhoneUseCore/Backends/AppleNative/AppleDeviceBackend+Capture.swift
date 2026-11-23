@@ -11,6 +11,19 @@ extension AppleDeviceBackend {
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation {
         try observeTextOrScreen(options)
     }
+    func observeAfterPaste(_ options: NativeTextObservationOptions?) throws -> CapturedObservation {
+        let started = ProcessInfo.processInfo.systemUptime
+        let diagnostics = NativePostActionDiagnostics.fromEnvironment()
+        do {
+            let frame = try captureAXP(textOptions: options, deadline: started + 30, axFirst: true)
+            diagnostics?.record(frame, phase: "finalObservation", started: started)
+            return diagnostics?.complete(frame) ?? frame
+        } catch {
+            diagnostics?.record(error, started: started, phase: "finalObservation")
+            diagnostics?.fail(error)
+            throw error
+        }
+    }
     func observeAfterAction(
         actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
@@ -82,7 +95,8 @@ extension AppleDeviceBackend {
 
     private func captureAXP(
         previous: CapturedObservation? = nil, selected: CapturedObservation? = nil,
-        textOptions: NativeTextObservationOptions?, deadline: TimeInterval, hit point: CGPoint? = nil
+        textOptions: NativeTextObservationOptions?, deadline: TimeInterval, hit point: CGPoint? = nil,
+        axFirst: Bool = false
     ) throws -> CapturedObservation {
         guard let cli else { throw IPhoneUseError("backend_unavailable", "Native backend not started") }
         let reader = axpReader, cancellation = cancellation
@@ -99,7 +113,7 @@ extension AppleDeviceBackend {
                 read: { try read { false } }, checkCancellation: { try cancellation.check() })
         }
         return try AXPObservation.capture(
-            device: cli.device, generation: generation, previous: previous, read: read, screenshot: {
+            device: cli.device, generation: generation, previous: previous, axFirst: axFirst, read: read, screenshot: {
                 return try self.capture(
                     textOptions: textOptions,
                     budget: NativeCaptureBudget(requestDeadline: deadline, purpose: .observation))

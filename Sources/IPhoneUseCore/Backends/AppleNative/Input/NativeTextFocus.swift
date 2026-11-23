@@ -45,11 +45,8 @@ extension AppleInputAttempt {
         let mapped = try NativeCoordinateMapper.map(point, screen: screenGuard.context.screen, rotation: rotation)
         try backend.checkInputAvailability(budget: budget)
         _ = try hid.tap(mapped, onContact: onInputStarted) { try self.backend.checkInputCanContinue() }
+        // The pre-input check confirms this editor after any lazy keyboard registration.
         focusTapQueued = true
-        let focused = try textFocusFrame(budget: budget)
-        guard editor.sameEditor(as: NativeTextResponder(focused)) else {
-            throw focusFailure("Focus was not confirmed after tapping the requested editor", focused)
-        }
     }
 
     func confirmTextFocus(stage: String, budget: NativeCaptureBudget) throws -> [String: Any] {

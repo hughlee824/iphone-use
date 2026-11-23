@@ -3,6 +3,66 @@ import IPhoneUseRunnerSupport
 @testable import IPhoneUseCore
 
 extension NativeCaptureTests {
+    private func withPasteDiagnostics(_ run: (AppleDeviceBackend, URL) throws -> Void) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try SessionPaths.secureDirectory(root)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let key = NativePostActionDiagnostics.environmentKey
+        let previous = ProcessInfo.processInfo.environment[key]
+        XCTAssertEqual(setenv(key, root.path, 1), 0)
+        defer {
+            if let previous { setenv(key, previous, 1) } else { unsetenv(key) }
+        }
+        let backend = AppleDeviceBackend(
+            config: HostConfiguration(session: "s" + String(repeating: "b", count: 32), device: "fixture",
+                xctestrun: "fixture", idleTimeoutSeconds: 180), paths: SessionPaths(directory: root), axpReader: nil)
+        try run(backend, root)
+    }
+
+    func testPasteDiagnosticsExportOnlyTheReturnedFrame() throws {
+        try withPasteDiagnostics { backend, _ in
+            let png = try screenPNG(width: 12, height: 18)
+            var captures = 0
+            let cli = AppleDeviceCLI(device: "fixture", cancellation: backend.cancellation)
+            cli.nativeScreenshot = NativeScreenshotReader(device: "fixture", read: { _ in
+                captures += 1
+                return ["png": png.base64EncodedString(), "displayBefore": self.display(), "display": self.display()]
+            })
+            backend.cli = cli
+            let result = try backend.observeAfterPaste(nil)
+            XCTAssertEqual(captures, 1)
+            XCTAssertEqual(result.screenshot, png)
+            XCTAssertNil(result.metadata["postActionStability"])
+            let facts = try XCTUnwrap(result.metadata["postActionDiagnostics"] as? [String: Any])
+            XCTAssertEqual(facts["exported"] as? Bool, true)
+            let directory = URL(fileURLWithPath: try XCTUnwrap(facts["directory"] as? String))
+            let manifest = try jsonObject(Data(contentsOf: directory.appendingPathComponent("manifest.json")))
+            let samples = try XCTUnwrap(manifest["samples"] as? [[String: Any]])
+            XCTAssertEqual(samples.compactMap { $0["phase"] as? String }, ["finalObservation"])
+            let file = try XCTUnwrap(samples.first?["screenshot"] as? String)
+            XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent(file)), result.screenshot)
+            let acquisition = try XCTUnwrap(manifest["finalAcquisition"] as? [String: Any])
+            XCTAssertEqual(acquisition["strategy"] as? String, "ax_then_screenshot")
+        }
+    }
+
+    func testPasteDiagnosticsExportOriginalCaptureFailure() throws {
+        try withPasteDiagnostics { backend, root in
+            XCTAssertThrowsError(try backend.observeAfterPaste(nil)) {
+                XCTAssertEqual(($0 as? IPhoneUseError)?.code, "backend_unavailable")
+            }
+            let directories = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            XCTAssertEqual(directories.count, 1)
+            let directory = try XCTUnwrap(directories.first)
+            let manifest = try jsonObject(Data(contentsOf: directory.appendingPathComponent("manifest.json")))
+            XCTAssertEqual(manifest["outcome"] as? String, "failed")
+            XCTAssertEqual(manifest["errorCode"] as? String, "backend_unavailable")
+            XCTAssertEqual(manifest["retainedFrames"] as? Int, 0)
+            let samples = try XCTUnwrap(manifest["samples"] as? [[String: Any]])
+            XCTAssertEqual(samples.compactMap { $0["phase"] as? String }, ["finalObservation"])
+        }
+    }
+
     func testDefaultTapReturnsPendingPNGThenReadsAXOnce() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try SessionPaths.secureDirectory(directory)

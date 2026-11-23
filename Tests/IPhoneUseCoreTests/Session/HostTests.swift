@@ -159,7 +159,8 @@ final class ControlledBackend: SessionBackend {
         inputStarted.signal()
         if blockAfterInput { _ = releaseAction.wait(timeout: .now() + 5) }
         return nativeSend
-            ? ["kind": action.kind, "transportStatus": "sent", "verificationStatus": "not_checked"]
+            ? ["kind": action.kind, "transportStatus": "sent", "verificationStatus": "not_checked",
+               "pasteShortcutQueued": action.kind == "type" && lastTextMethod == "paste"]
             : ["kind": action.kind]
     }
 }
