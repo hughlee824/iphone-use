@@ -1,37 +1,6 @@
 import Foundation
 import IPhoneUseRunnerSupport
 
-// A responder token is meaningful only within the same AX reader lease and foreground application.
-struct NativeTextResponder: Equatable {
-    let lease: String
-    let bundle: String
-    let pid: Int
-    let objectID: String
-    let role: String
-    let field: ScreenRect
-
-    init?(_ capture: CapturedObservation) {
-        let metadata = capture.metadata
-        guard metadata["axStatus"] as? String == "available", metadata["sourceTruncated"] as? Bool != true,
-            let cleanup = metadata["axCleanup"] as? [String: Any],
-            let connection = cleanup["connectionLease"] as? [String: Any],
-            let lease = connection["generation"] as? String, UUID(uuidString: lease) != nil,
-            let bundle = metadata["axApplicationBundleId"] as? String, !bundle.isEmpty else { return nil }
-        let matches = capture.nodes.filter { $0.attributes["keyboardFocus"] as? Bool == true }
-        guard matches.count == 1, let node = matches.first,
-            ["text_field", "search_field", "text_view"].contains(node.role),
-            let element = node.attributes["nativeElement"] as? [String: Any],
-            let pid = element["pid"] as? Int, pid > 0, let objectID = element["objectID"] as? String,
-            let number = UInt64(objectID), number > 0, let field = Self.rect(node) else { return nil }
-        self.lease = lease; self.bundle = bundle; self.pid = pid
-        self.objectID = objectID; role = node.role; self.field = ScreenRect(field)
-    }
-
-    static func rect(_ node: AXNode) -> CGRect? {
-        (node.attributes["frame"] as? [String: Any]).flatMap(AXPSnapshot.rect)
-    }
-}
-
 struct NativeKeyboardAttachment {
     let responder: NativeTextResponder
     let fieldGuard: NativeTextFieldGuard
@@ -127,6 +96,10 @@ struct NativeKeyboardAttachment {
 
 extension AppleInputAttempt {
     func prepareKeyboardForInput() throws {
+        if semanticTyping {
+            _ = try backend.prepareText()
+            return
+        }
         try screenGuard.validate()
         guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
             throw ScreenGuard.Failure.invalidGuard

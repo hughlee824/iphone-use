@@ -33,7 +33,8 @@ final class NativeObservationWorker {
         transaction.lock(); defer { transaction.unlock() }
         do { _ = try open(deadline: uptime + 12, cancelled: cancelled) } catch { retire(); throw error }
     }
-    func read(startBefore: TimeInterval? = nil, cancelled: () -> Bool) throws -> [String: Any] {
+    func read(startBefore: TimeInterval? = nil, focusPoint: CGPoint? = nil,
+              cancelled: () -> Bool) throws -> [String: Any] {
         transaction.lock(); defer { transaction.unlock() }
         let deadline = uptime + requestTimeout
         // Only read-only acquisitions are retried, on a NEW generation, within the original deadline.
@@ -44,6 +45,7 @@ final class NativeObservationWorker {
                 let identifier = UUID().uuidString
                 if let startBefore, uptime >= startBefore { throw samplingEnded }
                 var command: [String: Any] = ["op": "capture", "id": identifier, "generation": current.generation]
+                if let focusPoint { command["focusPoint"] = ["x": focusPoint.x, "y": focusPoint.y] }
                 command["screenshotStartDeadline"] = startBefore
                 try send(command, to: current)
                 let response = try wait(current, deadline: deadline, cancelled: cancelled)

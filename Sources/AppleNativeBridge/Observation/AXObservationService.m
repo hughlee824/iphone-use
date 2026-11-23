@@ -13,7 +13,7 @@ NSDictionary *ASRunAXObservation(NSString *device, ASObservationCommands *comman
         NSDictionary *last = ASAXReadTreeLoop([provider openService:@"com.apple.accessibility.axAuditDaemon.remoteAXService"], ^{
             NSError *displayError; NSDictionary *display = ASAXDisplayGeometry(ASReadDisplayInfo(info), &displayError);
             if (!display) ASAXFail(displayError.localizedDescription); return display;
-        }, ^(void (^check)(void)){
+        }, ^{ return commands.focusPoint; }, ^(void (^check)(void)){
             if (first) { [commands ready]; first = NO; }
             return [commands nextWithHealthCheck:check];
         }, ^(NSDictionary *snapshot) {

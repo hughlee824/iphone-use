@@ -58,6 +58,30 @@ final class NativeKeyboardAttachmentTests: XCTestCase {
         XCTAssertNil(try NativeKeyboardAttachment(source: source, field: wrongField, guard: baseline, fieldGuard: nil))
     }
 
+    func testSemanticFocusSurvivesLayoutChangeAndRequiresOriginalEditorAndLease() throws {
+        let png = try screenPNG()
+        let source = try frame(png, [editor()])
+        let original = try XCTUnwrap(NativeTextResponder(source))
+        XCTAssertTrue(try original.sameEditor(as: NativeTextResponder(frame(png, [editor(top: 250)]))))
+        XCTAssertFalse(try original.sameEditor(as: NativeTextResponder(frame(png, [editor(id: "18")]))))
+        XCTAssertFalse(try original.sameEditor(as: NativeTextResponder(frame(png, [editor()], generation: "retired"))))
+        XCTAssertFalse(try original.sameEditor(as: NativeTextResponder(frame(png, [editor(), editor()]))))
+        XCTAssertFalse(try original.sameEditor(as: NativeTextResponder(frame(png, []))))
+    }
+
+    func testTargetedTypeResolvesOnlyUniqueStructuralEditors() throws {
+        let png = try screenPNG()
+        var attrs = editor().attributes
+        attrs["attributeSource"] = "axp-native-snapshot"
+        attrs["keyboardFocus"] = NSNull()
+        let selected = AXNode(index: 0, parent: nil, role: "text_field", attributes: attrs)
+        let capture = try frame(png, [selected])
+        XCTAssertNil(NativeTextResponder(capture))
+        XCTAssertNotNil(NativeTextResponder(capture, selecting: selected))
+        XCTAssertNil(try NativeTextResponder(frame(png, [selected, selected]), selecting: selected))
+        XCTAssertNil(NativeTextResponder(capture, selecting: editor()))
+    }
+
     func testDismissalMustSettleBeforeStagingAndOtherScreenChangesRemainGuarded() throws {
         let fixture = try original()
         let binding = fixture.binding, baseline = fixture.baseline, source = fixture.source

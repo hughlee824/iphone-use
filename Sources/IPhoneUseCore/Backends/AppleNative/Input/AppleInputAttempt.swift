@@ -17,10 +17,12 @@ final class AppleInputAttempt {
     let pinch: NativePinchPlan?
     var timing: NativeInputTiming
     var keyboardAction: Bool {
-        (action.kind == "type" || action.kind == "press") && action.reference.node == nil
+        action.kind == "type" || (action.kind == "press" && action.reference.node == nil)
     }
     var homeAction: Bool { action.kind == "home" }
     var pressing: Bool { action.kind == "press" && action.reference.node == nil }
+    var semanticTyping: Bool { textInput != nil && action.textRegion == nil }
+    var focusTapQueued = false
     var captures = 0
     var preInputChecks: [[String: Any]] = []
     var inputBudget: NativeCaptureBudget?
@@ -29,7 +31,7 @@ final class AppleInputAttempt {
         backend: AppleDeviceBackend, action: DeviceAction, target: ObservedTarget, textInput: NativeTextInput?
     ) throws {
         self.backend = backend; self.action = action; self.target = target; self.textInput = textInput
-        let keyboardAction = (action.kind == "type" || action.kind == "press") && action.reference.node == nil
+        let keyboardAction = action.kind == "type" || (action.kind == "press" && action.reference.node == nil)
         let homeAction = action.kind == "home"
         let control = backend.controlStatus()
         guard control.available, let hid = backend.hid else {
@@ -67,7 +69,8 @@ final class AppleInputAttempt {
         self.rotation = rotation; self.swipe = swipe; self.pinch = pinch
     }
 
-    func run(onInputStarted: @escaping () -> Void) throws -> [String: Any] {
+    func perform(onInputStarted: @escaping () -> Void) throws -> [String: Any] {
+        if semanticTyping { try prepareSemanticFocus(onInputStarted: onInputStarted) }
         try prepareControls()
         let check = try checkBeforeInput()
         var result = try dispatch(onInputStarted: onInputStarted)
@@ -79,10 +82,13 @@ final class AppleInputAttempt {
             result["hidSurfaceID"] = hid.surface
             result["hidDisplayUniqueID"] = hid.surfaceDisplayUniqueID
         }
-        result["screenGuard"] = check.result
+        if semanticTyping {
+            result["textTargetValidation"] = check
+            result["focusTapQueued"] = focusTapQueued
+        } else { result["screenGuard"] = check }
         result["preInputCaptures"] = captures
         result["preInputChecks"] = preInputChecks
-        if keyboardAction {
+        if keyboardAction && !semanticTyping {
             let rect = screenGuard.regions[0].rect
             result["textFieldRect"] = [
                 "x": rect.originX, "y": rect.originY, "width": rect.width, "height": rect.height
@@ -122,9 +128,10 @@ final class AppleInputAttempt {
             }
         }
     }
-    func preflight(stage: String) throws -> ScreenGuard.Check {
+    func preflight(stage: String) throws -> [String: Any] {
         let budget = try timing.captureBudget(now: ProcessInfo.processInfo.systemUptime)
         inputBudget = budget
+        if semanticTyping { return try confirmTextFocus(stage: stage, budget: budget) }
         let deadline = budget.requestDeadline
         let phaseStarted = ProcessInfo.processInfo.systemUptime
         let focusedFrame = try attachmentFrame(stage: stage, budget: budget)
@@ -151,11 +158,11 @@ final class AppleInputAttempt {
                 return frame
             })
         captures += count
-        return value
+        return value.result
     }
 
-    private func checkBeforeInput() throws -> ScreenGuard.Check {
-        var check: ScreenGuard.Check
+    private func checkBeforeInput() throws -> [String: Any] {
+        var check: [String: Any]
         do {
             check = try preflight(
                 stage: textInput?.usesPasteboard == true ? "before_clipboard" : "before_input")

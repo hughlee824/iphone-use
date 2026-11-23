@@ -6,7 +6,7 @@ import AppleNativeBridge
 extension AppleDeviceBackend {
     func perform(_ action: DeviceAction, target: ObservedTarget, onInputStarted: @escaping () -> Void) throws
         -> [String: Any] {
-        let typing = action.kind == "type" && action.reference.node == nil
+        let typing = action.kind == "type"
         let pressing = action.kind == "press" && action.reference.node == nil
         let keyboardAction = typing || pressing
         let homeAction = action.kind == "home"

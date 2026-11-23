@@ -62,6 +62,7 @@ struct AXPSnapshot {
         }
         markTextResponder(payload, pid: pid, nodes: &nodes)
         var collection = try appendSupplements(payload, pid: pid, nodes: &nodes)
+        collection["focusHit"] = payload["focusHit"]
         collection["receiveBudget"] = payload["receiveBudget"]
         appendTimingFacts(payload, to: &collection)
         return AXPSnapshot(

@@ -106,7 +106,7 @@ static NSDictionary *TextResponder(id connection, ASAXReaderTarget *target, ASDT
     }
 }
 
-NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^next)(void (^check)(void)), void (^consume)(NSDictionary *)) {
+NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), NSValue * _Nullable (^_Nullable focusPoint)(void), BOOL (^next)(void (^check)(void)), void (^consume)(NSDictionary *)) {
     NSTimeInterval mark = NSProcessInfo.processInfo.systemUptime;
     id connection; BOOL subscribed = NO;
     dispatch_semaphore_t disconnected = dispatch_semaphore_create(0);
@@ -144,6 +144,8 @@ NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^ne
         mark = ASNativeTimingCollect(timings, @"ax.display_before", mark);
         NSPoint point = NSMakePoint([screen[@"x"] doubleValue] + [screen[@"width"] doubleValue] / 2,
                                    [screen[@"y"] doubleValue] + [screen[@"height"] doubleValue] / 2);
+        NSValue *requestedPoint = focusPoint ? focusPoint() : nil;
+        if (requestedPoint) point = requestedPoint.pointValue;
         NSDictionary *hitParameters = @{@"point": [NSValue valueWithPoint:point], @"displayId": @0};
         id hit = Read(connection, target, state, 6, hitParameters, nil);
         id front = hit ? nil : FrontmostApplication(connection, target, state, timings, @"ax.frontmost_before");
@@ -162,12 +164,16 @@ NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^ne
         if (!ASAXSame(root, Read(connection, target, state, 1, @{@"pid": pid}, nil))) ASAXFail(@"AX root changed");
         mark = ASNativeTimingCollect(timings, @"ax.root_after", mark);
         id after = Read(connection, target, state, 6, hitParameters, nil);
-        id currentFront = (front || !after)
+        id currentFront = (requestedPoint || front || !after)
             ? FrontmostApplication(connection, target, state, timings, @"ax.frontmost_after") : nil;
         mark = ASNativeTimingCollect(timings, @"ax.hit_after", mark);
         if (!ASAXSelectionMatches(root, after, currentFront) || ![screen isEqual:display()]) ASAXFail(@"AX selection changed");
         mark = ASNativeTimingCollect(timings, @"ax.display_after", mark);
         result = [collection mutableCopy]; result[@"stageTimingsMs"] = timings;
+        if (requestedPoint && ASAXSame(hit, after) && ASAXSame(root, currentFront)) {
+            result[@"focusHit"] = @{@"pid": [hit valueForKey:@"pid"], @"objectID": [[hit valueForKey:@"objectID"] stringValue],
+                @"x": @(point.x), @"y": @(point.y)};
+        }
         if (HasTextEditor(collection[@"tree"])) result[@"textResponder"] = TextResponder(connection, target, state, root);
         [result addEntriesFromDictionary:@{@"display": screen, @"rootStable": @YES, @"selectionStable": @YES}];
         result[@"startedAt"] = @(observedAt); result[@"finishedAt"] = @(NSDate.date.timeIntervalSince1970);
@@ -195,4 +201,4 @@ NSDictionary *ASAXReadTreeLoop(int fd, NSDictionary *(^display)(void), BOOL (^ne
     return result;
 }
 
-NSDictionary *ASAXReadTree(int fd, NSDictionary *(^display)(void)) { return ASAXReadTreeLoop(fd, display, nil, nil); }
+NSDictionary *ASAXReadTree(int fd, NSDictionary *(^display)(void)) { return ASAXReadTreeLoop(fd, display, nil, nil, nil); }

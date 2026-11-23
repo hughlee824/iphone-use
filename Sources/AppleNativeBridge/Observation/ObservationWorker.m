@@ -41,6 +41,15 @@
             NSNumber *cutoff = command[@"screenshotStartDeadline"];
             if (cutoff && (![cutoff isKindOfClass:NSNumber.class] || !isfinite(cutoff.doubleValue) || cutoff.doubleValue <= 0))
                 ASAXFail(@"Invalid screenshot start deadline");
+            NSDictionary *point = command[@"focusPoint"];
+            _focusPoint = nil;
+            if (point) {
+                if (![point isKindOfClass:NSDictionary.class]) ASAXFail(@"Invalid focus point");
+                NSNumber *x = point[@"x"], *y = point[@"y"];
+                if (![x isKindOfClass:NSNumber.class] || ![y isKindOfClass:NSNumber.class]
+                    || !isfinite(x.doubleValue) || !isfinite(y.doubleValue)) ASAXFail(@"Invalid focus point");
+                _focusPoint = [NSValue valueWithPoint:NSMakePoint(x.doubleValue, y.doubleValue)];
+            }
             _screenshotStartDeadline = cutoff;
             _request = command[@"id"]; return YES;
         }

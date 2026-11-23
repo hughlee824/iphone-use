@@ -17,7 +17,7 @@ extension ObservationCache {
             guard action.protectedReferences.isEmpty else {
                 throw IPhoneUseError("native_action_unsupported", "Standard AX references are for inspect only")
             }
-            if ["focus", "clear", "type", "press"].contains(action.kind), action.reference.node == nil {
+            if action.kind == "type" || (action.kind == "press" && action.reference.node == nil) {
                 return try textTarget(action, entry: entry)
             }
             guard ["tap", "double-tap", "long-press", "pinch", "swipe"].contains(action.kind),
@@ -106,17 +106,25 @@ extension ObservationCache {
             throw ScreenGuard.Failure.invalidGuard
         }
         let context = try JSONDecoder().decode(ScreenContext.self, from: jsonData(raw))
+        let selected = try action.reference.node.map { _ in try resolveCurrent(action.reference) }
+        let semantic = action.kind == "type" && action.textRegion == nil
+        let editor = semantic ? NativeTextResponder(entry.capture, selecting: selected) : nil
+        if selected != nil && editor == nil {
+            throw IPhoneUseError("native_action_unsupported", "Select a uniquely identified native text editor")
+        }
+        let rect = action.textRegion ?? editor?.field ?? context.screen
         let guardValue = try ScreenGuard(
-            png: entry.capture.screenshot, context: context, rects: [action.textRegion ?? context.screen],
+            png: entry.capture.screenshot, context: context, rects: [rect],
             policy: .init(), ignoring: action.ignoredScreenRect)
-        let fieldGuard = try NativeTextFieldGuard(
+        let fieldGuard = semantic ? nil : try NativeTextFieldGuard(
             png: entry.capture.screenshot, context: context, field: action.textRegion ?? context.screen)
         let caret = try action.caretRegion.map {
-            try NativeBoundCaretGuard(field: fieldGuard, caret: $0, observationID: entry.id)
+            guard let fieldGuard else { throw ScreenGuard.Failure.invalidGuard }
+            return try NativeBoundCaretGuard(field: fieldGuard, caret: $0, observationID: entry.id)
         }
         return ObservedTarget(
             context: entry.capture.metadata, path: [], textGuard: guardValue, textFieldGuard: fieldGuard,
-            textCaretGuard: caret, textSource: action.kind == "type" ? entry.capture : nil)
+            textCaretGuard: caret, textSource: action.kind == "type" ? entry.capture : nil, textEditor: editor)
     }
 
     private func accessibilityTarget(_ action: DeviceAction, entry: Entry) throws -> ObservedTarget {

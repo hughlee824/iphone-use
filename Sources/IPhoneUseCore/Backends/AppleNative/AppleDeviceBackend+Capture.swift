@@ -73,16 +73,16 @@ extension AppleDeviceBackend {
         return try captureAXP(textOptions: textOptions, deadline: deadline)
     }
 
-    func keyboardFocusFrame(budget: NativeCaptureBudget) throws -> CapturedObservation {
+    func keyboardFocusFrame(budget: NativeCaptureBudget, hit point: CGPoint? = nil) throws -> CapturedObservation {
         let image = try capture(budget: budget)
-        let frame = try captureAXP(selected: image, textOptions: nil, deadline: budget.deadline)
+        let frame = try captureAXP(selected: image, textOptions: nil, deadline: budget.deadline, hit: point)
         try budget.check()
         return frame
     }
 
     private func captureAXP(
         previous: CapturedObservation? = nil, selected: CapturedObservation? = nil,
-        textOptions: NativeTextObservationOptions?, deadline: TimeInterval
+        textOptions: NativeTextObservationOptions?, deadline: TimeInterval, hit point: CGPoint? = nil
     ) throws -> CapturedObservation {
         guard let cli else { throw IPhoneUseError("backend_unavailable", "Native backend not started") }
         let reader = axpReader, cancellation = cancellation
@@ -90,7 +90,7 @@ extension AppleDeviceBackend {
             guard let reader else {
                 throw IPhoneUseError("axp_runtime_unavailable", "Native AXP reader unavailable; use the screenshot")
             }
-            return try reader.read(device: cli.device, cancelled: {
+            return try reader.read(device: cli.device, focusPoint: point, cancelled: {
                 cancelled() || cancellation.isCancelled || ProcessInfo.processInfo.systemUptime >= deadline
             })
         }

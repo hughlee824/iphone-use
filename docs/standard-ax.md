@@ -1,6 +1,6 @@
 # Standard AX observations
 
-Standard can augment its Apple screenshot with a read-only AXP native snapshot. It uses the same host AX cache, compact rendering and `inspect` queries as Runner. It does not start XCTest, install an iPhone helper, or change standard input semantics.
+Standard can augment its Apple screenshot with a read-only AXP native snapshot. It uses the same host AX cache, compact rendering and `inspect` queries as Runner. Standard text input can bind the observed native editor to HID keyboard input.
 
 ## Session-owned automation enhancement
 
@@ -54,7 +54,7 @@ Standard observation, input-preflight screenshots and post-action samples share 
 - `sourceBundleId`/`axApplicationBundleId` identify the application selected by AX hit-testing or the validated AXP frontmost application token. They do not upgrade standard's `foreground=unverified` into a verified foreground-app identity. `axScope=application` differs from the screenshot's `scope=screen`; system overlays can be absent from the tree.
 - `coverage=unknown` remains explicit even when `source_truncated=false`. Native custom drawing may have no AX text. `visible` does not prove pixel visibility or hittability; enabled/focus values not returned by the source remain unknown.
 - The whole returned tree is cached. Compact output and query pagination do not discard source nodes. Same-label occurrences remain distinct; invalid geometry is unavailable rather than a zero-coordinate target. Raw source attributes are available through `inspect`.
-- `oN:eN` references in standard are **inspection references**. They do not enable Runner element tap/focus/type/clear/press. Continue using current screenshot-bound coordinates and the existing standard text workflow. New observations invalidate old action references as before.
+- Standard supports `inspect oN:eN` and `type oN:eN` on a uniquely identified native editor. A focus tap requires a fresh AX hit on the editor at its observed position. All touch and keyboard input uses HID. General element tap/focus/clear/press remain Runner operations.
 - AX is collected once for the final observation, not during input preflight or each post-action stability sample. Tap readiness describes the selected screenshot pair. Other default actions revalidate their earlier readiness against their final concurrent screenshot.
 
 The agent receives the screenshot and compact AX together. It uses AX for text/state/structure and the image for layout, occlusion and content not exposed through accessibility. There is no built-in OCR or inferred replacement tree. Failure to match a cached node does not prove the target is absent from the screen.
