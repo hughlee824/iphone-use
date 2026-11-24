@@ -46,6 +46,17 @@ struct NativeTextResponder: Equatable {
             && objectID == other.objectID && role == other.role && identifier == other.identifier
     }
 
+    func visibleField(on screen: ScreenRect) -> ScreenRect? {
+        guard field.valid, screen.valid else { return nil }
+        let clipped = ScreenRect(field.cgRect.intersection(screen.cgRect))
+        return clipped.valid ? clipped : nil
+    }
+
+    func hasVisibleFocus(in capture: CapturedObservation, on screen: ScreenRect) -> Bool {
+        guard let current = NativeTextResponder(capture), current.visibleField(on: screen) != nil else { return false }
+        return sameEditor(as: current)
+    }
+
     static func rect(_ node: AXNode) -> CGRect? {
         (node.attributes["frame"] as? [String: Any]).flatMap(AXPSnapshot.rect)
     }

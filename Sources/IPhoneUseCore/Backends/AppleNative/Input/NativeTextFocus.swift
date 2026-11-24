@@ -33,7 +33,7 @@ extension AppleInputAttempt {
         let budget = NativeCaptureBudget(requestDeadline: timing.dispatchDeadline)
         try hid.prepare(displayUniqueID: target.context["displayUniqueID"] as? String)
         let frame = try textFocusFrame(budget: budget, hit: point)
-        if editor.sameEditor(as: NativeTextResponder(frame)) { return }
+        if editor.hasVisibleFocus(in: frame, on: screenContext.screen) { return }
         guard editor == NativeTextResponder(frame, selecting: selected),
             let collection = frame.metadata["axCollection"] as? [String: Any],
             let hit = collection["focusHit"] as? [String: Any],
@@ -52,7 +52,7 @@ extension AppleInputAttempt {
     func confirmTextFocus(stage: String, budget: NativeCaptureBudget) throws -> [String: Any] {
         let frame = try textFocusFrame(budget: budget)
         captures += 1
-        let confirmed = target.textEditor?.sameEditor(as: NativeTextResponder(frame)) == true
+        let confirmed = target.textEditor?.hasVisibleFocus(in: frame, on: screenContext.screen) == true
         let facts: [String: Any] = ["stage": stage, "sameTextResponderConfirmed": confirmed,
                                     "validation": "foreground_text_responder"]
         preInputChecks.append(facts)

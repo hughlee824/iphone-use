@@ -26,10 +26,12 @@ In standard mode, the first keyboard-backed `type` or `press` opens a USB/RSD tu
 a session-owned keyboard. You can also run `text-prepare` before opening the editor, since
 keyboard attachment can change the layout. Unscoped `type oN` binds the observed foreground
 text responder. `type oN:eN` binds the specified native editor. If it needs focus, the host
-checks the screenshot, the editor geometry and the live AX hit at its center, taps once and
-confirms focus before preparing the keyboard. Both commands require the same foreground
-responder before key dispatch and on both sides of clipboard staging. The field may move
-and its caret may blink. Explicit `--field-rect` on `type oN` retains visual checks. Subsequent actions reuse the prepared keyboard.
+checks the fully onscreen editor geometry, the screenshot and the live AX hit at the editor's
+center before tapping once. Once the keyboard is ready, both commands verify the original
+foreground responder before key dispatch and on both sides of clipboard staging. A focused
+editor may move partly offscreen. Typing and default Backspace stop if that editor becomes
+hidden or moves fully offscreen. For landscape typing, prepare the keyboard with
+`text-prepare`, visually confirm focus and supply the full field bounds with `--field-rect`. Explicit `--field-rect` on `type oN` retains visual checks. Subsequent actions reuse the prepared keyboard.
 `text-prepare --rsd-keyboard` remains a compatibility alias. A connection used only for
 observation or touch leaves the keyboard media stream unopened. After preparation, status
 reports `keyboard.serviceSource=rsd_registered`, `prepared=true` and the assigned service ID.

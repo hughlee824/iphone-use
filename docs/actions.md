@@ -14,7 +14,7 @@
 
 原生 `press oN --key return --field-rect x,y,width,height --observe` 现支持向已确认焦点发送独立 Return。完整字段、当前 observationID、全屏保护、方向、请求受理后的验证预算及完整字段的新图校验与 type 相同；省略字段矩形时保护整个屏幕。不聚焦、不访问剪贴板、不自动完成待恢复的粘贴事务。调用方先核对输入结果并 text-finish，再决定是否发送 Return。Return 由 App 解释，可能搜索、完成、换行或提交；`keyReportQueued` 仅是本地发送事实，`keyEffectConfirmed=false`，结果仍为 unknown，必须检查新图。原生 type 的 auto/paste 正文允许 LF/CR 换行，作为文本一次粘贴，不转换或隐式附加 Return；keys 及其他控制字符仍拒绝。XCTest 仍使用原有 `press oN:eN --key return`。
 
-`apple-native` 使用 `type oN --mode insert|replace|append --text 'Ab7!?'`，绑定当前观察中唯一获得焦点的原生输入框。也可用 `type oN:eN --text TEXT` 指定原生输入框；需要入焦时内部先检查截图和点击位置实际命中的控件，点击一次并确认焦点，再准备键盘。`insert` 使用当前光标/选区；`replace` 先发送 Command-A 全选；`append` 先发送 Command-Down 请求移动到全文末尾。后两者不读取或重构原文，也不声明已经确认选区或末尾定位。ASCII 路径接受 1–64 个可打印字符，使用 US HID 映射。包含非 ASCII 字符或 LF/CR 换行的整段文本（如 `中文`、` A7，测🙂`）使用原生剪贴板服务与一次自写 HID Paste，最多 4096 UTF-8 bytes；不拆成拼音，不做候选词判断。不切换设备布局/输入法，auto/paste 保留正文中的 LF/CR（包括 CRLF），不规范化换行；其他控制字符仍拒绝。发送 Return 按键必须通过上述独立 press 操作。只有 `replace` 接受空文本，使用全选后 Delete，不读写剪贴板；即使显式指定 paste，空文本也不创建粘贴事务。
+`apple-native` 使用 `type oN --mode insert|replace|append --text 'Ab7!?'`，绑定当前观察中唯一获得焦点的原生输入框。也可用 `type oN:eN --text TEXT` 指定原生输入框；需要入焦时内部先检查截图和点击位置实际命中的控件，点击一次，待键盘就绪后复核焦点。已聚焦的框可以部分滚出屏幕；需要点框时，整个输入框须在屏幕内。`insert` 使用当前光标/选区；`replace` 先发送 Command-A 全选；`append` 先发送 Command-Down 请求移动到全文末尾。后两者不读取或重构原文，也不声明已经确认选区或末尾定位。ASCII 路径接受 1–64 个可打印字符，使用 US HID 映射。包含非 ASCII 字符或 LF/CR 换行的整段文本（如 `中文`、` A7，测🙂`）使用原生剪贴板服务与一次自写 HID Paste，最多 4096 UTF-8 bytes；不拆成拼音，不做候选词判断。不切换设备布局/输入法，auto/paste 保留正文中的 LF/CR（包括 CRLF），不规范化换行；其他控制字符仍拒绝。发送 Return 按键必须通过上述独立 press 操作。只有 `replace` 接受空文本，使用全选后 Delete，不读写剪贴板；即使显式指定 paste，空文本也不创建粘贴事务。
 
 全选/末尾定位与后续文本共用一次有界 HID 序列，每个组合键后释放，再发送下一步。`textMode` 记录意图，`editingShortcutQueued` 只证明本地发送队列完成，`editingEffectConfirmed=false` 不宣称设备完成了定位。取消或通道错误即使发生在定位之后、正文之前，也返回可能执行的不确定结果，不自动重放。默认校验前台输入框身份，光标闪烁或输入框移动不会单独阻止发键。显式传入 `--field-rect` 时仍校验字段图像。普通 UIKit 控件的验收不能代替网页、自定义编辑器或其他快捷键处理器的兼容验证。
 
@@ -157,11 +157,11 @@ Runner 动作协议 13 要求匹配的 CLI/Runner；旧宿主拒绝新 CLI 的�
 
 ## 原生编辑按键与横屏文字
 
-`apple-native` 的 `press oN --key KEY` 支持 `return`、`backspace`、`left`、`right`、`up`、`down`、`tab`、`shift-tab`、`escape`。默认退格会绑定当前观察中唯一获得焦点的原生编辑器，键盘就绪后再次核对其身份。焦点换框或复核失败时停止发键。若原观察无法识别唯一焦点，仍使用原有的全屏像素校验。其他按键使用截图校验，可通过 `--field-rect x,y,width,height` 保护完整输入框。每次只发送一个按键或明确的 Shift+Tab 组合，包含释放；没有重复次数、任意快捷键或自动补发。Runner 使用元素引用 `press oN:eN`，其实现和验收范围见 [Runner 编辑按键](runner-editing-keys.md)。按键、ASCII 每阶段仅一次最终 PNG 校验，Unicode 粘贴在剪贴板前后各一次；始终比较原 observation。方向准备和最多一次自有媒体恢复计入请求受理后 30 秒总预算，每阶段 8 秒从 Apple PNG 请求开始计时，方向变化立即拒绝，不循环截图或重发按键。
+`apple-native` 的 `press oN --key KEY` 支持 `return`、`backspace`、`left`、`right`、`up`、`down`、`tab`、`shift-tab`、`escape`。默认退格会绑定当前观察中唯一获得焦点的原生编辑器，键盘就绪后再次核对其身份。原框被标记为不可见、完全移出屏幕或失去焦点时停止发键。仅在原观察缺少唯一焦点证据时使用全屏像素校验。其他按键使用截图校验，可通过 `--field-rect x,y,width,height` 保护完整输入框。每次只发送一个按键或明确的 Shift+Tab 组合，包含释放；没有重复次数、任意快捷键或自动补发。Runner 使用元素引用 `press oN:eN`，其实现和验收范围见 [Runner 编辑按键](runner-editing-keys.md)。按键、ASCII 每阶段仅一次最终 PNG 校验，Unicode 粘贴在剪贴板前后各一次；始终比较原 observation。方向准备和最多一次自有媒体恢复计入请求受理后 30 秒总预算，每阶段 8 秒从 Apple PNG 请求开始计时，方向变化立即拒绝，不循环截图或重发按键。
 
 这些名称表示 HID 键盘操作，不承诺业务效果：Backspace 的删除单位、方向键的光标位置、Tab 的焦点切换、Escape 的取消行为均由前台 App/IME 决定。回执保留 `key`、`keyReportQueued`、`keyboardReleaseQueued`、`keyEffectConfirmed=false`；本地发送完成仍是 unknown，需检查结果截图。Shift+Tab 先单独按下 Shift，再按 Tab，最后释放全部按键；取消或失败沿用同通道释放和不重放契约。
 
-原生 `type` 和 `press` 可用于原生竖屏显示器的竖屏及左右横屏。无需旋转按键 usage；坐标输入框使用当前截图的屏幕点。文字模式、剪贴板所有权与恢复、设备/会话/当前观察绑定、派发前复核预算、方向和截图保护保持不变。先使用 `text-prepare` 建立键盘，再观察并确认焦点；旋转后必须重新观察。具体真机验收范围见[原生后端记录](apple-native-backend.md)。
+原生 `type` 和 `press` 可用于原生竖屏显示器的竖屏及左右横屏。无需旋转按键 usage；坐标输入框使用当前截图的屏幕点。文字模式、剪贴板所有权与恢复、设备/会话/当前观察绑定、派发前复核预算、方向和截图保护保持不变。横屏 AX 无法验证输入框焦点。使用 `text-prepare` 准备键盘，在当前截图中确认焦点，再用 `type oN --text TEXT --field-rect x,y,width,height` 指定完整输入框。旋转后须重新观察。具体真机验收范围见[原生后端记录](apple-native-backend.md)。
 
 
 ## Runner 长按与拖放

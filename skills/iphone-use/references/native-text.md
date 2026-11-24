@@ -9,7 +9,7 @@ reports and Unicode or multiline text as a clipboard paste. Inspect the resultin
 
 ## Normal path
 
-1. Use `type oN --text TEXT --observe` for the native editor reporting `keyboard_focus=true`. Ordinary typing follows the current insertion point or selection and requires no field or caret rectangle.
+1. Use `type oN --text TEXT --observe` for the native editor reporting `keyboard_focus=true`. In portrait, ordinary typing follows the current insertion point or selection while at least part of the focused editor is visible. In landscape, run `text-prepare`, confirm the focused field on the current screenshot and use `type oN --text TEXT --field-rect X,Y,WIDTH,HEIGHT --observe` with the full field bounds.
 2. With `native_editor_reference` in `actionTargets.type`, use `type oN:eN --text TEXT --observe` to choose a specific native editor. If it needs focus, the host validates the observed location against a fresh screenshot and AX hit test, taps once and confirms that editor received focus.
 3. Keyboard registration is lazy. Before key dispatch the host checks the actual foreground responder. Clipboard typing checks before and after staging. A missing or changed responder stops key dispatch. Check the returned field even when the HID outcome is `unknown`.
 4. Use `--field-rect` on `type oN` for an explicitly screenshot-bound input. Select the complete visible field. Add `--caret-rect` only to exclude a visually confirmed blinking caret from that comparison.

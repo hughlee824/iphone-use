@@ -151,14 +151,16 @@ final class NativeKeyboardAttachmentTests: XCTestCase {
         XCTAssertThrowsError(try press("o1", "backspace"))
     }
 
-    func testDefaultBackspaceAcceptsOnlyEditorsWithVisibleAreaOnScreen() throws {
+    func testFocusedTypingAndBackspaceRequireVisibleAreaOnScreen() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = ObservationCache(directory: directory)
         let png = try screenPNG()
         for hasDimensions in [true, false] {
             for top in [-10.0, 832, -44, -60, 844] {
-                let source = try frame(png, [editor(top: top)])
+                var attrs = editor(top: top).attributes
+                attrs["attributeSource"] = "axp-native-snapshot"
+                let source = try frame(png, [AXNode(index: 0, parent: nil, role: "text_field", attributes: attrs)])
                 var metadata = source.metadata
                 metadata["backend"] = "apple-native"
                 if hasDimensions {
@@ -167,18 +169,72 @@ final class NativeKeyboardAttachmentTests: XCTestCase {
                 let capture = CapturedObservation(nodes: source.nodes, metadata: metadata, screenshot: png)
                 let stored = try cache.store(capture)
                 let ref = try XCTUnwrap(stored["observation"] as? String)
-                let action = try DeviceAction(operation: "press",
-                    request: ["reference": ref, "key": "backspace"], allowScreenText: true)
-                if top == -10 || top == 832 {
-                    let target = try cache.resolveTarget(for: action)
-                    XCTAssertEqual(target.textEditor, try XCTUnwrap(NativeTextResponder(source)))
-                } else {
-                    XCTAssertThrowsError(try cache.resolveTarget(for: action)) {
-                        XCTAssertEqual($0 as? ScreenGuard.Failure, .invalidGuard)
+                let actions = [
+                    try DeviceAction(operation: "press", request: ["reference": ref, "key": "backspace"],
+                                     allowScreenText: true),
+                    try typeAction(ref), try typeAction(ref + ":e1")
+                ]
+                for action in actions {
+                    if top == -10 || top == 832 {
+                        let target = try cache.resolveTarget(for: action)
+                        XCTAssertEqual(target.textEditor, try XCTUnwrap(NativeTextResponder(source)))
+                    } else {
+                        XCTAssertThrowsError(try cache.resolveTarget(for: action)) {
+                            XCTAssertEqual($0 as? ScreenGuard.Failure, .invalidGuard)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func typeAction(_ ref: String) throws -> DeviceAction {
+        try DeviceAction(operation: "type", request: ["reference": ref, "text": "x", "mode": "insert"],
+                         allowScreenText: true)
+    }
+
+    func testHiddenFocusRejectsBackspaceAndClippedUnfocusedEditorRejectsFocusTap() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = ObservationCache(directory: directory)
+        let png = try screenPNG()
+        for focused in [true, false] {
+            var attrs = editor(top: -12).attributes
+            attrs["attributeSource"] = "axp-native-snapshot"
+            attrs["visible"] = !focused
+            attrs["keyboardFocus"] = focused
+            let source = try frame(png, [AXNode(index: 0, parent: nil, role: "text_field", attributes: attrs)])
+            var metadata = source.metadata
+            metadata["backend"] = "apple-native"
+            let stored = try cache.store(CapturedObservation(nodes: source.nodes, metadata: metadata, screenshot: png))
+            let ref = try XCTUnwrap(stored["observation"] as? String)
+            if focused {
+                let press = try DeviceAction(operation: "press", request: ["reference": ref, "key": "backspace"],
+                                             allowScreenText: true)
+                for action in [press, try typeAction(ref)] {
+                    XCTAssertThrowsError(try cache.resolveTarget(for: action)) {
+                        XCTAssertEqual(($0 as? ActionFailure)?.possiblyExecuted, false)
+                        XCTAssertEqual(($0 as? ActionFailure)?.code, "native_keyboard_focus_unverified")
+                    }
+                }
+            } else {
+                XCTAssertThrowsError(try cache.resolveTarget(for: typeAction(ref + ":e1"))) {
+                    XCTAssertEqual($0 as? ScreenGuard.Failure, .invalidGuard)
+                }
+            }
+        }
+    }
+
+    func testLiveFocusMayMoveButMustStayVisible() throws {
+        let png = try screenPNG()
+        let original = try XCTUnwrap(NativeTextResponder(frame(png, [editor()])))
+        XCTAssertTrue(try original.hasVisibleFocus(in: frame(png, [editor(top: -12)]), on: context.screen))
+        XCTAssertFalse(try original.hasVisibleFocus(in: frame(png, [editor(top: -44)]), on: context.screen))
+        XCTAssertFalse(try original.hasVisibleFocus(in: frame(png, [editor(id: "18")]), on: context.screen))
+        var attrs = editor().attributes
+        attrs["visible"] = false
+        let hidden = AXNode(index: 0, parent: nil, role: "text_field", attributes: attrs)
+        XCTAssertFalse(try original.hasVisibleFocus(in: frame(png, [hidden]), on: context.screen))
     }
 
     func testDismissalMustSettleBeforeStagingAndOtherScreenChangesRemainGuarded() throws {

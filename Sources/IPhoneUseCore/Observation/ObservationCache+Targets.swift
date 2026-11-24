@@ -106,27 +106,21 @@ extension ObservationCache {
             throw ScreenGuard.Failure.invalidGuard
         }
         let context = try JSONDecoder().decode(ScreenContext.self, from: jsonData(raw))
-        let selected = try action.reference.node.map { _ in try resolveCurrent(action.reference) }
-        let useResponder = action.isKeyboardTextEdit && action.textRegion == nil
-        let editor = useResponder ? NativeTextResponder(entry.capture, selecting: selected) : nil
-        if selected != nil && editor == nil {
-            throw IPhoneUseError("native_action_unsupported", "Select a uniquely identified native text editor")
-        }
+        let editor = try textEditor(for: action, capture: entry.capture)
+        let alreadyFocused = editor.map {
+            action.reference.node == nil || $0.sameEditor(as: NativeTextResponder(entry.capture))
+        } ?? false
         var rect = action.textRegion ?? editor?.field ?? context.screen
-        if action.kind == "press", let editor {
-            // Backspace needs no focus tap. Clip the guard region, keeping the original responder identity.
-            guard editor.field.valid else { throw ScreenGuard.Failure.invalidGuard }
-            rect = ScreenRect(editor.field.cgRect.intersection(context.screen.cgRect))
+        if alreadyFocused, let editor {
+            guard let visible = editor.visibleField(on: context.screen) else { throw ScreenGuard.Failure.invalidGuard }
+            rect = visible
         }
         // Native capture already checked these pixel dimensions against the display.
         // With an identified, focused editor there is no touch point to compare.
-        if let editor, action.ignoredScreenRect == nil, action.caretRegion == nil,
-            selected == nil || editor.sameEditor(as: NativeTextResponder(entry.capture)),
+        if alreadyFocused, let editor,
             let width = entry.capture.metadata["screenshotWidth"] as? Int,
             let height = entry.capture.metadata["screenshotHeight"] as? Int {
-            guard context.valid, rect.valid, context.screen.cgRect.contains(rect.cgRect) else {
-                throw ScreenGuard.Failure.invalidGuard
-            }
+            guard context.valid else { throw ScreenGuard.Failure.invalidGuard }
             try ScreenImage.validateMapping(width: width, height: height, to: context.screen)
             return ObservedTarget(context: entry.capture.metadata, path: [], textSource: entry.capture,
                                   textEditor: editor, focusedTextContext: context)
@@ -145,6 +139,34 @@ extension ObservationCache {
         return ObservedTarget(
             context: entry.capture.metadata, path: [], textGuard: guardValue, textFieldGuard: fieldGuard,
             textCaretGuard: caret, textSource: action.kind == "type" ? entry.capture : nil, textEditor: editor)
+    }
+
+    private func textEditor(for action: DeviceAction, capture: CapturedObservation) throws -> NativeTextResponder? {
+        guard action.isKeyboardTextEdit, action.textRegion == nil else { return nil }
+        if action.kind == "type", let rotation = capture.metadata["displayRotation"] as? String,
+            ["rot90", "rot270"].contains(rotation) {
+            throw ActionFailure(
+                code: "native_keyboard_focus_unverified",
+                description: """
+                Landscape AX focus is unavailable. Run text-prepare, observe and confirm the focused field, \
+                then use type oN --field-rect x,y,width,height with the full field bounds.
+                """, possiblyExecuted: false, requiresObservation: true)
+        }
+        if action.reference.node != nil {
+            let selected = try resolveCurrent(action.reference)
+            guard let editor = NativeTextResponder(capture, selecting: selected) else {
+                throw IPhoneUseError("native_action_unsupported", "Select a uniquely identified native text editor")
+            }
+            return editor
+        }
+        let editor = NativeTextResponder(capture)
+        // An identified but unusable focus must not downgrade Backspace to a screenshot comparison.
+        if editor == nil, capture.nodes.filter({ $0.attributes["keyboardFocus"] as? Bool == true }).count == 1 {
+            throw ActionFailure(code: "native_keyboard_focus_unverified",
+                                description: "Observe a visible, usable focused editor before keyboard input",
+                                possiblyExecuted: false, requiresObservation: true)
+        }
+        return editor
     }
 
     private func accessibilityTarget(_ action: DeviceAction, entry: Entry) throws -> ObservedTarget {
