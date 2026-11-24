@@ -7,6 +7,9 @@ struct DeviceAction {
         ["tap", "double-tap", "long-press", "pinch", "swipe", "home", "focus", "clear", "type", "press"]
     let kind: String
     var touchPaste: Bool { kind == "type" && fields["textMethod"] as? String == "touch-paste" }
+    var isKeyboardTextEdit: Bool {
+        (kind == "type" && !touchPaste) || (kind == "press" && fields["key"] as? String == "backspace")
+    }
     let reference: ObservationReference
     let fields: [String: Any]
     let coordinate: Bool

@@ -118,6 +118,69 @@ final class NativeKeyboardAttachmentTests: XCTestCase {
         XCTAssertThrowsError(try resolve("o1:e1"))
     }
 
+    func testBackspaceUsesOnlyTheOriginalFocusedEditorOrTheRequestedVisualGuard() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = ObservationCache(directory: directory)
+        let source = try frame(screenPNG(), [editor()])
+        var metadata = source.metadata
+        metadata["backend"] = "apple-native"; metadata["screenshotWidth"] = 390; metadata["screenshotHeight"] = 844
+        func store(_ nodes: [AXNode]) throws {
+            let capture = CapturedObservation(nodes: nodes, metadata: metadata, screenshot: source.screenshot)
+            _ = try cache.store(capture)
+        }
+        func press(_ ref: String, _ key: String, field: String? = nil) throws -> ObservedTarget {
+            var request: [String: Any] = ["reference": ref, "key": key]
+            request["fieldRect"] = field
+            let action = try DeviceAction(operation: "press", request: request, allowScreenText: true)
+            return try cache.resolveTarget(for: action)
+        }
+        try store([editor()])
+        let backspace = try press("o1", "backspace")
+        XCTAssertEqual(backspace.textEditor, NativeTextResponder(source))
+        XCTAssertNotNil(backspace.focusedTextContext)
+        XCTAssertNil(backspace.textGuard)
+        for target in [try press("o1", "return"), try press("o1", "backspace", field: "20,100,350,44")] {
+            XCTAssertNil(target.textEditor)
+            XCTAssertNotNil(target.textFieldGuard)
+        }
+        try store([editor(), editor(id: "18")])
+        let ambiguous = try press("o2", "backspace")
+        XCTAssertNil(ambiguous.textEditor)
+        XCTAssertNotNil(ambiguous.textFieldGuard)
+        XCTAssertThrowsError(try press("o1", "backspace"))
+    }
+
+    func testDefaultBackspaceAcceptsOnlyEditorsWithVisibleAreaOnScreen() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = ObservationCache(directory: directory)
+        let png = try screenPNG()
+        for hasDimensions in [true, false] {
+            for top in [-10.0, 832, -44, -60, 844] {
+                let source = try frame(png, [editor(top: top)])
+                var metadata = source.metadata
+                metadata["backend"] = "apple-native"
+                if hasDimensions {
+                    metadata["screenshotWidth"] = 390; metadata["screenshotHeight"] = 844
+                }
+                let capture = CapturedObservation(nodes: source.nodes, metadata: metadata, screenshot: png)
+                let stored = try cache.store(capture)
+                let ref = try XCTUnwrap(stored["observation"] as? String)
+                let action = try DeviceAction(operation: "press",
+                    request: ["reference": ref, "key": "backspace"], allowScreenText: true)
+                if top == -10 || top == 832 {
+                    let target = try cache.resolveTarget(for: action)
+                    XCTAssertEqual(target.textEditor, try XCTUnwrap(NativeTextResponder(source)))
+                } else {
+                    XCTAssertThrowsError(try cache.resolveTarget(for: action)) {
+                        XCTAssertEqual($0 as? ScreenGuard.Failure, .invalidGuard)
+                    }
+                }
+            }
+        }
+    }
+
     func testDismissalMustSettleBeforeStagingAndOtherScreenChangesRemainGuarded() throws {
         let fixture = try original()
         let binding = fixture.binding, baseline = fixture.baseline, source = fixture.source

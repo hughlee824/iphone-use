@@ -29,7 +29,7 @@ extension NativeCaptureTests {
                 return ["png": png.base64EncodedString(), "displayBefore": self.display(), "display": self.display()]
             })
             backend.cli = cli
-            let result = try backend.observeAfterTyping(nil)
+            let result = try backend.observeAfterTextEdit(nil)
             XCTAssertEqual(captures, 1)
             XCTAssertEqual(result.screenshot, png)
             XCTAssertNil(result.metadata["postActionStability"])
@@ -48,7 +48,7 @@ extension NativeCaptureTests {
 
     func testTypingDiagnosticsExportOriginalCaptureFailure() throws {
         try withPasteDiagnostics { backend, root in
-            XCTAssertThrowsError(try backend.observeAfterTyping(nil)) {
+            XCTAssertThrowsError(try backend.observeAfterTextEdit(nil)) {
                 XCTAssertEqual(($0 as? IPhoneUseError)?.code, "backend_unavailable")
             }
             let directories = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)

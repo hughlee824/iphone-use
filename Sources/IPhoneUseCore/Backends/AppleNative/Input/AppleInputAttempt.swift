@@ -26,7 +26,9 @@ final class AppleInputAttempt {
     }
     var homeAction: Bool { action.kind == "home" }
     var pressing: Bool { action.kind == "press" && action.reference.node == nil }
-    var semanticTyping: Bool { textInput != nil && action.textRegion == nil }
+    var validatesTextResponder: Bool {
+        action.textRegion == nil && (textInput != nil || target.textEditor != nil)
+    }
     var focusTapQueued = false
     var captures = 0
     var preInputChecks: [[String: Any]] = []
@@ -46,7 +48,7 @@ final class AppleInputAttempt {
                 possiblyExecuted: false, requiresObservation: false, result: control.result)
         }
         let visualGuard = (keyboardAction || homeAction) ? target.textGuard : target.gesture?.screenGuard
-        let focusedContext = textInput != nil && action.textRegion == nil ? target.focusedTextContext : nil
+        let focusedContext = action.isKeyboardTextEdit && action.textRegion == nil ? target.focusedTextContext : nil
         guard target.context["deviceID"] as? String == backend.cli?.device,
             target.context["sessionGeneration"] as? String == backend.generation,
             let captured = target.context["captureStartedUptime"] as? Double,
@@ -77,7 +79,7 @@ final class AppleInputAttempt {
     }
 
     func perform(onInputStarted: @escaping () -> Void) throws -> [String: Any] {
-        if semanticTyping { try prepareSemanticFocus(onInputStarted: onInputStarted) }
+        if textInput != nil && validatesTextResponder { try prepareSemanticFocus(onInputStarted: onInputStarted) }
         try prepareControls()
         let check = try checkBeforeInput()
         var result = try dispatch(onInputStarted: onInputStarted)
@@ -89,13 +91,13 @@ final class AppleInputAttempt {
             result["hidSurfaceID"] = hid.surface
             result["hidDisplayUniqueID"] = hid.surfaceDisplayUniqueID
         }
-        if semanticTyping {
+        if validatesTextResponder {
             result["textTargetValidation"] = check
             result["focusTapQueued"] = focusTapQueued
         } else { result["screenGuard"] = check }
         result["preInputCaptures"] = captures
         result["preInputChecks"] = preInputChecks
-        if keyboardAction && !semanticTyping, let rect = visualGuard?.regions.first?.rect {
+        if keyboardAction && !validatesTextResponder, let rect = visualGuard?.regions.first?.rect {
             result["textFieldRect"] = [
                 "x": rect.originX, "y": rect.originY, "width": rect.width, "height": rect.height
             ]
@@ -138,7 +140,7 @@ final class AppleInputAttempt {
     func preflight(stage: String) throws -> [String: Any] {
         let budget = try timing.captureBudget(now: ProcessInfo.processInfo.systemUptime)
         inputBudget = budget
-        if semanticTyping { return try confirmTextFocus(stage: stage, budget: budget) }
+        if validatesTextResponder { return try confirmTextFocus(stage: stage, budget: budget) }
         let deadline = budget.requestDeadline
         let phaseStarted = ProcessInfo.processInfo.systemUptime
         let focusedFrame = try attachmentFrame(stage: stage, budget: budget)

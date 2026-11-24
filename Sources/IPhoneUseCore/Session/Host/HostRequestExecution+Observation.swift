@@ -10,10 +10,10 @@ extension HostRequestExecution {
             observations.invalidate("post_action_capture")
             do {
                 let capture: CapturedObservation
-                let sentText = config.backend == "apple-native" && action?.kind == "type"
+                let sentText = config.backend == "apple-native" && action?.isKeyboardTextEdit == true
                     && (response["result"] as? [String: Any])?["transportStatus"] as? String == "sent"
                 if sentText {
-                    capture = try backend.observeAfterTyping(textObservationOptions)
+                    capture = try backend.observeAfterTextEdit(textObservationOptions)
                 } else if operation == "text-finish" || action?.touchPaste == true {
                     capture =
                         try textObservationOptions.map { try backend.observeText($0) } ?? backend.observe()

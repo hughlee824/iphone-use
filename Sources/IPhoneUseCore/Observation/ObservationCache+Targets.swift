@@ -107,10 +107,16 @@ extension ObservationCache {
         }
         let context = try JSONDecoder().decode(ScreenContext.self, from: jsonData(raw))
         let selected = try action.reference.node.map { _ in try resolveCurrent(action.reference) }
-        let semantic = action.kind == "type" && action.textRegion == nil
-        let editor = semantic ? NativeTextResponder(entry.capture, selecting: selected) : nil
+        let useResponder = action.isKeyboardTextEdit && action.textRegion == nil
+        let editor = useResponder ? NativeTextResponder(entry.capture, selecting: selected) : nil
         if selected != nil && editor == nil {
             throw IPhoneUseError("native_action_unsupported", "Select a uniquely identified native text editor")
+        }
+        var rect = action.textRegion ?? editor?.field ?? context.screen
+        if action.kind == "press", let editor {
+            // Backspace needs no focus tap. Clip the guard region, keeping the original responder identity.
+            guard editor.field.valid else { throw ScreenGuard.Failure.invalidGuard }
+            rect = ScreenRect(editor.field.cgRect.intersection(context.screen.cgRect))
         }
         // Native capture already checked these pixel dimensions against the display.
         // With an identified, focused editor there is no touch point to compare.
@@ -118,19 +124,20 @@ extension ObservationCache {
             selected == nil || editor.sameEditor(as: NativeTextResponder(entry.capture)),
             let width = entry.capture.metadata["screenshotWidth"] as? Int,
             let height = entry.capture.metadata["screenshotHeight"] as? Int {
-            guard context.valid, editor.field.valid, context.screen.cgRect.contains(editor.field.cgRect) else {
+            guard context.valid, rect.valid, context.screen.cgRect.contains(rect.cgRect) else {
                 throw ScreenGuard.Failure.invalidGuard
             }
             try ScreenImage.validateMapping(width: width, height: height, to: context.screen)
             return ObservedTarget(context: entry.capture.metadata, path: [], textSource: entry.capture,
                                   textEditor: editor, focusedTextContext: context)
         }
-        let rect = action.textRegion ?? editor?.field ?? context.screen
         let guardValue = try ScreenGuard(
             png: entry.capture.screenshot, context: context, rects: [rect],
             policy: .init(), ignoring: action.ignoredScreenRect)
-        let fieldGuard = semantic ? nil : try NativeTextFieldGuard(
-            png: entry.capture.screenshot, context: context, field: action.textRegion ?? context.screen)
+        // Unscoped Backspace retains its visual guard when the source has no unique AX responder.
+        let needsFieldGuard = action.textRegion != nil || (action.kind == "press" && editor == nil)
+        let fieldGuard = needsFieldGuard ? try NativeTextFieldGuard(
+            png: entry.capture.screenshot, context: context, field: action.textRegion ?? context.screen) : nil
         let caret = try action.caretRegion.map {
             guard let fieldGuard else { throw ScreenGuard.Failure.invalidGuard }
             return try NativeBoundCaretGuard(field: fieldGuard, caret: $0, observationID: entry.id)

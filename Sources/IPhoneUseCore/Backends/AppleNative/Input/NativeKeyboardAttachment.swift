@@ -96,7 +96,7 @@ struct NativeKeyboardAttachment {
 
 extension AppleInputAttempt {
     func prepareKeyboardForInput() throws {
-        if semanticTyping {
+        if validatesTextResponder {
             _ = try backend.prepareText()
             return
         }

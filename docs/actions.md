@@ -63,8 +63,8 @@ iphone-use --session "$SESSION" type o2:e8 --text '新内容' --observe
 
 - `action` 完整保留原动作回执，包括 `outcome`、错误及可用输入事实；`observation` 独立保留观察回执。CLI 退出码与顶层 `ok` 表示整组是否成功：动作和观察均成功才为 0 / true。
 - standard 普通 `tap --observe` 在点击派发后立即连续截图。在相同设备、会话和显示上下文内，相邻两张通过现有像素比较就选定后一张；有差异就用后一张和下一张再比。1.5 秒是停止发新截图的时间，无固定最短等待。到点仍未判稳时，等最后一张已发出的截图在原请求期限内返回：有效就选它，取图失败就退回同一有效上下文中的最近一张，标记 `stable=false`。上下文已失效或没有有效图时报告观察失败。选图后只读一次 AX，与选定的原图一同返回。完整耗时还包括输入前校验、派发、在途截图剩余时间和 AX 读取。
-- standard 的 `type` 发完 ASCII 按键、粘贴快捷键或清空快捷键（`action.result.transportStatus=sent`）后，先读 AX，再截一张图（`ax_then_screenshot`）。单帧观察省略 `observation.stability`。直接核对目标输入框的内容；若结果尚看不清，可再执行一次只读 `observe`，避免重复输入。
-- 使用常规判稳的标准模式动作（如 `swipe`、`press`）最多等待 15 秒，以 Apple PNG 连续采样：同一设备、会话、显示方向与尺寸下至少 3 帧满足就绪条件，稳定跨度至少 0.4 秒，总观察跨度至少 1.5 秒。比较固定候选帧，容忍有限色差；另允许每帧至多全屏 0.1% 像素变化，但连续窗口累计差异包围框必须在 320 平方点、任一边 80 点内。此局部容差仅用于动作后就绪，不修改动作前校验或 Runner。返回最后一张原图，`observationID`、PNG、哈希及 `postActionStability` 元数据保持绑定。该预算独立于派发前的 30/8 秒预算。
+- standard 的 `type` 发完 ASCII 按键、粘贴快捷键或清空快捷键，或 `press --key backspace` 发完退格键后（`action.result.transportStatus=sent`），先读 AX，再截一张图（`ax_then_screenshot`）。单帧观察省略 `observation.stability`。直接核对目标输入框的内容；若结果尚看不清，可再执行一次只读 `observe`，避免重复输入。
+- 使用常规判稳的标准模式动作（如 `swipe`、`press --key return`）最多等待 15 秒，以 Apple PNG 连续采样：同一设备、会话、显示方向与尺寸下至少 3 帧满足就绪条件，稳定跨度至少 0.4 秒，总观察跨度至少 1.5 秒。比较固定候选帧，容忍有限色差；另允许每帧至多全屏 0.1% 像素变化，但连续窗口累计差异包围框必须在 320 平方点、任一边 80 点内。此局部容差仅用于动作后就绪，不修改动作前校验或 Runner。返回最后一张原图，`observationID`、PNG、哈希及 `postActionStability` 元数据保持绑定。该预算独立于派发前的 30/8 秒预算。
 - 视频等持续变化区域仅沿用本动作明确提供的 `--ignore-rect`；方向/坐标空间变化后禁用旧区域。动作后不会沿用输入前的光标位置，不会把整个输入框排除，也不识别光标颜色。小范围闪烁可满足上述就绪条件；采用常规判稳的动作遇到较大持续运动，在至少三个同几何样本和 1.5 秒观察后返回当前图，标记 `dynamic_or_transitioning`，不要求视频停止。
 - `observation.ok=true` 仅表示取得有效截图。采用连续采样时，读取 `observation.stability.stable`；若为 `false`，回执附上最后的有效截图和原因。采集失败时返回 `observation.ok=false`。两者均保留输入的已知/未知结果，绝不重放输入。视觉稳定也不等于业务动作成功，仍须 Agent 判断。
 - 独立 `observe` 保留单次采集语义；`text-finish` 仅恢复剪贴板，不新增动作后判稳。Runner 的动态观察完成条件见下方执行结果。有限采样不能保证未来不会出现延迟加载，下一次动作仍执行原有前置校验。
@@ -157,7 +157,7 @@ Runner 动作协议 13 要求匹配的 CLI/Runner；旧宿主拒绝新 CLI 的�
 
 ## 原生编辑按键与横屏文字
 
-`apple-native` 的 `press oN --key KEY` 支持 `return`、`backspace`、`left`、`right`、`up`、`down`、`tab`、`shift-tab`、`escape`。使用当前截图确认焦点，可通过 `--field-rect x,y,width,height` 保护完整输入框。每次只发送一个按键或明确的 Shift+Tab 组合，包含释放；没有重复次数、任意快捷键或自动补发。Runner 使用元素引用 `press oN:eN`，其实现和验收范围见 [Runner 编辑按键](runner-editing-keys.md)。按键、ASCII 每阶段仅一次最终 PNG 校验，Unicode 粘贴在剪贴板前后各一次；始终比较原 observation。方向准备和最多一次自有媒体恢复计入请求受理后 30 秒总预算，每阶段 8 秒从 Apple PNG 请求开始计时，方向变化立即拒绝，不循环截图或重发按键。
+`apple-native` 的 `press oN --key KEY` 支持 `return`、`backspace`、`left`、`right`、`up`、`down`、`tab`、`shift-tab`、`escape`。默认退格会绑定当前观察中唯一获得焦点的原生编辑器，键盘就绪后再次核对其身份。焦点换框或复核失败时停止发键。若原观察无法识别唯一焦点，仍使用原有的全屏像素校验。其他按键使用截图校验，可通过 `--field-rect x,y,width,height` 保护完整输入框。每次只发送一个按键或明确的 Shift+Tab 组合，包含释放；没有重复次数、任意快捷键或自动补发。Runner 使用元素引用 `press oN:eN`，其实现和验收范围见 [Runner 编辑按键](runner-editing-keys.md)。按键、ASCII 每阶段仅一次最终 PNG 校验，Unicode 粘贴在剪贴板前后各一次；始终比较原 observation。方向准备和最多一次自有媒体恢复计入请求受理后 30 秒总预算，每阶段 8 秒从 Apple PNG 请求开始计时，方向变化立即拒绝，不循环截图或重发按键。
 
 这些名称表示 HID 键盘操作，不承诺业务效果：Backspace 的删除单位、方向键的光标位置、Tab 的焦点切换、Escape 的取消行为均由前台 App/IME 决定。回执保留 `key`、`keyReportQueued`、`keyboardReleaseQueued`、`keyEffectConfirmed=false`；本地发送完成仍是 unknown，需检查结果截图。Shift+Tab 先单独按下 Shift，再按 Tab，最后释放全部按键；取消或失败沿用同通道释放和不重放契约。
 
