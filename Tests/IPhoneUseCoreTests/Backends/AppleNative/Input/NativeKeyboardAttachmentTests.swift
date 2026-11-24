@@ -82,6 +82,42 @@ final class NativeKeyboardAttachmentTests: XCTestCase {
         XCTAssertNil(NativeTextResponder(capture, selecting: editor()))
     }
 
+    func testOnlyAlreadyFocusedSemanticTargetsCanSkipThePixelBaseline() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = ObservationCache(directory: directory)
+        func node(_ index: Int, focused: Bool) -> AXNode {
+            var attrs = editor(id: String(index + 1), top: Double(100 + 60 * index)).attributes
+            attrs["attributeSource"] = "axp-native-snapshot"
+            attrs["keyboardFocus"] = focused
+            return AXNode(index: index, parent: nil, role: "text_field", attributes: attrs)
+        }
+        let source = try frame(screenPNG(), [node(0, focused: true), node(1, focused: false)])
+        var metadata = source.metadata
+        metadata["backend"] = "apple-native"; metadata["screenshotWidth"] = 390; metadata["screenshotHeight"] = 844
+        func store() throws {
+            let capture = CapturedObservation(nodes: source.nodes, metadata: metadata, screenshot: source.screenshot)
+            _ = try cache.store(capture)
+        }
+        func resolve(_ ref: String, field: String? = nil) throws -> ObservedTarget {
+            var fields: [String: Any] = ["reference": ref, "text": "abc", "mode": "insert"]
+            fields["fieldRect"] = field
+            return try cache.resolveTarget(for: DeviceAction(operation: "type", request: fields, allowScreenText: true))
+        }
+        try store()
+        for ref in ["o1", "o1:e1"] {
+            let target = try resolve(ref)
+            XCTAssertNotNil(target.focusedTextContext)
+            XCTAssertNil(target.textGuard)
+        }
+        XCTAssertNotNil(try resolve("o1:e2").textGuard)
+        XCTAssertNotNil(try resolve("o1", field: "20,100,350,44").textFieldGuard)
+        metadata["screenshotHeight"] = 500
+        try store()
+        XCTAssertThrowsError(try resolve("o2"))
+        XCTAssertThrowsError(try resolve("o1:e1"))
+    }
+
     func testDismissalMustSettleBeforeStagingAndOtherScreenChangesRemainGuarded() throws {
         let fixture = try original()
         let binding = fixture.binding, baseline = fixture.baseline, source = fixture.source

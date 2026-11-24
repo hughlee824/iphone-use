@@ -19,14 +19,14 @@ extension AppleInputAttempt {
         guard let editor = target.textEditor, let source = target.textSource else {
             throw focusFailure("Observe a unique, focused native text editor before typing")
         }
-        if editor.sameEditor(as: NativeTextResponder(source)) { return }
+        if target.focusedTextContext != nil || editor.sameEditor(as: NativeTextResponder(source)) { return }
         guard let index = action.reference.node, source.nodes.indices.contains(index) else {
             throw focusFailure("The original observation does not identify the focused editor")
         }
         let selected = source.nodes[index]
         let rect = editor.field.cgRect
         guard selected.attributes["visible"] as? Bool == true, selected.enabled != false,
-            screenGuard.context.screen.cgRect.contains(rect) else {
+            screenContext.screen.cgRect.contains(rect) else {
             throw focusFailure("Observe a visible editor before requesting focus")
         }
         let point = CGPoint(x: rect.midX, y: rect.midY)
@@ -39,10 +39,10 @@ extension AppleInputAttempt {
             let hit = collection["focusHit"] as? [String: Any],
             hit["pid"] as? Int == editor.pid, hit["objectID"] as? String == editor.objectID,
             hit["x"] as? Double == point.x, hit["y"] as? Double == point.y,
-            try screenGuard.check(png: frame.screenshot, context: screenGuard.context).accepted else {
+            try requireVisualGuard().check(png: frame.screenshot, context: screenContext).accepted else {
             throw focusFailure("The focus point no longer matches the observed editor", frame)
         }
-        let mapped = try NativeCoordinateMapper.map(point, screen: screenGuard.context.screen, rotation: rotation)
+        let mapped = try NativeCoordinateMapper.map(point, screen: screenContext.screen, rotation: rotation)
         try backend.checkInputAvailability(budget: budget)
         _ = try hid.tap(mapped, onContact: onInputStarted) { try self.backend.checkInputCanContinue() }
         // The pre-input check confirms this editor after any lazy keyboard registration.
@@ -70,7 +70,7 @@ extension AppleInputAttempt {
             frame.metadata["displayRotation"] as? String == rotation,
             frame.metadata["nativeRotation"] as? String == "rot0",
             let raw = frame.metadata["screenContext"] as? [String: Any],
-            screenGuard.context.matches(try JSONDecoder().decode(ScreenContext.self, from: jsonData(raw))) else {
+            screenContext.matches(try JSONDecoder().decode(ScreenContext.self, from: jsonData(raw))) else {
             throw focusFailure("Display context changed before text input", frame)
         }
         try budget.check()

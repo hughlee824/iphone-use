@@ -62,9 +62,12 @@ extension HostTests {
         let paths = running.paths, session = running.session, finished = running.finished
         defer { _ = try? call(paths, session: session, op: "disconnect"); wait(for: [finished], timeout: 3) }
         _ = try call(paths, session: session, op: "observe")
-        for (index, mode) in ["replace", "append", "insert"].enumerated() {
+        let edits = [("replace", "中文", "paste"), ("append", "中文", "paste"), ("insert", "中文", "paste"),
+                     ("insert", "abc", "auto"), ("replace", "", "auto")]
+        for (index, edit) in edits.enumerated() {
+            let (mode, text, method) = edit
             let fields: [String: Any] = [
-                "reference": "o\(index + 1)", "mode": mode, "text": "中文", "textMethod": "paste"
+                "reference": "o\(index + 1)", "mode": mode, "text": text, "textMethod": method
             ]
             let response = try call(paths, session: session, op: "type-with-method", fields: fields)
             XCTAssertEqual(response["outcome"] as? String, "unknown")

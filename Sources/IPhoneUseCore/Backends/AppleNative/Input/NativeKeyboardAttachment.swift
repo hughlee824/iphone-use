@@ -100,6 +100,7 @@ extension AppleInputAttempt {
             _ = try backend.prepareText()
             return
         }
+        let screenGuard = try requireVisualGuard()
         try screenGuard.validate()
         guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
             throw ScreenGuard.Failure.invalidGuard
@@ -128,8 +129,9 @@ extension AppleInputAttempt {
             try attachment.confirm(frame)
             return frame
         }
+        let screenGuard = try requireVisualGuard()
         let frame = try attachment.settledFrame(original: screenGuard, capture: capture)
-        screenGuard = try attachment.afterRegistration(frame, original: screenGuard)
+        visualGuard = try attachment.afterRegistration(frame, original: screenGuard)
         return frame
     }
 }

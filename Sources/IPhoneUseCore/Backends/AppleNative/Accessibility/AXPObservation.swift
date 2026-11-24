@@ -11,7 +11,7 @@ enum AXPObservation {
         try checkCancellation()
         let task = AXPParallelRead(read: read)
         defer { task.cancel(); _ = task.join() }
-        // After Paste, an immediately requested PNG can still show the field before the edit.
+        // After typing, an immediately requested PNG can still show the field before the edit.
         if axFirst { _ = task.join(); try checkCancellation() }
         let imageStarted = Date().timeIntervalSince1970
         let image = try screenshot()

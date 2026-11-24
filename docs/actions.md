@@ -55,7 +55,7 @@ iphone-use --session "$SESSION" tap o1:e10 --observe
 iphone-use --session "$SESSION" type o2:e8 --text '新内容' --observe
 ```
 
-每条命令只执行一个已选择的动作。标准模式在宿主设备队列内完成动作后有界判稳，`--observe` 复用其返回的观察；其他路径根据回执调用既有 `observe`。返回单行 JSON：
+每条命令只执行一个已选择的动作。标准模式在宿主设备队列内按动作采集结果，`--observe` 复用其返回的观察；其他路径根据回执调用既有 `observe`。返回单行 JSON：
 
 ```json
 {"session":"example-session","ok":true,"action":{"id":"action-request","session":"example-session","ok":true,"outcome":"completed","result":{}},"observation":{"id":"capture-request","session":"example-session","ok":true,"result":{"observation":"o2","refs":"current","screenshot":"/example/o2/screen.png","text":"observation=o2 refs=current…"}}}
@@ -63,9 +63,10 @@ iphone-use --session "$SESSION" type o2:e8 --text '新内容' --observe
 
 - `action` 完整保留原动作回执，包括 `outcome`、错误及可用输入事实；`observation` 独立保留观察回执。CLI 退出码与顶层 `ok` 表示整组是否成功：动作和观察均成功才为 0 / true。
 - standard 普通 `tap --observe` 在点击派发后立即连续截图。在相同设备、会话和显示上下文内，相邻两张通过现有像素比较就选定后一张；有差异就用后一张和下一张再比。1.5 秒是停止发新截图的时间，无固定最短等待。到点仍未判稳时，等最后一张已发出的截图在原请求期限内返回：有效就选它，取图失败就退回同一有效上下文中的最近一张，标记 `stable=false`。上下文已失效或没有有效图时报告观察失败。选图后只读一次 AX，与选定的原图一同返回。完整耗时还包括输入前校验、派发、在途截图剩余时间和 AX 读取。
-- 标准模式其他动作后最多等待 15 秒，以 Apple PNG 连续采样：同一设备、会话、显示方向与尺寸下至少 3 帧满足就绪条件，稳定跨度至少 0.4 秒，总观察跨度至少 1.5 秒。比较固定候选帧，容忍有限色差；另允许每帧至多全屏 0.1% 像素变化，但连续窗口累计差异包围框必须在 320 平方点、任一边 80 点内。此局部容差仅用于动作后就绪，不修改动作前校验或 Runner。返回最后一张原图，`observationID`、PNG、哈希及 `postActionStability` 元数据保持绑定。该预算独立于派发前的 30/8 秒预算。
-- 视频等持续变化区域仅沿用本动作明确提供的 `--ignore-rect`；方向/坐标空间变化后禁用旧区域。动作后不会沿用输入前的光标位置，不会把整个输入框排除，也不识别光标颜色。小范围闪烁可满足上述就绪条件；普通点击以外的动作遇到较大持续运动，在至少三个同几何样本和 1.5 秒观察后返回当前图，标记 `dynamic_or_transitioning`，不要求视频停止。
-- `observation.ok=true` 仅表示取得有效截图。必须另看 `observation.stability.stable`：动态画面或期限内未判稳时保留最后有效截图并附相应原因；没有有效截图等采集失败则 `observation.ok=false`。两者均保留输入的已知/未知结果，绝不重放输入。视觉稳定也不等于业务动作成功，仍须 Agent 判断。
+- standard 的 `type` 发完 ASCII 按键、粘贴快捷键或清空快捷键（`action.result.transportStatus=sent`）后，先读 AX，再截一张图（`ax_then_screenshot`）。单帧观察省略 `observation.stability`。直接核对目标输入框的内容；若结果尚看不清，可再执行一次只读 `observe`，避免重复输入。
+- 使用常规判稳的标准模式动作（如 `swipe`、`press`）最多等待 15 秒，以 Apple PNG 连续采样：同一设备、会话、显示方向与尺寸下至少 3 帧满足就绪条件，稳定跨度至少 0.4 秒，总观察跨度至少 1.5 秒。比较固定候选帧，容忍有限色差；另允许每帧至多全屏 0.1% 像素变化，但连续窗口累计差异包围框必须在 320 平方点、任一边 80 点内。此局部容差仅用于动作后就绪，不修改动作前校验或 Runner。返回最后一张原图，`observationID`、PNG、哈希及 `postActionStability` 元数据保持绑定。该预算独立于派发前的 30/8 秒预算。
+- 视频等持续变化区域仅沿用本动作明确提供的 `--ignore-rect`；方向/坐标空间变化后禁用旧区域。动作后不会沿用输入前的光标位置，不会把整个输入框排除，也不识别光标颜色。小范围闪烁可满足上述就绪条件；采用常规判稳的动作遇到较大持续运动，在至少三个同几何样本和 1.5 秒观察后返回当前图，标记 `dynamic_or_transitioning`，不要求视频停止。
+- `observation.ok=true` 仅表示取得有效截图。采用连续采样时，读取 `observation.stability.stable`；若为 `false`，回执附上最后的有效截图和原因。采集失败时返回 `observation.ok=false`。两者均保留输入的已知/未知结果，绝不重放输入。视觉稳定也不等于业务动作成功，仍须 Agent 判断。
 - 独立 `observe` 保留单次采集语义；`text-finish` 仅恢复剪贴板，不新增动作后判稳。Runner 的动态观察完成条件见下方执行结果。有限采样不能保证未来不会出现延迟加载，下一次动作仍执行原有前置校验。
 - `completed`、`unknown` 和需要刷新的拒绝均继续观察。`unknown` 即使观察成功也仍退出 1；观察不能追认动作完成。
 - 会话匹配、`ok=false`、`outcome=not_dispatched` 且 `requiresObservation` 缺省或为 false 时，不刷新，返回 `observation={"skipped":"not_dispatched"}`。这保留了可纠正参数错误后的当前引用。

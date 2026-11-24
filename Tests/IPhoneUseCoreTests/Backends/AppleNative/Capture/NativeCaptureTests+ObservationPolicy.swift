@@ -19,7 +19,7 @@ extension NativeCaptureTests {
         try run(backend, root)
     }
 
-    func testPasteDiagnosticsExportOnlyTheReturnedFrame() throws {
+    func testTypingDiagnosticsExportOnlyTheReturnedFrame() throws {
         try withPasteDiagnostics { backend, _ in
             let png = try screenPNG(width: 12, height: 18)
             var captures = 0
@@ -29,7 +29,7 @@ extension NativeCaptureTests {
                 return ["png": png.base64EncodedString(), "displayBefore": self.display(), "display": self.display()]
             })
             backend.cli = cli
-            let result = try backend.observeAfterPaste(nil)
+            let result = try backend.observeAfterTyping(nil)
             XCTAssertEqual(captures, 1)
             XCTAssertEqual(result.screenshot, png)
             XCTAssertNil(result.metadata["postActionStability"])
@@ -46,9 +46,9 @@ extension NativeCaptureTests {
         }
     }
 
-    func testPasteDiagnosticsExportOriginalCaptureFailure() throws {
+    func testTypingDiagnosticsExportOriginalCaptureFailure() throws {
         try withPasteDiagnostics { backend, root in
-            XCTAssertThrowsError(try backend.observeAfterPaste(nil)) {
+            XCTAssertThrowsError(try backend.observeAfterTyping(nil)) {
                 XCTAssertEqual(($0 as? IPhoneUseError)?.code, "backend_unavailable")
             }
             let directories = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)

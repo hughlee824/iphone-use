@@ -112,6 +112,19 @@ extension ObservationCache {
         if selected != nil && editor == nil {
             throw IPhoneUseError("native_action_unsupported", "Select a uniquely identified native text editor")
         }
+        // Native capture already checked these pixel dimensions against the display.
+        // With an identified, focused editor there is no touch point to compare.
+        if let editor, action.ignoredScreenRect == nil, action.caretRegion == nil,
+            selected == nil || editor.sameEditor(as: NativeTextResponder(entry.capture)),
+            let width = entry.capture.metadata["screenshotWidth"] as? Int,
+            let height = entry.capture.metadata["screenshotHeight"] as? Int {
+            guard context.valid, editor.field.valid, context.screen.cgRect.contains(editor.field.cgRect) else {
+                throw ScreenGuard.Failure.invalidGuard
+            }
+            try ScreenImage.validateMapping(width: width, height: height, to: context.screen)
+            return ObservedTarget(context: entry.capture.metadata, path: [], textSource: entry.capture,
+                                  textEditor: editor, focusedTextContext: context)
+        }
         let rect = action.textRegion ?? editor?.field ?? context.screen
         let guardValue = try ScreenGuard(
             png: entry.capture.screenshot, context: context, rects: [rect],

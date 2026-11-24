@@ -11,7 +11,7 @@ protocol SessionBackend: AnyObject {
     func appLifecycle(bundle: String, relaunch: Bool) throws -> [String: Any]
     func observe() throws -> CapturedObservation
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation
-    func observeAfterPaste(_ options: NativeTextObservationOptions?) throws -> CapturedObservation
+    func observeAfterTyping(_ options: NativeTextObservationOptions?) throws -> CapturedObservation
     func observeAfterAction(
         actionKind: String?,
         textOptions: NativeTextObservationOptions?, ignoring: ScreenRect?, sourceContext: ScreenContext?
@@ -32,7 +32,7 @@ protocol SessionBackend: AnyObject {
 }
 
 extension SessionBackend {
-    func observeAfterPaste(_ options: NativeTextObservationOptions?) throws -> CapturedObservation {
+    func observeAfterTyping(_ options: NativeTextObservationOptions?) throws -> CapturedObservation {
         try options.map { try observeText($0) } ?? observe()
     }
     func showPreviewGesture(_ gesture: NativePreviewGesture) {}

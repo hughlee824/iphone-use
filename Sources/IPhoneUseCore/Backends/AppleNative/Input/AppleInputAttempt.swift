@@ -10,7 +10,12 @@ final class AppleInputAttempt {
     let target: ObservedTarget
     let textInput: NativeTextInput?
     let hid: NativeHIDAdapter
-    var screenGuard: ScreenGuard
+    let screenContext: ScreenContext
+    var visualGuard: ScreenGuard?
+    func requireVisualGuard() throws -> ScreenGuard {
+        guard let visualGuard else { throw ScreenGuard.Failure.invalidGuard }
+        return visualGuard
+    }
     var attachment: NativeKeyboardAttachment?
     let rotation: String
     let swipe: NativeSwipePlan?
@@ -40,10 +45,12 @@ final class AppleInputAttempt {
                 description: control.message ?? "Native control is unavailable",
                 possiblyExecuted: false, requiresObservation: false, result: control.result)
         }
+        let visualGuard = (keyboardAction || homeAction) ? target.textGuard : target.gesture?.screenGuard
+        let focusedContext = textInput != nil && action.textRegion == nil ? target.focusedTextContext : nil
         guard target.context["deviceID"] as? String == backend.cli?.device,
             target.context["sessionGeneration"] as? String == backend.generation,
             let captured = target.context["captureStartedUptime"] as? Double,
-            let screenGuard = (keyboardAction || homeAction) ? target.textGuard : target.gesture?.screenGuard
+            let screenContext = visualGuard?.context ?? focusedContext
         else {
             throw ActionFailure(
                 code: "stale_observation", description: "Observe this device/session again before input",
@@ -65,7 +72,7 @@ final class AppleInputAttempt {
             action.kind == "swipe" ? try NativeSwipePlan(gesture: target.gesture!, rotation: rotation) : nil
         let pinch =
             action.kind == "pinch" ? try NativePinchPlan(gesture: target.gesture!, rotation: rotation) : nil
-        self.hid = hid; self.screenGuard = screenGuard; self.timing = timing
+        self.hid = hid; self.visualGuard = visualGuard; self.screenContext = screenContext; self.timing = timing
         self.rotation = rotation; self.swipe = swipe; self.pinch = pinch
     }
 
@@ -88,8 +95,7 @@ final class AppleInputAttempt {
         } else { result["screenGuard"] = check }
         result["preInputCaptures"] = captures
         result["preInputChecks"] = preInputChecks
-        if keyboardAction && !semanticTyping {
-            let rect = screenGuard.regions[0].rect
+        if keyboardAction && !semanticTyping, let rect = visualGuard?.regions.first?.rect {
             result["textFieldRect"] = [
                 "x": rect.originX, "y": rect.originY, "width": rect.width, "height": rect.height
             ]
@@ -107,6 +113,7 @@ final class AppleInputAttempt {
             try prepareKeyboardForInput()
         }
         if homeAction {
+            let screenGuard = try requireVisualGuard()
             try screenGuard.validate()
             guard screenGuard.regions.map(\.rect) == [screenGuard.context.screen] else {
                 throw ScreenGuard.Failure.invalidGuard
@@ -136,7 +143,7 @@ final class AppleInputAttempt {
         let phaseStarted = ProcessInfo.processInfo.systemUptime
         let focusedFrame = try attachmentFrame(stage: stage, budget: budget)
         let (value, count) = try NativeInputPreflight.check(
-            guard: screenGuard,
+            guard: requireVisualGuard(),
             displayID: target.context["displayID"] as? UInt64, displayRotation: rotation,
             displayUniqueID: target.context["displayUniqueID"] as? String,
             captureSource: target.context["captureSource"] as? String,

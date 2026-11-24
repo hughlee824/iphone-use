@@ -11,7 +11,7 @@ extension AppleDeviceBackend {
     func observeText(_ options: NativeTextObservationOptions) throws -> CapturedObservation {
         try observeTextOrScreen(options)
     }
-    func observeAfterPaste(_ options: NativeTextObservationOptions?) throws -> CapturedObservation {
+    func observeAfterTyping(_ options: NativeTextObservationOptions?) throws -> CapturedObservation {
         let started = ProcessInfo.processInfo.systemUptime
         let diagnostics = NativePostActionDiagnostics.fromEnvironment()
         do {

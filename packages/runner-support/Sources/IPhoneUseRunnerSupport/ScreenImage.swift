@@ -24,8 +24,12 @@ public struct ScreenImage {
     }
 
     public func validateMapping(to screen: ScreenRect) throws {
+        try Self.validateMapping(width: image.width, height: image.height, to: screen)
+    }
+
+    public static func validateMapping(width: Int, height: Int, to screen: ScreenRect) throws {
         // Full-screen iPhone captures only; never stretch a mismatched image onto old coordinates.
-        let scaleX = Double(image.width) / screen.width, scaleY = Double(image.height) / screen.height
+        let scaleX = Double(width) / screen.width, scaleY = Double(height) / screen.height
         guard scaleX >= 1, scaleY >= 1, abs(scaleX - scaleY) <= 0.01 else {
             throw ScreenGuard.Failure.invalidImage
         }
