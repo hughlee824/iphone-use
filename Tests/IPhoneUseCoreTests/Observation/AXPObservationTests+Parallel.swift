@@ -2,6 +2,24 @@ import XCTest
 @testable import IPhoneUseCore
 
 extension AXPObservationTests {
+    func testPasteRequestsOneScreenshotAfterAXFinishes() throws {
+        let readFinished = DispatchSemaphore(value: 0), image = try screenshot()
+        var images = 0
+        let result = try AXPObservation.capture(device: "device", generation: "generation", axFirst: true, read: { _ in
+            defer { readFinished.signal() }
+            return self.payload()
+        }, screenshot: {
+            XCTAssertEqual(readFinished.wait(timeout: .now()), .success)
+            images += 1
+            return image
+        }, checkCancellation: {})
+        XCTAssertEqual(images, 1)
+        let timing = try XCTUnwrap(result.metadata["observationAcquisition"] as? [String: Any])
+        XCTAssertEqual(timing["strategy"] as? String, "ax_then_screenshot")
+        XCTAssertEqual(result.nodes.count, 3)
+        XCTAssertNil(result.metadata["postActionStability"])
+    }
+
     func testAXAndScreenshotOverlapAndPublishOnlyAfterBothComplete() throws {
         let image = try screenshot()
         for axFinishesFirst in [false, true] {

@@ -3,6 +3,24 @@
 #import "../NativeServiceFailure.h"
 #import "../NativeTiming.h"
 
+@interface ASKeyboardMediaEndpoint ()
+- (instancetype)initWithTunnel:(ASCoreDeviceTunnel *)tunnel channel:(ASNativeChannel *)channel;
+@end
+@implementation ASKeyboardMediaEndpoint {
+    ASCoreDeviceTunnel *_tunnel;
+}
+- (instancetype)initWithTunnel:(ASCoreDeviceTunnel *)tunnel channel:(ASNativeChannel *)channel {
+    if ((self = [super init])) {
+        _tunnel = tunnel; _channel = channel; _localAddress = tunnel.localIP;
+        _deviceAddress = tunnel.deviceIP; _receiverPort = [tunnel openMediaReceiver];
+    }
+    return self;
+}
+- (NSUInteger)receivedFromPort:(uint16_t)port ssrc:(uint32_t)ssrc {
+    return [_tunnel receivedFromPort:port ssrc:ssrc];
+}
+@end
+
 @implementation ASDeviceServiceTransport {
     ASCoreDeviceTunnel *_tunnel;
     ASNativeChannel *_discovery;
@@ -32,6 +50,29 @@
         [self close]; @throw;
     }
     return self;
+}
+- (ASKeyboardMediaEndpoint *)openKeyboardMedia {
+    NSString *name = @"com.apple.coredevice.displayservice";
+    NSDictionary *entry = _services[name];
+    if (![entry isKindOfClass:NSDictionary.class] || [entry[@"Entitlement"] isEqual:@"AppleInternal"]
+        || ![entry[@"Properties"] isKindOfClass:NSDictionary.class] || ![entry[@"Properties"][@"UsesRemoteXPC"] boolValue])
+        ASDeviceTransportFail(@"Device did not advertise an eligible display service");
+    NSError *error = nil;
+    ASNativeChannel *channel = [[ASNativeChannel alloc] initWithConnectedFileDescriptor:[self openService:name]
+        versionFlags:_versionFlags handshake:NO peerInfo:NULL error:&error];
+    if (!channel) ASNativeChannelFail(error, @"RSD display channel unavailable");
+    return [[ASKeyboardMediaEndpoint alloc] initWithTunnel:_tunnel channel:channel];
+}
+- (int)openKeyboardService:(BOOL)pasteboard {
+    NSString *name = pasteboard ? @"com.apple.coredevice.pasteboardservice" : @"com.apple.coredevice.hid.universalhidservice";
+    NSDictionary *entry = _services[name];
+    if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"Properties"] isKindOfClass:NSDictionary.class])
+        ASDeviceTransportFail(@"Requested keyboard or pasteboard service absent from RSD inventory");
+    NSDictionary *properties = entry[@"Properties"];
+    if ([entry[@"Entitlement"] isEqual:@"AppleInternal"] || ![properties[@"UsesRemoteXPC"] boolValue]
+        || [properties[@"ServiceVersion"] integerValue] != 1)
+        ASDeviceTransportFail(@"Device did not advertise an eligible RemoteXPC keyboard or pasteboard service");
+    return [self openService:name];
 }
 - (int)openService:(NSString *)name {
     id service = _services[name];

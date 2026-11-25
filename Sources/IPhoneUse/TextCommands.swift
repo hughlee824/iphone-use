@@ -113,6 +113,8 @@ struct TextPrepare: ParsableCommand {
              screenshot. Inspect it before typing or Return.
             """
     )
+    @Flag(help: "Compatibility option. Standard mode registers its USB/RSD keyboard by default.")
+    var rsdKeyboard = false
     @OptionGroup var options: SessionOptions
     @OptionGroup var presentation: AgentOutputOptions
     @Option(
@@ -134,7 +136,8 @@ struct TextPrepare: ParsableCommand {
             if let ignoreRect { fields["ignoreRect"] = ignoreRect }
             // Old hosts must reject the scoped request, not silently skip stability checks.
             return try SessionClient.call(
-                session: session, operation: fieldRect == nil ? "text-prepare" : "text-prepare-scoped",
+                session: session, operation: rsdKeyboard ? "text-prepare-rsd"
+                    : (fieldRect == nil ? "text-prepare" : "text-prepare-scoped"),
                 fields: fields)
         }
     }

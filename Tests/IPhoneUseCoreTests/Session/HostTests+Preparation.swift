@@ -29,6 +29,29 @@ extension HostTests {
         XCTAssertEqual(backend.inputCount, 1)
     }
 
+    func testOnlyFullySentBackspaceUsesSinglePressObservation() throws {
+        let backend = ControlledBackend(); backend.nativeSend = true; backend.nativeTextFixture = true
+        let running = try host(timeout: 5, backend: backend, native: true)
+        let paths = running.paths, session = running.session, finished = running.finished
+        defer { _ = try? call(paths, session: session, op: "disconnect"); wait(for: [finished], timeout: 3) }
+        _ = try call(paths, session: session, op: "observe")
+        func press(_ ref: String, _ key: String) throws -> [String: Any] {
+            try call(paths, session: session, op: "press", fields: ["reference": ref, "key": key])
+        }
+        let sent = try press("o1", "backspace")
+        XCTAssertEqual(sent["outcome"] as? String, "unknown")
+        XCTAssertEqual((sent["observation"] as? [String: Any])?["ok"] as? Bool, true)
+        XCTAssertEqual(backend.postActionObserveCount, 0)
+        _ = try press("o2", "return")
+        XCTAssertEqual(backend.postActionObserveCount, 1)
+        backend.actionFailure = ActionFailure(code: "native_input_uncertain", description: "Partial key report",
+            possiblyExecuted: true, requiresObservation: true, result: ["transportStatus": "uncertain"])
+        let partial = try press("o3", "backspace")
+        XCTAssertEqual(partial["outcome"] as? String, "unknown")
+        XCTAssertEqual(backend.postActionObserveCount, 2)
+        XCTAssertEqual(backend.actionCount, 3)
+    }
+
     func testPreparationPreservesFactsOnCaptureFailureAndIsNativeOnly() throws {
         for native in [true, false] {
             let backend = ControlledBackend(); backend.nativeTextFixture = native
@@ -62,12 +85,20 @@ extension HostTests {
         let paths = running.paths, session = running.session, finished = running.finished
         defer { _ = try? call(paths, session: session, op: "disconnect"); wait(for: [finished], timeout: 3) }
         _ = try call(paths, session: session, op: "observe")
-        for (index, mode) in ["replace", "append", "insert"].enumerated() {
+        let edits = [("replace", "中文", "paste"), ("append", "中文", "paste"), ("insert", "中文", "paste"),
+                     ("insert", "abc", "auto"), ("replace", "", "auto")]
+        for (index, edit) in edits.enumerated() {
+            let (mode, text, method) = edit
             let fields: [String: Any] = [
-                "reference": "o\(index + 1)", "mode": mode, "text": "中文", "textMethod": "paste"
+                "reference": "o\(index + 1)", "mode": mode, "text": text, "textMethod": method
             ]
             let response = try call(paths, session: session, op: "type-with-method", fields: fields)
             XCTAssertEqual(response["outcome"] as? String, "unknown")
+            let observation = try XCTUnwrap(response["observation"] as? [String: Any])
+            XCTAssertEqual(observation["ok"] as? Bool, true)
+            XCTAssertNil(observation["stability"])
+            XCTAssertEqual(backend.postActionObserveCount, 0)
+            XCTAssertEqual(backend.observeCount, index + 2)
             XCTAssertEqual(backend.lastTextMode, mode)
             XCTAssertEqual(backend.inputCount, index + 1)
             let stale = try call(paths, session: session, op: "type-with-method", fields: fields)

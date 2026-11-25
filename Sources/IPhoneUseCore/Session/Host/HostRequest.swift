@@ -30,7 +30,8 @@ final class HostRequest {
             ["type-with-method", "type-with-caret"].contains(requestedOperation)
             ? "type"
             : requestedOperation == "press-with-caret"
-                ? "press" : requestedOperation == "text-prepare-scoped" ? "text-prepare" : requestedOperation
+                ? "press" : ["text-prepare-scoped", "text-prepare-rsd"].contains(requestedOperation)
+                    ? "text-prepare" : requestedOperation
         appLifecycle = operation == "terminate" || operation == "relaunch"
         appAction = operation == "open" || appLifecycle
     }

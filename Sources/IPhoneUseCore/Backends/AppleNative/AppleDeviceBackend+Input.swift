@@ -6,7 +6,7 @@ import AppleNativeBridge
 extension AppleDeviceBackend {
     func perform(_ action: DeviceAction, target: ObservedTarget, onInputStarted: @escaping () -> Void) throws
         -> [String: Any] {
-        let typing = action.kind == "type" && action.reference.node == nil
+        let typing = action.kind == "type"
         let pressing = action.kind == "press" && action.reference.node == nil
         let keyboardAction = typing || pressing
         let homeAction = action.kind == "home"
@@ -33,6 +33,15 @@ extension AppleDeviceBackend {
         return try AppleInputAttempt(backend: self, action: action, target: target, textInput: textInput)
             .run(onInputStarted: onInputStarted)
     }
+    func openKeyboardConnection(identifier: String) throws -> NativeTransport {
+        guard let cli, let deviceLock else { throw IPhoneUseError("native_session_closing", "Keyboard session closed") }
+        let display = try NativeDisplay(cli.read(["device", "info", "displays"]))
+        let tunnel = try KeyboardTunnel(
+            device: cli.device, identifier: identifier, display: display.id, ownership: deviceLock)
+        keyboardTunnel = tunnel
+        return try tunnel.open(pasteboard: false)
+    }
+
     func prepareText() throws -> [String: Any] {
         try cancellation.check()
         let control = controlStatus()
@@ -44,11 +53,12 @@ extension AppleDeviceBackend {
         }
         let alreadyPrepared = hid.keyboardStatus["prepared"] as? Bool == true
         do { try hid.prepareKeyboard() } catch {
-            // Discovery is read-only: failure cannot have sent input or created a service.
+            if !alreadyPrepared, hid.registeredKeyboard != nil { keyboardTunnel?.close() }
             throw ActionFailure(
                 code: (error as? ActionFailure)?.code ?? (error as? IPhoneUseError)?.code
                     ?? "native_keyboard_unavailable",
-                description: String(describing: error), possiblyExecuted: false,
+                description: String(describing: error),
+                possiblyExecuted: hid.registeredKeyboard?.registrationMayExist == true,
                 requiresObservation: true,
                 result: [
                     "keyboardPrepared": false, "keyboard": hid.keyboardStatus,

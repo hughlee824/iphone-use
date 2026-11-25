@@ -36,10 +36,34 @@ static void frag(const uint8_t *tcp,size_t off,size_t len,bool more,uint32_t id)
     memcpy(p+8,remote,16);memcpy(p+24,local,16);p[40]=6;wire_put16(p+42,(uint16_t)off|more);wire_put32(p+44,id);memcpy(p+48,tcp+off,len);
     assert(device_ip_input(stack,p,48+len));
 }
+static size_t datagrams;
+static void capture_udp(void *context,uint16_t source,const uint8_t *data,size_t count) {
+    (void)context;
+    assert(source==12000 && count==8 && !memcmp(data,"keyboard",8));datagrams++;
+}
+static void test_udp(void) {
+    uint8_t p[56]={0};p[0]=0x60;wire_put16(p+4,16);p[6]=17;p[7]=64;
+    memcpy(p+8,remote,16);memcpy(p+24,local,16);wire_put16(p+40,12000);wire_put16(p+42,50123);
+    wire_put16(p+44,16);memcpy(p+48,"keyboard",8);
+    wire_put16(p+46,wire_transport_checksum(remote,local,p+40,16,17));
+    assert(device_ip_input(stack,p,sizeof(p)) && !datagrams);
+    device_ip_receive_udp(stack,50123,capture_udp);
+    assert(device_ip_input(stack,p,sizeof(p)) && datagrams==1);
+    p[48]^=1;assert(device_ip_input(stack,p,sizeof(p)) && datagrams==1);p[48]^=1;
+    device_ip_receive_udp(stack,50124,capture_udp);
+    assert(device_ip_input(stack,p,sizeof(p)) && datagrams==1);
+    device_ip_receive_udp(stack,50123,capture_udp);
+    uint8_t chunk[56]={0};memcpy(chunk,p,40);chunk[6]=44;chunk[40]=17;
+    wire_put32(chunk+44,123);wire_put16(chunk+42,8);memcpy(chunk+48,p+48,8);
+    assert(device_ip_input(stack,chunk,sizeof(chunk)) && datagrams==1);
+    wire_put16(chunk+42,1);memcpy(chunk+48,p+40,8);
+    assert(device_ip_input(stack,chunk,sizeof(chunk)) && datagrams==2);
+}
 int main(int argc,char **argv){
     assert(argc==2);const char *mode=argv[1];slow_handshake=!strcmp(mode,"slow-rtt");lost_syn=!strcmp(mode,"syn-window");session_lifetime=!strncmp(mode,"session-",8);setup(!strcmp(mode,"wrap")?UINT32_MAX-3:100);
     uint32_t start=flow->rnext,a=flow->next;
-    if(!strcmp(mode,"overlap")||!strcmp(mode,"wrap")){
+    if(!strcmp(mode,"session-udp")){ test_udp();
+    }else if(!strcmp(mode,"overlap")||!strcmp(mode,"wrap")){
         incoming(start,a,ACK,65535,"abcd",4);
         incoming(start+2,a,ACK,65535,"cdefgh",6);
         incoming(start,a,ACK,65535,"abcdefgh",8);

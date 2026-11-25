@@ -3,8 +3,8 @@ import Foundation
 
 extension HostRequestExecution {
     func prepareText() throws {
-        // Bind preparation to a fresh observation, even when the borrowed
-        // CoreDevice keyboard is already ready. Preparation does not focus a field.
+        // Bind preparation to a fresh observation, even when the selected
+        // keyboard is already ready. Preparation does not focus a field.
         previousObservation = observations.beginAction()
         effective = true
         response["result"] = try backend.prepareText()

@@ -16,7 +16,7 @@ For these builds, control disconnect or idle expiry does **not** stop preview. F
 
 ## Start once per owned session
 
-Default to preview after a successful connection in either standard or runner. Do not ask an extra preference question. Honor an explicit request such as “no preview”, “don't open a browser”, or “只操作手机，不要预览” for the entire task, including reconnects, until the user changes it. Skip starting the service as well as opening the page. If the user later opts out, stop only a preview created by this task with `preview --stop` and obtain fresh references before further input.
+Default to preview after a successful connection. For a standard keyboard task with `keyboard.serviceSource=rsd_registered`, use action screenshots. The keyboard needs its own media stream and preparation can fail if preview or recording already holds one. Do not ask an extra preference question. Honor an explicit request such as “no preview”, “don't open a browser”, or “只操作手机，不要预览” for the entire task, including reconnects, until the user changes it. Skip starting the service as well as opening the page. If the user later opts out, stop only a preview created by this task with `preview --stop` and obtain fresh references before further input.
 
 Preflight reports **Live preview: available** only when the selected CLI supports `preview`, `--no-open` and `--stop`. If unavailable, continue the supported phone workflow and briefly explain that preview needs a CLI with these supported command forms. Do not automatically upgrade, switch binaries or modes, or repeatedly probe help.
 

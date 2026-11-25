@@ -10,16 +10,26 @@ final class AppleInputAttempt {
     let target: ObservedTarget
     let textInput: NativeTextInput?
     let hid: NativeHIDAdapter
-    let screenGuard: ScreenGuard
+    let screenContext: ScreenContext
+    var visualGuard: ScreenGuard?
+    func requireVisualGuard() throws -> ScreenGuard {
+        guard let visualGuard else { throw ScreenGuard.Failure.invalidGuard }
+        return visualGuard
+    }
+    var attachment: NativeKeyboardAttachment?
     let rotation: String
     let swipe: NativeSwipePlan?
     let pinch: NativePinchPlan?
     var timing: NativeInputTiming
     var keyboardAction: Bool {
-        (action.kind == "type" || action.kind == "press") && action.reference.node == nil
+        action.kind == "type" || (action.kind == "press" && action.reference.node == nil)
     }
     var homeAction: Bool { action.kind == "home" }
     var pressing: Bool { action.kind == "press" && action.reference.node == nil }
+    var validatesTextResponder: Bool {
+        action.textRegion == nil && (textInput != nil || target.textEditor != nil)
+    }
+    var focusTapQueued = false
     var captures = 0
     var preInputChecks: [[String: Any]] = []
     var inputBudget: NativeCaptureBudget?
@@ -28,7 +38,7 @@ final class AppleInputAttempt {
         backend: AppleDeviceBackend, action: DeviceAction, target: ObservedTarget, textInput: NativeTextInput?
     ) throws {
         self.backend = backend; self.action = action; self.target = target; self.textInput = textInput
-        let keyboardAction = (action.kind == "type" || action.kind == "press") && action.reference.node == nil
+        let keyboardAction = action.kind == "type" || (action.kind == "press" && action.reference.node == nil)
         let homeAction = action.kind == "home"
         let control = backend.controlStatus()
         guard control.available, let hid = backend.hid else {
@@ -37,10 +47,12 @@ final class AppleInputAttempt {
                 description: control.message ?? "Native control is unavailable",
                 possiblyExecuted: false, requiresObservation: false, result: control.result)
         }
+        let visualGuard = (keyboardAction || homeAction) ? target.textGuard : target.gesture?.screenGuard
+        let focusedContext = action.isKeyboardTextEdit && action.textRegion == nil ? target.focusedTextContext : nil
         guard target.context["deviceID"] as? String == backend.cli?.device,
             target.context["sessionGeneration"] as? String == backend.generation,
             let captured = target.context["captureStartedUptime"] as? Double,
-            let screenGuard = (keyboardAction || homeAction) ? target.textGuard : target.gesture?.screenGuard
+            let screenContext = visualGuard?.context ?? focusedContext
         else {
             throw ActionFailure(
                 code: "stale_observation", description: "Observe this device/session again before input",
@@ -62,11 +74,12 @@ final class AppleInputAttempt {
             action.kind == "swipe" ? try NativeSwipePlan(gesture: target.gesture!, rotation: rotation) : nil
         let pinch =
             action.kind == "pinch" ? try NativePinchPlan(gesture: target.gesture!, rotation: rotation) : nil
-        self.hid = hid; self.screenGuard = screenGuard; self.timing = timing
+        self.hid = hid; self.visualGuard = visualGuard; self.screenContext = screenContext; self.timing = timing
         self.rotation = rotation; self.swipe = swipe; self.pinch = pinch
     }
 
-    func run(onInputStarted: @escaping () -> Void) throws -> [String: Any] {
+    func perform(onInputStarted: @escaping () -> Void) throws -> [String: Any] {
+        if textInput != nil && validatesTextResponder { try prepareSemanticFocus(onInputStarted: onInputStarted) }
         try prepareControls()
         let check = try checkBeforeInput()
         var result = try dispatch(onInputStarted: onInputStarted)
@@ -78,11 +91,13 @@ final class AppleInputAttempt {
             result["hidSurfaceID"] = hid.surface
             result["hidDisplayUniqueID"] = hid.surfaceDisplayUniqueID
         }
-        result["screenGuard"] = check.result
+        if validatesTextResponder {
+            result["textTargetValidation"] = check
+            result["focusTapQueued"] = focusTapQueued
+        } else { result["screenGuard"] = check }
         result["preInputCaptures"] = captures
         result["preInputChecks"] = preInputChecks
-        if keyboardAction {
-            let rect = screenGuard.regions[0].rect
+        if keyboardAction && !validatesTextResponder, let rect = visualGuard?.regions.first?.rect {
             result["textFieldRect"] = [
                 "x": rect.originX, "y": rect.originY, "width": rect.width, "height": rect.height
             ]
@@ -97,14 +112,10 @@ final class AppleInputAttempt {
             try hid.prepare(displayUniqueID: target.context["displayUniqueID"] as? String)
         }
         if keyboardAction {
-            try screenGuard.validate()
-            guard screenGuard.regions.map(\.rect) == [action.textRegion ?? screenGuard.context.screen] else {
-                throw ScreenGuard.Failure.invalidGuard
-            }
-            // Discover the built-in keyboard, then capture/guard before any key.
-            try hid.prepareKeyboard()
+            try prepareKeyboardForInput()
         }
         if homeAction {
+            let screenGuard = try requireVisualGuard()
             try screenGuard.validate()
             guard screenGuard.regions.map(\.rect) == [screenGuard.context.screen] else {
                 throw ScreenGuard.Failure.invalidGuard
@@ -126,37 +137,41 @@ final class AppleInputAttempt {
             }
         }
     }
-    func preflight(stage: String) throws -> ScreenGuard.Check {
+    func preflight(stage: String) throws -> [String: Any] {
         let budget = try timing.captureBudget(now: ProcessInfo.processInfo.systemUptime)
         inputBudget = budget
+        if validatesTextResponder { return try confirmTextFocus(stage: stage, budget: budget) }
         let deadline = budget.requestDeadline
+        let phaseStarted = ProcessInfo.processInfo.systemUptime
+        let focusedFrame = try attachmentFrame(stage: stage, budget: budget)
         let (value, count) = try NativeInputPreflight.check(
-            guard: screenGuard,
+            guard: requireVisualGuard(),
             displayID: target.context["displayID"] as? UInt64, displayRotation: rotation,
             displayUniqueID: target.context["displayUniqueID"] as? String,
             captureSource: target.context["captureSource"] as? String,
             deadline: deadline,
-            maximumCaptures: 1, fieldGuard: keyboardAction ? target.textFieldGuard : nil,
+            maximumCaptures: 1, fieldGuard: attachment?.fieldGuard ?? (keyboardAction ? target.textFieldGuard : nil),
             caretGuard: keyboardAction ? target.textCaretGuard : nil, budget: budget,
             gestureValidation: try target.gesture.map {
                 try NativeGestureValidation(action: action, gesture: $0)
             },
-            record: { sample in
+            startedAt: phaseStarted, record: { sample in
                 var sample = sample; sample["stage"] = stage
+                if attachment != nil { sample["sameTextResponderConfirmed"] = true }
                 preInputChecks.append(sample)
             },
             capture: {
                 try backend.checkInputAvailability(budget: budget)
-                let frame = try backend.capture(budget: budget)
+                let frame = try focusedFrame ?? backend.capture(budget: budget)
                 backend.diagnosticGuardFrame?(frame.screenshot)
                 return frame
             })
         captures += count
-        return value
+        return value.result
     }
 
-    private func checkBeforeInput() throws -> ScreenGuard.Check {
-        var check: ScreenGuard.Check
+    private func checkBeforeInput() throws -> [String: Any] {
+        var check: [String: Any]
         do {
             check = try preflight(
                 stage: textInput?.usesPasteboard == true ? "before_clipboard" : "before_input")
@@ -193,11 +208,15 @@ final class AppleInputAttempt {
                 throw IPhoneUseError("native_pasteboard_unavailable", pasteboardError)
             }
             if backend.pasteboard == nil {
-                guard let tunnel = backend.tunnel else {
+                let transport: NativeTransport
+                if let direct = backend.keyboardTunnel {
+                    transport = try direct.open(pasteboard: true)
+                } else if let tunnel = backend.tunnel {
+                    transport = try AppleServiceTransport(
+                        tunnel: tunnel, service: "com.apple.coredevice.pasteboardservice")
+                } else {
                     throw IPhoneUseError("native_pasteboard_unavailable", "Native tunnel is unavailable")
                 }
-                let transport = try AppleServiceTransport(
-                    tunnel: tunnel, service: "com.apple.coredevice.pasteboardservice")
                 backend.pasteboardTransport = transport
                 backend.pasteboard = NativeTextPasteboard(
                     pasteboardIO: AppleTextPasteboardIO(

@@ -16,7 +16,7 @@ extension ActionRequest {
             }
             let allowNewlines =
                 touchPaste || !allowScreenText
-                || (reference.node == nil && request["textMethod"] as? String != "keys")
+                || request["textMethod"] as? String != "keys"
             guard let text = request["text"] as? String, text.utf8.count <= TextInput.maximumBytes,
                 mode == "replace" || !text.isEmpty,
                 text.unicodeScalars.allSatisfy({ scalar in

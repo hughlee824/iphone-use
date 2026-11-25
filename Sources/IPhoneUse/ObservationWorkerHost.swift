@@ -8,3 +8,11 @@ struct ObservationWorkerHost: ParsableCommand {
     @Option var generation: String
     mutating func run() throws { try NativeObservationHost.run(device: device, kind: kind, generation: generation) }
 }
+
+struct KeyboardTunnelCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "_keyboard-tunnel", shouldDisplay: false)
+    @Option var device: String
+    @Option var identifier: String
+    @Option var display: UInt64
+    mutating func run() throws { try KeyboardTunnelHost.run(device: device, identifier: identifier, display: display) }
+}

@@ -4,6 +4,7 @@
 @interface ASObservationCommands : NSObject
 - (instancetype)initWithGeneration:(NSString *)generation;
 - (BOOL)canStartScreenshotAt:(NSTimeInterval)uptime;
+@property(nonatomic, readonly) NSValue *focusPoint;
 - (void)ready;
 - (BOOL)next;
 - (BOOL)nextWithHealthCheck:(void (^)(void))check;

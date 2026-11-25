@@ -201,7 +201,7 @@ final class NativeCaretGuardTests: XCTestCase {
         }
     }
 
-    func testNativeTextGetsAnObservationBoundFullPixelGuard() throws {
+    func testOnlyExplicitTextRegionGetsAnObservationBoundFullPixelGuard() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let cache = ObservationCache(directory: directory), context = screenTestContext()
@@ -218,7 +218,7 @@ final class NativeCaretGuardTests: XCTestCase {
         let action = try DeviceAction(operation: "type", request: request, allowScreenText: true)
         XCTAssertNotNil(try cache.resolveTarget(for: action).textFieldGuard)
         var noField = request; noField.removeValue(forKey: "fieldRect")
-        XCTAssertNotNil(
+        XCTAssertNil(
             try cache.resolveTarget(
                 for: DeviceAction(operation: "type", request: noField, allowScreenText: true)
             )

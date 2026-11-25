@@ -147,6 +147,17 @@ extension NativeKeyboardTests {
                 screenshot: try screenPNG(width: 844, height: 390))
             for operation in ["press", "type"] {
                 let cache = ObservationCache(directory: directory); _ = try cache.store(capture)
+                if operation == "type" {
+                    let unscoped = try DeviceAction(operation: "type",
+                        request: ["reference": "o1", "text": "横屏中文", "mode": "insert"], allowScreenText: true)
+                    XCTAssertThrowsError(try cache.resolveTarget(for: unscoped)) { error in
+                        let failure = error as? ActionFailure
+                        XCTAssertEqual(failure?.code, "native_keyboard_focus_unverified")
+                        XCTAssertEqual(failure?.possiblyExecuted, false)
+                        XCTAssertEqual(failure?.description.contains("text-prepare"), true)
+                        XCTAssertEqual(failure?.description.contains("--field-rect"), true)
+                    }
+                }
                 let action = try DeviceAction(
                     operation: operation,
                     request: [

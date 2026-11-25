@@ -408,6 +408,14 @@ class ActionObservationCLITests(unittest.TestCase):
         self.assertEqual(response["outcome"], "unknown")
         self.assertEqual(len(requests), 1)
 
+    def test_rsd_preparation_is_a_distinct_operation_and_never_replayed(self):
+        code, response, requests = self.run_cli(
+            ["text-prepare", "--rsd-keyboard", "--field-rect", "18,209,354,160"], lose_action=True)
+        self.assertEqual(code, 1, response)
+        self.assertEqual(response["outcome"], "unknown")
+        self.assertEqual([request["op"] for request in requests], ["text-prepare-rsd"])
+        self.assertEqual(requests[0]["fieldRect"], "18,209,354,160")
+
     def test_native_preparation_and_return_field_are_forwarded_once(self):
         code, response, requests = self.run_cli(["text-prepare"])
         self.assertEqual(code, 0, response)

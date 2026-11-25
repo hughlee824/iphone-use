@@ -2,10 +2,6 @@ import Foundation
 
 // Common observation envelope; a shared ID is not a shared device sampling instant.
 enum ObservationAcquisition {
-    static func parallel(screenshot: (Double, Double), accessibility: (Double, Double)) -> [String: Any] {
-        host(strategy: "parallel_ax_screenshot", screenshot: screenshot, accessibility: accessibility)
-    }
-
     static func host(strategy: String, screenshot: (Double, Double), accessibility: (Double, Double)) -> [String: Any] {
         ["strategy": strategy, "atomic": false, "clock": "host_unix_seconds",
          "timeMeaning": "request_intervals_not_device_sample_instants",

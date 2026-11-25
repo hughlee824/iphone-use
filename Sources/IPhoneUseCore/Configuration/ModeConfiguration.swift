@@ -20,7 +20,8 @@ public enum ControlMode: String, Codable {
                 "observationSources": ["screenshot", "available_elements"],
                 "actionTargets": [
                     "tap": ["screen_point"], "swipe": ["screen_path"],
-                    "type": ["visually_focused_input", "touch_paste_staging"],
+                    "type": ["focused_native_editor", "native_editor_reference",
+                             "visually_focused_input", "touch_paste_staging"],
                     "press": ["visually_focused_input"]
                 ],
                 "textModes": ["insert", "replace", "append"],

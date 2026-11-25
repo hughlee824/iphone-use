@@ -19,7 +19,7 @@ extension AppleInputAttempt {
             result = try hid.press(key) { try backend.checkInputCanContinue() }
         } else if action.kind == "double-tap" {
             let point = try NativeCoordinateMapper.map(
-                target.gesture!.start, screen: screenGuard.context.screen, rotation: rotation)
+                target.gesture!.start, screen: screenContext.screen, rotation: rotation)
             result = try hid.doubleTap(point, onContact: onInputStarted) {
                 try backend.checkInputCanContinue()
             }
@@ -29,7 +29,7 @@ extension AppleInputAttempt {
             result = try hid.swipe(swipe, onContact: onInputStarted) { try backend.checkInputCanContinue() }
         } else {
             let point = try NativeCoordinateMapper.map(
-                target.gesture!.start, screen: screenGuard.context.screen, rotation: rotation)
+                target.gesture!.start, screen: screenContext.screen, rotation: rotation)
             result = try hid.tap(
                 point, hold: action.fields["duration"] as? Double ?? 0.06, onContact: onInputStarted
             ) {

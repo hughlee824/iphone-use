@@ -20,8 +20,8 @@ final class AXPReader {
         self.arguments = arguments
     }
 
-    func read(device: String, cancelled: () -> Bool) throws -> [String: Any] {
-        if let persistent { return try persistent.read(cancelled: cancelled) }
+    func read(device: String, focusPoint: CGPoint? = nil, cancelled: () -> Bool) throws -> [String: Any] {
+        if let persistent { return try persistent.read(focusPoint: focusPoint, cancelled: cancelled) }
         let process = Process(), pipe = Pipe(), output = AXPOutput()
         defer {
             try? pipe.fileHandleForWriting.close()

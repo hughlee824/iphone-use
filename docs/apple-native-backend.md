@@ -22,7 +22,34 @@ On devices advertising multiple built-in touchscreens, standard mode matches the
 
 ## Keyboard and clipboard
 
-`text-prepare` discovers one device-advertised CoreDevice keyboard. It does not create or remove a hardware keyboard service, change the input method or focus a field. Cleanup releases this session's keys and connections. Use the returned fresh image to confirm the editor and focus.
+In standard mode, the first keyboard-backed `type` or `press` opens a USB/RSD tunnel and registers
+a session-owned keyboard. You can also run `text-prepare` before opening the editor, since
+keyboard attachment can change the layout. Unscoped `type oN` binds the observed foreground
+text responder. `type oN:eN` binds the specified native editor. If it needs focus, the host
+checks the fully onscreen editor geometry, the screenshot and the live AX hit at the editor's
+center before tapping once. Once the keyboard is ready, both commands verify the original
+foreground responder before key dispatch and on both sides of clipboard staging. A focused
+editor may move partly offscreen. Typing and default Backspace stop if that editor becomes
+hidden or moves fully offscreen. For landscape typing, prepare the keyboard with
+`text-prepare`, visually confirm focus and supply the full field bounds with `--field-rect`. Explicit `--field-rect` on `type oN` retains visual checks. Subsequent actions reuse the prepared keyboard.
+`text-prepare --rsd-keyboard` remains a compatibility alias. A connection used only for
+observation or touch leaves the keyboard media stream unopened. After preparation, status
+reports `keyboard.serviceSource=rsd_registered`, `prepared=true` and the assigned service ID.
+
+This path holds a dedicated USB CoreDeviceProxy userspace tunnel, verifies the RSD device identity
+and starts an owned display stream on that tunnel. The receiver drains video without storing
+frames. After a settling interval and receipt of RTP from the negotiated source, it opens
+the advertised HID port. The host performs the service RemoteXPC handshake, reads replies
+and requests service ID `0x100002001`. It verifies its keyboard by its unique name or by matching the assigned ID in the create reply to the sole new inventory entry.
+For Chinese or explicit paste, a second RemoteXPC socket on the same tunnel writes the general
+pasteboard under the usual backup and restoration rules. Modifier-down, Command-V and key release
+all use the original HID socket. Disconnect removes only the verified session keyboard.
+A lost registration reply or unconfirmed removal is reported as uncertain.
+
+Disconnect also stops the display stream by its verified session identity. An existing media
+session prevents preparation. Check the actual editor after dispatch:
+the device can accept the connection and reports while the focused app receives no text.
+The initial standard session and its observation checks still use the regular standard backend.
 
 Standard `type` supports ASCII key reports and literal clipboard paste. Editing shortcuts request selection or caret movement; the host cannot prove their app-specific effect. Unicode/multiline paste uses a transaction that preserves the original clipboard in memory. `text-finish` restores it only while ownership still matches. Process crashes, lost replies and concurrent clipboard writers limit restoration guarantees.
 
@@ -47,6 +74,6 @@ Recovery includes `automaticReplayAllowed=false`. Local IPC response loss does n
 
 ## Media and runtime limits
 
-Explicit preview/recording starts an independently owned media connection, without depending on either control mode. HID admission no longer depends on media inventory or health; fresh Apple screenshots, display geometry validation and input guards remain required. Lock state, backlight state and black pixels do not by themselves invalidate an observation. Both share streaming, decoding, recording and cleanup code; Runner input still uses XCTest. Ownership conflicts fail rather than stopping another client's stream. See [preview](local-preview.md) and [recording](runner-recording.md) for freshness recovery, orientation changes, validation and resource limits.
+Explicit preview/recording starts an independently owned media connection, without depending on either control mode. Touch input is independent of media inventory or health. Keyboard preparation requires its own display stream; fresh Apple screenshots, display geometry validation and input guards remain required. Lock state, backlight state and black pixels do not by themselves invalidate an observation. Both share streaming, decoding, recording and cleanup code; Runner input still uses XCTest. Ownership conflicts fail rather than stopping another client's stream. See [preview](local-preview.md) and [recording](runner-recording.md) for freshness recovery, orientation changes, validation and resource limits.
 
 Apple runtime/service interfaces are checked at their adapter boundaries but are not a stable public SDK contract. Unsupported shapes or signatures fail explicitly. Last-check-to-event races, app-defined shortcut behavior and transport uncertainty remain limitations. Test affected device paths after toolchain changes; host fakes alone cannot establish compatibility.
