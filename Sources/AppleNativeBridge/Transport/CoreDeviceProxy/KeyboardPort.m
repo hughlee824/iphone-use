@@ -18,9 +18,14 @@ static BOOL PassPort(int control, int port) {
     return sendmsg(control, &message, 0) == 1;
 }
 
-static void ReportOpenFailure(NSException *exception) {
+static BOOL ReportOpenFailure(NSException *exception) {
     NSData *reason = [(exception.reason ?: @"RSD keyboard service unavailable") dataUsingEncoding:NSUTF8StringEncoding];
-    write(STDOUT_FILENO, reason.bytes, MIN(reason.length, 512));
+    size_t length = MIN(reason.length, 512);
+    ssize_t written;
+    do {
+        written = write(STDOUT_FILENO, reason.bytes, length);
+    } while (written < 0 && errno == EINTR);
+    return written > 0 && (size_t)written == length;
 }
 
 BOOL ASProvideKeyboardPort(NSString *udid, NSString *(^startMedia)(ASKeyboardMediaEndpoint *), BOOL (^stopMedia)(void)) {
@@ -60,7 +65,9 @@ BOOL ASProvideKeyboardPort(NSString *udid, NSString *(^startMedia)(ASKeyboardMed
             } else break;
         }
     } @catch (NSException *exception) {
-        ReportOpenFailure(exception);
+        // The parent receives the open error on the socket. A reported refusal
+        // can still end with acknowledged media and transport cleanup.
+        orderly = ReportOpenFailure(exception);
     } @finally {
         alarm(32);
         BOOL mediaStopped = stopMedia();

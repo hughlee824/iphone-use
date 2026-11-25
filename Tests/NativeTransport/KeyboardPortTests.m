@@ -6,14 +6,15 @@
 // The production helper and descriptor receiver run in separate processes. Only
 // the provider that would normally contact MobileDevice/RSD is substituted.
 @implementation ASDeviceServiceTransport {
-    BOOL _refusePasteboard, _mediaStarted;
+    NSString *_mode;
+    BOOL _mediaStarted;
     int _hidPeer, _boardPeer;
 }
 - (instancetype)initWithUDID:(NSString *)device sessionLifetime:(BOOL)sessionLifetime {
     assert(sessionLifetime);
     if ((self = [super init])) {
         _hidPeer = _boardPeer = -1;
-        _refusePasteboard = [device isEqual:@"refuse"];
+        _mode = device;
     }
     return self;
 }
@@ -23,7 +24,7 @@
 }
 - (int)openKeyboardService:(BOOL)pasteboard {
     assert(_mediaStarted);
-    if (pasteboard && _refusePasteboard)
+    if (pasteboard && [_mode isEqual:@"refuse"])
         @throw [NSException exceptionWithName:@"Test" reason:@"Pasteboard unavailable" userInfo:nil];
     int pair[2]; assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     if (pasteboard) _boardPeer = pair[1]; else _hidPeer = pair[1];
@@ -31,6 +32,10 @@
     return pair[0];
 }
 - (BOOL)close {
+    if ([_mode hasPrefix:@"media-busy"]) {
+        assert(_mediaStarted && _hidPeer == -1 && _boardPeer == -1);
+        return ![_mode isEqual:@"media-busy-provider-close-failed"];
+    }
     // The client can still dispatch on the original HID socket after it opens
     // the pasteboard, including when that second service refuses to open.
     char key = 0;
@@ -43,13 +48,19 @@
 
 int main(int argc, char **argv) { @autoreleasepool {
     assert(argc == 3);
+    NSString *mode = @(argv[2]);
     if (strcmp(argv[1], "provider") == 0)
-        return ASProvideKeyboardPort(@(argv[2]), ^NSString *(ASKeyboardMediaEndpoint *media) {
-            assert(media != nil); return nil;
-        }, ^BOOL{ return YES; }) ? 0 : 1;
+        return ASProvideKeyboardPort(mode, ^NSString *(ASKeyboardMediaEndpoint *media) {
+            assert(media != nil);
+            return [mode hasPrefix:@"media-busy"] ? @"Media busy" : nil;
+        }, ^BOOL{ return ![mode isEqual:@"media-busy-stop-failed"]; }) ? 0 : 1;
     NSError *error = nil;
     assert(write(STDIN_FILENO, "H", 1) == 1);
     int hid = ASReceiveKeyboardPort(STDIN_FILENO, &error);
+    if ([mode hasPrefix:@"media-busy"]) {
+        assert(hid < 0 && [error.localizedDescription isEqual:@"Media busy"]);
+        return 0;
+    }
     char marker = 0;
     assert(hid >= 0 && read(hid, &marker, 1) == 1 && marker == 'h');
     assert(write(STDIN_FILENO, "P", 1) == 1);
