@@ -1,0 +1,65 @@
+name: Diagnose Runner build
+
+on:
+  push:
+    branches: [codex/diagnose-runner-pair]
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: ${{ matrix.scenario }}
+    runs-on: xcode-27
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [standalone-1, standalone-2, native-suite]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Inspect the on-disk device set without starting CoreSimulator
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib
+          root = Path.home() / "Library/Developer/CoreSimulator/Devices"
+          path = root / "device_set.plist"
+          if path.is_file():
+              data = plistlib.loads(path.read_bytes())
+              pairs = data.get("DevicePairs", {})
+              print("Stored device pairs:", pairs)
+              print("Device directories:", sorted(p.parent.name for p in root.glob("*/device.plist")))
+          else:
+              print("No default device_set.plist on disk")
+          PY
+      - name: Build the Runner in isolation
+        if: matrix.scenario != 'native-suite'
+        run: |
+          xcodebuild build-for-testing -project Runner/IPhoneUseRunner.xcodeproj \
+            -scheme IPhoneUseRunner -configuration Debug -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath .build/check-runner \
+            -jobs 2 CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=17.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        if: matrix.scenario == 'native-suite'
+        with:
+          node-version: '22'
+      - name: Run the original native sequence
+        if: matrix.scenario == 'native-suite'
+        run: |
+          xcodebuild -version
+          swift --version
+          python3 scripts/tools/install-swiftlint.py
+          python3 -m venv .build/test-venv
+          .build/test-venv/bin/python -m pip install -r scripts/tests/requirements.txt
+          .build/test-venv/bin/python scripts/check.py --suite native
+      - name: Collect simulator pairing diagnostics after the build
+        if: always()
+        run: |
+          /usr/bin/log show --last 5m --style compact \
+            --predicate '(process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "xcodebuild") AND eventMessage CONTAINS[c] "pair"' | tail -80
+          xcrun simctl list pairs --json
