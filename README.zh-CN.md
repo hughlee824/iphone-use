@@ -64,6 +64,8 @@ command -v iphone-use
 iphone-use --version
 ```
 
+再次运行安装脚本时，如果有新版，脚本会显示升级命令。官网安装的 CLI 可在断开活跃会话后运行 `iphone-use upgrade`。旧版 CLI 可使用脚本提示的兼容命令。
+
 也可以用 Homebrew 安装，或下载并校验 Release 安装包。源码开发者可运行 `swift build` 并使用 `.build/debug/iphone-use`。使用本地候选包时，保留完整目录并将 `bin` 加入 PATH。详见[安装与升级说明](docs/install.md)。
 
 **2. 配置 Agent。** 按所用客户端的说明安装插件或技能，需要时新开会话。插件和通用技能独立于 CLI 更新，要求稳定版 **CLI 0.4.0 或更高版本**。只用命令行时可以跳过这一步。详见 [Agent 接入约定](#agent-接入约定)和[客户端兼容说明](docs/plugins.md#先检查环境)。

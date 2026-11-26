@@ -119,9 +119,24 @@ profile 可按 Apple 的[开发 profile 流程](https://developer.apple.com/help
 
 ## 升级和卸载
 
-下面的 Homebrew 命令仅适用于已通过 `iphone-use` formula 安装的用户，并以 Tap 实际提供的版本为准。手动安装及草稿/候选包按版本目录方式升级。升级前先断开活跃会话；不要混用不同版本的 CLI 和 Runner。
+升级前先结束录屏并断开活跃会话。CLI 与 Runner 随同一个完整发布包升级。
 
-升级前先断开活跃会话。Homebrew 用户执行：
+**官网脚本安装**：首次运行脚本会安装最新稳定版；重复运行时若发现新版，只显示当前版本、可用版本和升级命令。准备好切换版本时执行：
+
+```sh
+iphone-use upgrade
+iphone-use --version
+```
+
+如果已安装的旧 CLI 没有 `upgrade` 子命令，使用官网脚本提示的一次性命令：
+
+```sh
+curl -fsSL https://iphone-use.com/install.sh | /bin/sh -s -- --upgrade
+```
+
+两种升级入口都使用官网安装器，校验新包后才切换命令入口，并保留旧版本目录。
+
+**Homebrew 安装**：`iphone-use upgrade` 会提示使用 Homebrew。按 Tap 提供的版本升级：
 
 ```sh
 brew update

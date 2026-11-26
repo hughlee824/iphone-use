@@ -19,7 +19,7 @@ struct IPhoneUse: ParsableCommand {
         version: RunnerSetup.releaseVersion,
         subcommands: [
             Diagnostics.self, Configuration.self, Setup.self, BuildRunner.self, Devices.self, Sessions.self,
-            Connect.self,
+            Upgrade.self, Connect.self,
             Status.self,
             Apps.self, Open.self, Terminate.self, Relaunch.self, Observe.self, Inspect.self, Tap.self,
             DoubleTap.self,

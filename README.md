@@ -64,6 +64,8 @@ command -v iphone-use
 iphone-use --version
 ```
 
+Running the installer again shows the upgrade command when a newer version is available. For a website installation, run `iphone-use upgrade` after disconnecting active sessions. Older CLIs can use the command printed by the installer.
+
 Homebrew and verified release downloads are also available. Source developers can run `swift build` and use `.build/debug/iphone-use`. For a local candidate package, keep the complete directory and add its `bin` to PATH. See the [installation and upgrade guide](docs/install.md).
 
 **2. Set up your agent.** Follow the instructions for your client and start a new session if required. The plugin and portable skill update separately from the CLI and require stable **CLI 0.4.0 or later**. If you use only the CLI, you can skip this step. See [agent integration](#agent-integration) and [client compatibility](docs/plugins.md#先检查环境).
