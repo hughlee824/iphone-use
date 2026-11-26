@@ -27,6 +27,7 @@ static void (*sendReply)(id, xpc_object_t, dispatch_queue_t, void (^)(xpc_object
 static void (*sendBarrier)(id, dispatch_block_t);
 static id (*createFDConnection)(int, dispatch_queue_t, uint64_t, uint64_t) __attribute__((ns_returns_retained));
 static uint64_t (*failsafeVersion)(void);
+static uint64_t (*localVersion)(void);
 
 static BOOL Load(NSError **error) {
     static dispatch_once_t once;
@@ -43,12 +44,23 @@ static BOOL Load(NSError **error) {
         LOAD(remote, sendBarrier, "xpc_remote_connection_send_barrier");
         LOAD(remote, createFDConnection, "xpc_remote_connection_create_with_connected_fd");
         LOAD(remote, failsafeVersion, "xpc_remote_connection_get_failsafe_version_flags");
+        LOAD(remote, localVersion, "xpc_remote_connection_get_version_flags");
 #undef LOAD
         ready = setHandler && activateConnection && cancelConnection && sendMessage && sendReply && sendBarrier
-            && createFDConnection && failsafeVersion;
+            && createFDConnection && failsafeVersion && localVersion;
     });
     if (!ready && error) *error = Failure(@"native_api_unavailable", @"Installed Apple RemoteXPC ABI is unavailable");
     return ready;
+}
+
+// The discovery socket bootstraps with failsafe flags. The hello tells the peer
+// what the local runtime can receive on the service connections that follow.
+static NSDictionary *DiscoveryHello(void) {
+    return @{
+        @"MessageType": @"Handshake", @"MessagingProtocolVersion": [[ASNativeUnsigned alloc] initWithValue:7],
+        @"UUID": [NSUUID UUID], @"Services": @{},
+        @"Properties": @{@"RemoteXPCVersionFlags": [[ASNativeUnsigned alloc] initWithValue:localVersion()]}
+    };
 }
 
 static xpc_object_t Encode(id value, NSUInteger depth, NSError **error) {
@@ -207,10 +219,7 @@ NSDictionary *ASNativeRoundTrip(NSDictionary *value, NSError **error) {
     });
     activateConnection(_connection);
     if (handshake) {
-        // A new, ordinary client identity. No Apple process identity or sensitive-properties claim.
-        NSDictionary *hello = @{@"MessageType": @"Handshake", @"MessagingProtocolVersion": [[ASNativeUnsigned alloc] initWithValue:7],
-            @"UUID": [NSUUID UUID], @"Properties": @{@"RemoteXPCVersionFlags": [[ASNativeUnsigned alloc] initWithValue:failsafeVersion()]}, @"Services": @{}};
-        sendMessage(_connection, Encode(hello, 0, error));
+        sendMessage(_connection, Encode(DiscoveryHello(), 0, error));
         long timedOut = dispatch_semaphore_wait(ready, dispatch_time(DISPATCH_TIME_NOW, 8 * NSEC_PER_SEC));
         [lock lock]; finished = YES; NSDictionary *result = received; NSError *failure = handshakeError; [lock unlock];
         if (timedOut || !result) {
