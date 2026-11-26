@@ -168,7 +168,7 @@ OpenCode 使用 `--agent opencode`。默认安装到当前项目 `.cursor/skills
 
 插件身份为 `iphone-use@iphone-use`。避免同时启用多份操作同一设备的 skill；插件与独立安装的 skill 应按各自安装方式管理。CLI 与插件版本号独立。只升级 Homebrew 不会更新插件。各端更新插件后需开始新会话，核对安装缓存中的 manifest 与 SKILL.md 工作流版本是否对应所选发布版本。旧会话不会自动替换已加载的 skill；不要修改已发布版本的附件。
 
-先断开活跃设备会话，再 `brew update` / `brew upgrade iphone-use`。插件另外更新：
+先断开活跃设备会话。官网安装的 CLI 用 `iphone-use upgrade`，Homebrew 安装的用 `brew upgrade iphone-use`。旧版 CLI 的升级步骤见[安装指南](install.md#升级和卸载)。插件另外更新：
 
 ```sh
 # Codex：更新仓库快照后重新安装插件。
